@@ -1,0 +1,21 @@
+{
+  "user1": {
+    "apiKeys": {
+      "googleSearchKeys": [
+        "AIzaSyAyj4AstBsA8z3_kOIXOIaYv6Bv57krIUs",
+        "AIzaSyDr3PnZTocarHxtJbRrSwW-SAmraq5nXn4"
+      ],
+      "geminiKeys": [
+        "AIzaSyDxAGzysjaW5yK_kJulYzv-pHaqn1P0H4E",
+        "AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo"
+      ]
+    },
+    "createdAt": "2025-08-18T02:34:23.747Z",
+    "expiresAt": null,
+    "meta": {
+      "issuedBy": "admin",
+      "lastUsed": "2025-08-24T20:00:43.806Z",
+      "useCount": 21
+    }
+  }
+}
