@@ -1,30 +1,24 @@
 {
   "212691708186@s.whatsapp.net": {
     "prefs": {
-      "source": "MAPS",
+      "source": "ALL",
       "format": "XLSX",
-      "limit": 300,
-      "dataType": "COMPLETE"
+      "limit": 300
     },
-    "status": "running",
-    "currentStep": "scraping_in_progress",
-    "previousMessage": "💾 **Format de sortie défini sur: XLSX**\n\n🚀 **Prêt à commencer le scraping!**\n\n0️⃣ **RETOUR** - Retour à la sélection de format\n0️⃣0️⃣ **REDÉMARRER** - Commencer une nouvelle recherche\n\n💬 **Envoyez:** START",
-    "language": "fr",
+    "status": "idle",
+    "currentStep": "awaiting_language",
+    "previousMessage": null,
+    "language": "en",
     "meta": {
-      "createdAt": "2025-08-24T20:00:24.137Z",
+      "createdAt": "2025-08-24T21:20:55.611Z",
       "totalJobs": 0,
-      "lastNiche": "Dentist in fes"
+      "lastNiche": null
     },
-    "code": "user1",
-    "apiKeys": {
-      "googleSearchKeys": [
-        "AIzaSyAyj4AstBsA8z3_kOIXOIaYv6Bv57krIUs",
-        "AIzaSyDr3PnZTocarHxtJbRrSwW-SAmraq5nXn4"
-      ],
-      "geminiKeys": [
-        "AIzaSyDxAGzysjaW5yK_kJulYzv-pHaqn1P0H4E",
-        "AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo"
-      ]
+    "security": {
+      "failedAuthAttempts": 0,
+      "lastFailedAttempt": null,
+      "isBlocked": false,
+      "blockedAt": null
     }
   }
 }

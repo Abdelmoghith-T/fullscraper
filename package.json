@@ -19,6 +19,7 @@
     "test:progress": "node test/test-progress-simulator.js",
     "test:languages": "node test/test-language-system.js",
     "test:duplicate-fix": "node test/test-duplicate-message-fix.js",
+    "test:security": "node test/test-security-features.js",
     "demo:progress": "node test/demo-progress.js",
     "lint": "eslint .",
     "clean": "rm -rf results/*.xlsx results/*.csv results/*.json",

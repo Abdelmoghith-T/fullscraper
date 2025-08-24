@@ -618,7 +618,7 @@ async function handleMessage(sock, message) {
   let sessions = loadJson(SESSIONS_FILE, {});
   const codesDb = loadJson(CODES_FILE, {});
 
-  // Initialize session if not exists
+  // Initialize session if not exists (but don't send welcome message yet)
   if (!sessions[jid]) {
     sessions[jid] = {
       prefs: {
@@ -634,21 +634,73 @@ async function handleMessage(sock, message) {
         createdAt: new Date().toISOString(),
         totalJobs: 0,
         lastNiche: null
+      },
+      security: {
+        failedAuthAttempts: 0,
+        lastFailedAttempt: null,
+        isBlocked: false,
+        blockedAt: null
       }
     };
     saveJson(SESSIONS_FILE, sessions);
     
-    // Send welcome message for new users
-    await sock.sendMessage(jid, { 
-      text: getMessage('en', 'welcome') // Default to English for welcome
-    });
+    // DON'T send welcome message for new users - they must authenticate first
+    // The welcome message will only be sent after they provide a valid CODE
+    console.log(chalk.yellow(`🔒 New user ${jid.split('@')[0]} created session - awaiting authentication`));
+    return; // Exit without any response
   }
 
   const session = sessions[jid];
 
+  // STRICT AUTHENTICATION: No responses until CODE is provided
+  if (!session.apiKeys && !/^CODE:?\s+/i.test(text)) {
+    // SILENT IGNORE: Don't respond to any messages until authentication
+    console.log(chalk.yellow(`🔒 Unauthorized message from ${jid.split('@')[0]}: "${shortText}" - Ignoring silently`));
+    return; // Exit without any response
+  }
+
+  // Check if user is blocked due to too many failed attempts
+  if (session.security && session.security.isBlocked) {
+    // Check if 24 hours have passed since blocking (auto-unblock)
+    if (session.security.blockedAt) {
+      const blockedTime = new Date(session.security.blockedAt);
+      const now = new Date();
+      const hoursSinceBlocked = (now - blockedTime) / (1000 * 60 * 60);
+      
+      if (hoursSinceBlocked >= 24) {
+        // Auto-unblock after 24 hours
+        session.security.isBlocked = false;
+        session.security.failedAuthAttempts = 0;
+        session.security.lastFailedAttempt = null;
+        session.security.blockedAt = null;
+        
+        console.log(chalk.green(`🔓 User ${jid.split('@')[0]} auto-unblocked after 24 hours`));
+        
+        // Save the updated session
+        sessions[jid] = session;
+        saveJson(SESSIONS_FILE, sessions);
+        
+        // Send notification to user
+        await sock.sendMessage(jid, { 
+          text: `🔓 **Account Auto-Unblocked**\n\nYour account has been automatically unblocked after 24 hours. You can now authenticate again using your access code.`
+        });
+        
+        // Continue with normal message processing
+      } else {
+        // Still blocked, ignore message
+        console.log(chalk.red(`🚫 Blocked user ${jid.split('@')[0]} attempted to send message: "${shortText}" (${Math.floor(24 - hoursSinceBlocked)} hours until auto-unblock)`));
+        return; // Exit without any response
+      }
+    } else {
+      // No blocked timestamp, ignore message
+      console.log(chalk.red(`🚫 Blocked user ${jid.split('@')[0]} attempted to send message: "${shortText}"`));
+      return; // Exit without any response
+    }
+  }
+
   try {
-    // Handle language selection first for new users
-    if (session.currentStep === 'awaiting_language') {
+    // Handle language selection first for new users (only if authenticated)
+    if (session.currentStep === 'awaiting_language' && session.apiKeys) {
       const langNumber = parseInt(text);
       const langMap = { 1: 'en', 2: 'fr', 3: 'ar' };
       
@@ -675,6 +727,34 @@ async function handleMessage(sock, message) {
       const code = text.replace(/^CODE:?\s+/i, '').trim();
       
       if (!codesDb[code]) {
+        // Log security attempt
+        console.log(chalk.red(`🚨 Invalid access code attempt from ${jid.split('@')[0]}: "${code}"`));
+        
+        // Track failed attempts
+        if (!session.security) {
+          session.security = { failedAuthAttempts: 0, lastFailedAttempt: null, isBlocked: false };
+        }
+        
+        session.security.failedAuthAttempts += 1;
+        session.security.lastFailedAttempt = new Date().toISOString();
+        
+        // Block user after 5 failed attempts
+        if (session.security.failedAuthAttempts >= 5) {
+          session.security.isBlocked = true;
+          session.security.blockedAt = new Date().toISOString();
+          console.log(chalk.red(`🚫 User ${jid.split('@')[0]} blocked due to 5 failed authentication attempts`));
+          
+          await sock.sendMessage(jid, { 
+            text: `🚫 **Account Blocked**\n\nYou have been blocked due to multiple failed authentication attempts. Please contact an administrator to regain access.`
+          });
+          
+          saveJson(SESSIONS_FILE, sessions);
+          return;
+        }
+        
+        // Save updated security info
+        saveJson(SESSIONS_FILE, sessions);
+        
         await sock.sendMessage(jid, { 
           text: getMessage(session.language, 'invalid_code')
         });
@@ -686,12 +766,29 @@ async function handleMessage(sock, message) {
       codesDb[code].meta.useCount = (codesDb[code].meta.useCount || 0) + 1;
       saveJson(CODES_FILE, codesDb);
 
+      // Log successful authentication
+      console.log(chalk.green(`🔓 Access granted to ${jid.split('@')[0]} with code: ${code}`));
+
+      // Reset security counters on successful authentication
+      if (session.security) {
+        session.security.failedAuthAttempts = 0;
+        session.security.lastFailedAttempt = null;
+        session.security.isBlocked = false;
+        session.security.blockedAt = null;
+      }
+
       // Assign API keys to session
       session.code = code;
       session.apiKeys = codesDb[code].apiKeys;
       sessions[jid] = session;
       saveJson(SESSIONS_FILE, sessions);
 
+      // Send welcome message first (since this is their first interaction after authentication)
+      await sock.sendMessage(jid, { 
+        text: getMessage('en', 'welcome') // Always use English for welcome
+      });
+      
+      // Then send access granted message
       await sock.sendMessage(jid, { 
         text: getMessage(session.language, 'access_granted', {
           source: session.prefs.source,
@@ -706,25 +803,189 @@ async function handleMessage(sock, message) {
       return;
     }
 
-    // Handle incoming messages based on conversation step
-    const inputNumber = parseInt(text);
-
-    // Check for authentication first, regardless of step
-    if (!session.apiKeys && !/^CODE:?\s+/i.test(text)) {
-      // Check if user wants to change language (option 0)
-      if (text === '0') {
-        session.currentStep = 'awaiting_language';
-        session.language = 'en'; // Reset to default
-        saveJson(SESSIONS_FILE, sessions);
-        
+    // Admin command: UNBLOCK (only works for users with valid codes)
+    if (text.toUpperCase().startsWith('ADMIN: UNBLOCK') && session.apiKeys) {
+      const targetJid = text.replace(/^ADMIN:\s*UNBLOCK\s+/i, '').trim();
+      
+      if (!targetJid) {
         await sock.sendMessage(jid, { 
-          text: getMessage('en', 'welcome') // Always use English for welcome
+          text: `❌ **Admin Command Error**\n\nUsage: ADMIN: UNBLOCK <phone_number>\nExample: ADMIN: UNBLOCK 1234567890`
+        });
+        return;
+      }
+
+      // Find the target user's session
+      const targetSession = sessions[targetJid + '@s.whatsapp.net'] || sessions[targetJid + '@c.us'];
+      
+      if (!targetSession) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **User Not Found**\n\nNo session found for: ${targetJid}`
+        });
+        return;
+      }
+
+      if (!targetSession.security || !targetSession.security.isBlocked) {
+        await sock.sendMessage(jid, { 
+          text: `ℹ️ **User Status**\n\nUser ${targetJid} is not currently blocked.`
+        });
+        return;
+      }
+
+      // Unblock the user
+      targetSession.security.isBlocked = false;
+      targetSession.security.failedAuthAttempts = 0;
+      targetSession.security.lastFailedAttempt = null;
+      targetSession.security.blockedAt = null;
+      
+      sessions[targetJid + '@s.whatsapp.net'] = targetSession;
+      saveJson(SESSIONS_FILE, sessions);
+      
+      console.log(chalk.green(`🔓 Admin ${jid.split('@')[0]} unblocked user ${targetJid}`));
+      
+      await sock.sendMessage(jid, { 
+        text: `✅ **User Unblocked**\n\nUser ${targetJid} has been unblocked and can now authenticate again.`
+      });
+      
+      // Notify the unblocked user
+      try {
+        await sock.sendMessage(targetJid + '@s.whatsapp.net', { 
+          text: `🔓 **Account Unblocked**\n\nYour account has been unblocked by an administrator. You can now authenticate again using your access code.`
+        });
+      } catch (error) {
+        console.log(chalk.yellow(`⚠️ Could not notify unblocked user ${targetJid}: ${error.message}`));
+      }
+      
+      return;
+    }
+
+    // Admin command: SECURITY STATUS (only works for users with valid codes)
+    if (text.toUpperCase().startsWith('ADMIN: STATUS') && session.apiKeys) {
+      const targetJid = text.replace(/^ADMIN:\s*STATUS\s+/i, '').trim();
+      
+      if (!targetJid) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Admin Command Error**\n\nUsage: ADMIN: STATUS <phone_number>\nExample: ADMIN: STATUS 1234567890`
+        });
+        return;
+      }
+
+      // Find the target user's session
+      const targetSession = sessions[targetJid + '@s.whatsapp.net'] || sessions[targetJid + '@c.us'];
+      
+      if (!targetSession) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **User Not Found**\n\nNo session found for: ${targetJid}`
+        });
+        return;
+      }
+
+      const security = targetSession.security || {};
+      const status = security.isBlocked ? '🚫 BLOCKED' : '✅ ACTIVE';
+      const failedAttempts = security.failedAuthAttempts || 0;
+      const lastFailed = security.lastFailedAttempt ? new Date(security.lastFailedAttempt).toLocaleString() : 'Never';
+      const blockedAt = security.blockedAt ? new Date(security.blockedAt).toLocaleString() : 'N/A';
+      const isAuthenticated = !!targetSession.apiKeys;
+
+      const statusMessage = `🔒 **Security Status for ${targetJid}**\n\n` +
+        `Status: ${status}\n` +
+        `Authenticated: ${isAuthenticated ? '✅ Yes' : '❌ No'}\n` +
+        `Failed Auth Attempts: ${failedAttempts}/5\n` +
+        `Last Failed Attempt: ${lastFailed}\n` +
+        `Blocked At: ${blockedAt}\n` +
+        `Session Created: ${new Date(targetSession.meta?.createdAt || Date.now()).toLocaleString()}`;
+
+      await sock.sendMessage(jid, { text: statusMessage });
+      return;
+    }
+
+    // Admin command: HELP (only works for users with valid codes)
+    if (text.toUpperCase() === 'ADMIN: HELP' && session.apiKeys) {
+      const helpMessage = `🔐 **Admin Commands**\n\n` +
+        `**ADMIN: HELP** - Show this help message\n` +
+        `**ADMIN: STATUS <phone>** - Check user security status\n` +
+        `**ADMIN: UNBLOCK <phone>** - Unblock a blocked user\n` +
+        `**ADMIN: LOG** - Show security log with all issues\n\n` +
+        `**Examples:**\n` +
+        `• ADMIN: STATUS 1234567890\n` +
+        `• ADMIN: UNBLOCK 1234567890\n` +
+        `• ADMIN: LOG\n\n` +
+        `**Note:** These commands only work for authenticated users.`;
+
+      await sock.sendMessage(jid, { text: helpMessage });
+      return;
+    }
+
+    // Admin command: SECURITY LOG (only works for users with valid codes)
+    if (text.toUpperCase() === 'ADMIN: LOG' && session.apiKeys) {
+      // Get all sessions and find security issues
+      const securityIssues = [];
+      
+      for (const [sessionJid, sessionData] of Object.entries(sessions)) {
+        if (sessionData.security) {
+          const security = sessionData.security;
+          if (security.isBlocked || security.failedAuthAttempts > 0) {
+            const phone = sessionJid.split('@')[0];
+            const status = security.isBlocked ? '🚫 BLOCKED' : '⚠️ WARNING';
+            const attempts = security.failedAuthAttempts;
+            const lastFailed = security.lastFailedAttempt ? new Date(security.lastFailedAttempt).toLocaleString() : 'Never';
+            const blockedAt = security.blockedAt ? new Date(security.blockedAt).toLocaleString() : 'N/A';
+            
+            securityIssues.push({
+              phone,
+              status,
+              attempts,
+              lastFailed,
+              blockedAt,
+              createdAt: sessionData.meta?.createdAt ? new Date(sessionData.meta.createdAt).toLocaleString() : 'Unknown'
+            });
+          }
+        }
+      }
+      
+      if (securityIssues.length === 0) {
+        await sock.sendMessage(jid, { 
+          text: `✅ **Security Status: All Clear**\n\nNo security issues detected. All users are secure.`
         });
         return;
       }
       
+      // Sort by severity (blocked first, then by failed attempts)
+      securityIssues.sort((a, b) => {
+        if (a.status.includes('BLOCKED') && !b.status.includes('BLOCKED')) return -1;
+        if (!a.status.includes('BLOCKED') && b.status.includes('BLOCKED')) return 1;
+        return b.attempts - a.attempts;
+      });
+      
+      let logMessage = `🔒 **Security Log**\n\n`;
+      
+      for (const issue of securityIssues) {
+        logMessage += `${issue.status} **${issue.phone}**\n` +
+          `Failed Attempts: ${issue.attempts}/5\n` +
+          `Last Failed: ${issue.lastFailed}\n` +
+          `Blocked At: ${issue.blockedAt}\n` +
+          `Created: ${issue.createdAt}\n\n`;
+      }
+      
+      logMessage += `**Total Issues:** ${securityIssues.length}`;
+      
+      await sock.sendMessage(jid, { text: logMessage });
+      return;
+    }
+
+    // Handle incoming messages based on conversation step
+    const inputNumber = parseInt(text);
+
+    // Authentication is already checked at the beginning of the function
+    // All messages reaching this point are from authenticated users
+
+    // Handle language reset option (works for authenticated users)
+    if (text === '0' && session.currentStep !== 'awaiting_language') {
+      session.currentStep = 'awaiting_language';
+      session.language = 'en'; // Reset to default
+      saveJson(SESSIONS_FILE, sessions);
+      
       await sock.sendMessage(jid, { 
-        text: getMessage(session.language, 'auth_required')
+        text: getMessage('en', 'welcome') // Always use English for welcome
       });
       return;
     }
@@ -1228,6 +1489,7 @@ async function handleMessage(sock, message) {
             return;
         }
     } else if (session.currentStep === 'scraping_in_progress') {
+        // Only allow STOP and STATUS commands during scraping
         if (text.toUpperCase() === 'STOP') {
             const activeJob = activeJobs.get(jid);
             if (activeJob && activeJob.abort) {
@@ -1238,9 +1500,12 @@ async function handleMessage(sock, message) {
         } else if (text.toUpperCase() === 'STATUS') {
             // Handled below by the general STATUS command
         } else {
-            await sock.sendMessage(jid, { 
-                text: '⏳ A scraping job is currently in progress. You can type STATUS to check its progress or STOP to cancel it.'
-            });
+            // Only respond if user is authenticated
+            if (session.apiKeys) {
+                await sock.sendMessage(jid, { 
+                    text: '⏳ A scraping job is currently in progress. You can type STATUS to check its progress or STOP to cancel it.'
+                });
+            }
             return;
         }
     }
@@ -1250,6 +1515,12 @@ async function handleMessage(sock, message) {
     // The step-specific handling above should take precedence.
     
     if (/^STATUS$/i.test(text)) {
+      // Only allow STATUS command for authenticated users
+      if (!session.apiKeys) {
+        console.log(chalk.yellow(`🔒 Unauthorized STATUS command from ${jid.split('@')[0]} - Ignoring silently`));
+        return;
+      }
+      
       const activeJob = activeJobs.get(jid);
       
       if (activeJob) {
@@ -1278,6 +1549,12 @@ async function handleMessage(sock, message) {
     }
 
     if (/^STOP$/i.test(text)) {
+      // Only allow STOP command for authenticated users
+      if (!session.apiKeys) {
+        console.log(chalk.yellow(`🔒 Unauthorized STOP command from ${jid.split('@')[0]} - Ignoring silently`));
+        return;
+      }
+      
       const activeJob = activeJobs.get(jid);
       
       if (activeJob && activeJob.abort) {
@@ -1303,6 +1580,12 @@ async function handleMessage(sock, message) {
     }
 
     if (/^RESET$/i.test(text)) {
+      // Only allow RESET command for authenticated users
+      if (!session.apiKeys) {
+        console.log(chalk.yellow(`🔒 Unauthorized RESET command from ${jid.split('@')[0]} - Ignoring silently`));
+        return;
+      }
+      
       session.prefs = {
         source: 'ALL',
         format: 'XLSX',
@@ -1326,6 +1609,12 @@ async function handleMessage(sock, message) {
     }
 
     if (/^LIMIT:?\s+/i.test(text)) {
+      // Only allow LIMIT command for authenticated users
+      if (!session.apiKeys) {
+        console.log(chalk.yellow(`🔒 Unauthorized LIMIT command from ${jid.split('@')[0]} - Ignoring silently`));
+        return;
+      }
+      
       const limitStr = text.replace(/^LIMIT:?\s+/i, '').trim();
       const limit = parseInt(limitStr, 10);
       
@@ -1351,6 +1640,12 @@ async function handleMessage(sock, message) {
     }
 
     if (/^HELP$/i.test(text)) {
+      // Only allow HELP command for authenticated users
+      if (!session.apiKeys) {
+        console.log(chalk.yellow(`🔒 Unauthorized HELP command from ${jid.split('@')[0]} - Ignoring silently`));
+        return;
+      }
+      
       await sendChunkedMessage(sock, jid, getMessage(session.language, 'help'));
       session.currentStep = 'awaiting_niche'; // Reset step after help
       session.previousMessage = null;
@@ -1358,8 +1653,8 @@ async function handleMessage(sock, message) {
       return;
     }
 
-    // Check if there are pending results for this user (should be handled outside conversation flow if possible)
-    if (pendingResults.has(jid)) {
+        // Check if there are pending results for this user (only if authenticated)
+    if (pendingResults.has(jid) && session.apiKeys) {
       const pendingResult = pendingResults.get(jid);
       const wantsSend = /^SEND(\s+RESULTS)?$/i.test(text);
       const wantsSkip = /^(DISMISS|SKIP|IGNORE)$/i.test(text);
@@ -1388,9 +1683,9 @@ async function handleMessage(sock, message) {
         // Only inform if not already in a specific state and not a common command
         if (!['awaiting_niche', 'awaiting_source', 'awaiting_type', 'awaiting_format', 'ready_to_start', 'scraping_in_progress'].includes(session.currentStep) &&
             !['STATUS', 'STOP', 'RESET', 'LIMIT', 'HELP'].some(cmd => text.toUpperCase().startsWith(cmd))) {
-            await sock.sendMessage(jid, { 
-                text: `📎 **You have pending results.** Reply \`SEND\` to receive them, or \`SKIP\` to discard. Continuing with your new message...`
-            });
+          await sock.sendMessage(jid, { 
+            text: `📎 **You have pending results.** Reply \`SEND\` to receive them, or \`SKIP\` to discard. Continuing with your new message...`
+          });
         }
       }
     }
@@ -1564,9 +1859,6 @@ async function startBot() {
 }
 
 // Start the bot
-if (import.meta.url === `file://${process.argv[1]}` || 
-    import.meta.url.startsWith('file:') && process.argv[1] && import.meta.url.includes(process.argv[1].replace(/\\/g, '/'))) {
-  startBot();
-}
+startBot();
 
 export { startBot };
