@@ -978,6 +978,39 @@ async function main() {
 
   // Initialize configuration
   await initializeConfig();
+  
+  // ✅ ENHANCED: Inject API keys from environment variables if not already set
+  console.log(chalk.yellow('🔍 DEBUG: Checking for environment variable API keys...'));
+  console.log(chalk.yellow(`   process.env.GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? 'SET' : 'NOT SET'}`));
+  console.log(chalk.yellow(`   process.env.GOOGLE_API_KEY_1: ${process.env.GOOGLE_API_KEY_1 ? 'SET' : 'NOT SET'}`));
+  console.log(chalk.yellow(`   process.env.GOOGLE_API_KEY_2: ${process.env.GOOGLE_API_KEY_2 ? 'SET' : 'NOT SET'}`));
+  
+  // Inject Gemini API key from environment if not set in config
+  if (process.env.GEMINI_API_KEY && (!config.gemini.apiKey || config.gemini.apiKey === 'YOUR_GEMINI_API_KEY_HERE')) {
+    config.gemini.apiKey = process.env.GEMINI_API_KEY;
+    console.log(chalk.green('✅ Injected Gemini API key from environment variables'));
+  }
+  
+  // Inject Google Search API keys from environment if not set in config
+  if (process.env.GOOGLE_API_KEY_1 && config.googleSearch.apiKeys.length === 0) {
+    const envKeys = [];
+    let i = 1;
+    while (process.env[`GOOGLE_API_KEY_${i}`]) {
+      const key = process.env[`GOOGLE_API_KEY_${i}`];
+      if (key && key !== 'YOUR_API_KEY_HERE' && key.length > 20) {
+        envKeys.push(key);
+      }
+      i++;
+    }
+    if (envKeys.length > 0) {
+      config.googleSearch.apiKeys = envKeys;
+      console.log(chalk.green(`✅ Injected ${envKeys.length} Google Search API keys from environment variables`));
+    }
+  }
+  
+  console.log(chalk.yellow('🔍 DEBUG: Final config after injection:'));
+  console.log(chalk.yellow(`   config.gemini.apiKey: ${config.gemini.apiKey ? 'SET' : 'NULL'}`));
+  console.log(chalk.yellow(`   config.googleSearch.apiKeys.length: ${config.googleSearch.apiKeys.length}`));
 
   // Set up interruption handlers
   process.on('SIGINT', handleGlobalInterruption);
@@ -1028,9 +1061,9 @@ async function main() {
       }
       spinner.succeed(chalk.green(`✅ Generated ${searchQueries.length} AI-powered queries`));
     } catch (error) {
-      console.log(chalk.yellow('⚠️  AI query generation failed, using fallback queries'));
-      // Always use 25 fallback queries
-      searchQueries = config.searchQueries.slice(0, 25);
+      console.error(chalk.red(`❌ AI query generation failed: ${error.message}`));
+      console.error(chalk.red('🛑 Stopping scraping operation - Gemini API error.'));
+      throw new Error(`Gemini AI API error: ${error.message}`);
     }
 
     console.log(chalk.yellow(`📋 Processing ${searchQueries.length} enhanced queries...`));
@@ -1048,30 +1081,23 @@ async function main() {
     let allResults = [];
 
     // Process queries based on data source
-    try {
-      if (dataSource === 'linkedin') {
-        allResults = await processLinkedInSearch(searchQueries, niche, contentValidator);
-      } else if (dataSource === 'google_search') {
-        allResults = await processGoogleSearch(searchQueries, niche, contentValidator, dataType);
-      } else if (dataSource === 'google_maps') {
-        allResults = await processGoogleMapsSearch(niche, contentValidator);
-      } else if (dataSource === 'all_sources') {
-        // Process all sources: Google Search, LinkedIn, and Google Maps
-        console.log(chalk.blue(`\n🔄 Processing all sources...`));
-        
-        const [googleResults, linkedInResults, googleMapsResults] = await Promise.all([
-          processGoogleSearch(searchQueries, niche, contentValidator, dataType),
-          processLinkedInSearch(searchQueries, niche, contentValidator),
-          processGoogleMapsSearch(niche, contentValidator)
-        ]);
-        
-        allResults = [...googleResults, ...linkedInResults, ...googleMapsResults];
-      }
-    } catch (processingError) {
-      console.error(chalk.red(`❌ Processing error: ${processingError.message}`));
-      console.error(chalk.gray('Processing error details:', processingError.stack));
-      // Continue with whatever results we have
-      allResults = allResults || [];
+    if (dataSource === 'linkedin') {
+      allResults = await processLinkedInSearch(searchQueries, niche, contentValidator);
+    } else if (dataSource === 'google_search') {
+      allResults = await processGoogleSearch(searchQueries, niche, contentValidator, dataType);
+    } else if (dataSource === 'google_maps') {
+      allResults = await processGoogleMapsSearch(niche, contentValidator);
+    } else if (dataSource === 'all_sources') {
+      // Process all sources: Google Search, LinkedIn, and Google Maps
+      console.log(chalk.blue(`\n🔄 Processing all sources...`));
+      
+      const [googleResults, linkedInResults, googleMapsResults] = await Promise.all([
+        processGoogleSearch(searchQueries, niche, contentValidator, dataType),
+        processLinkedInSearch(searchQueries, niche, contentValidator),
+        processGoogleMapsSearch(niche, contentValidator)
+      ]);
+      
+      allResults = [...googleResults, ...linkedInResults, ...googleMapsResults];
     }
 
     // Update final results
@@ -1104,13 +1130,8 @@ async function main() {
     } catch (saveError) {
       console.error(chalk.red(`❌ Save error: ${saveError.message}`));
       console.error(chalk.gray('Save error details:', saveError.stack));
-      // Try to save without AI analysis as fallback
-      try {
-        console.log(chalk.yellow('🔄 Attempting fallback save without AI analysis...'));
-        await saveResultsAutoSave(allResults, niche, dataType);
-      } catch (fallbackError) {
-        console.error(chalk.red(`❌ Fallback save also failed: ${fallbackError.message}`));
-      }
+      // Don't try fallback save - if main save fails, let the error propagate
+      throw saveError;
     }
 
     // Display API key stats
@@ -1126,6 +1147,8 @@ async function main() {
     isProcessing = false;
     stopAutoSave();
     rl.close();
+    // Re-throw the error so it propagates up to the bot level
+    throw error;
   }
 }
 

@@ -14,8 +14,8 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin",
-      "lastUsed": "2025-08-24T20:59:52.214Z",
-      "useCount": 22
+      "lastUsed": "2025-08-25T14:44:07.552Z",
+      "useCount": 30
     }
   },
   "test": {
@@ -52,8 +52,8 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": null,
-      "useCount": 0
+      "lastUsed": "2025-08-25T14:48:26.198Z",
+      "useCount": 10
     }
   }
 }

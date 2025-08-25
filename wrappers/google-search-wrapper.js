@@ -52,7 +52,11 @@ export class GoogleSearchScraper extends ScraperInterface {
       console.log(chalk.blue('📡 Running Google Search API queries...'));
       
       // Run existing Google Search scraper with EXACT same workflow
-      const results = await runScraper(scraperOptions);
+      // Pass API keys to the scraper
+      const results = await runScraper({
+        ...scraperOptions,
+        apiKeys: options.apiKeys
+      });
       
       // Transform results based on requested data type
       const transformedResults = this.transformResults(results, options.dataType);
@@ -88,6 +92,10 @@ export class GoogleSearchScraper extends ScraperInterface {
     const fs = await import('fs');
     
     const niche = options.niche || 'dentist fes';
+    const apiKeys = options.apiKeys || {};
+    
+    // Debug: Log what API keys we received
+    console.log(chalk.yellow(`🔍 DEBUG: Received apiKeys:`, JSON.stringify(apiKeys, null, 2)));
     
     console.log(chalk.blue('🚀 Starting original Google Search scraper...'));
     console.log(chalk.blue(`   🎯 Target Niche: "${niche}"`));
@@ -100,16 +108,45 @@ export class GoogleSearchScraper extends ScraperInterface {
     
     return new Promise((resolve, reject) => {
       // Run the standalone scraper with special environment for detailed logging
+      // Inject user's API keys into child process environment
+      const childEnv = { 
+        ...process.env, 
+        FORCE_COLOR: '1',  // Enable colors in child process
+        UNIFIED_SCRAPER: '1',  // Tell scraper to use detailed console logging
+        SESSION_ID: this.sessionId.toString(),  // Unique session ID
+        SESSION_TIMESTAMP: this.sessionTimestamp  // Human-readable timestamp
+      };
+      
+      // Inject Google Search API keys if available
+      if (apiKeys.googleSearchKeys && apiKeys.googleSearchKeys.length > 0) {
+        apiKeys.googleSearchKeys.forEach((key, index) => {
+          if (index < 5) { // Limit to 5 keys max
+            childEnv[`GOOGLE_API_KEY_${index + 1}`] = key;
+          }
+        });
+        console.log(`   🔑 Injected ${apiKeys.googleSearchKeys.length} Google Search API keys into child process`);
+      } else {
+        console.log(chalk.red(`   ❌ No Google Search API keys found in apiKeys:`, apiKeys));
+      }
+      
+      // Inject Gemini API key if available
+      if (apiKeys.geminiKeys && apiKeys.geminiKeys.length > 0) {
+        childEnv.GEMINI_API_KEY = apiKeys.geminiKeys[0];
+        console.log(`   🤖 Injected Gemini API key into child process`);
+      } else {
+        console.log(chalk.red(`   ❌ No Gemini API keys found in apiKeys:`, apiKeys));
+      }
+      
+      // Debug: Log the final child environment
+      console.log(chalk.yellow(`🔍 DEBUG: Child environment API keys:`));
+      console.log(chalk.yellow(`   GEMINI_API_KEY: ${childEnv.GEMINI_API_KEY || 'NOT SET'}`));
+      console.log(chalk.yellow(`   GOOGLE_API_KEY_1: ${childEnv.GOOGLE_API_KEY_1 || 'NOT SET'}`));
+      console.log(chalk.yellow(`   GOOGLE_API_KEY_2: ${childEnv.GOOGLE_API_KEY_2 || 'NOT SET'}`));
+      
       const child = spawn('node', ['scraper.js'], {
         cwd: './google search + linkdin scraper/lead-scraper',
         stdio: ['pipe', 'pipe', 'pipe'],
-        env: { 
-          ...process.env, 
-          FORCE_COLOR: '1',  // Enable colors in child process
-          UNIFIED_SCRAPER: '1',  // Tell scraper to use detailed console logging
-          SESSION_ID: this.sessionId.toString(),  // Unique session ID
-          SESSION_TIMESTAMP: this.sessionTimestamp  // Human-readable timestamp
-        }
+        env: childEnv
       });
       
       console.log(chalk.blue('   🔍 Google Search child process started'));

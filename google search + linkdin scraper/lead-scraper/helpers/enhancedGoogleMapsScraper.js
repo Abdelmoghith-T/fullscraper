@@ -19,7 +19,14 @@ export class EnhancedGoogleMapsScraper {
   // Helper: Generate main search queries using Gemini
   async generateMainQueriesWithGemini(userQuery, locationContext) {
     try {
-      const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo';
+      const apiKey = process.env.GEMINI_API_KEY;
+      
+      // ❌ REMOVED: Hard-coded fallback API key
+      // ✅ NEW: Require valid API key
+      if (!apiKey) {
+        throw new Error('No Gemini API key available. User must provide valid API key to proceed.');
+      }
+      
       const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
       const prompt = `You are a helpful AI assistant. Given a user's search query for a business type and location (e.g., "dentist in fes"), your task is to generate 5 diverse and unique search queries that are highly likely to find more results for that business type in or around the specified location. 
@@ -84,7 +91,14 @@ Generated Queries:`;
   // Helper: Generate sub-queries (neighborhoods/sub-cities) using Gemini
   async generateSubQueriesWithGemini(mainQuery, locationContext) {
     try {
-      const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo';
+      const apiKey = process.env.GEMINI_API_KEY;
+      
+      // ❌ REMOVED: Hard-coded fallback API key
+      // ✅ NEW: Require valid API key
+      if (!apiKey) {
+        throw new Error('No Gemini API key available. User must provide valid API key to proceed.');
+      }
+      
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
       const prompt = `You are a helpful AI assistant. Given a general business search query (e.g., "cabinet dentaire fes") and a location context (e.g., "Fes"), your task is to generate 10 highly specific sub-queries. Each sub-query should target a major neighborhood or a well-known smaller area within the given city/country, related to the business type.
@@ -150,7 +164,13 @@ Generated Sub-Queries:`;
     try {
       if (!Array.isArray(businessDataArray) || businessDataArray.length === 0) return [];
 
-      const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo';
+      const apiKey = process.env.GEMINI_API_KEY;
+      
+      // ❌ REMOVED: Hard-coded fallback API key
+      // ✅ NEW: Require valid API key
+      if (!apiKey) {
+        throw new Error('No Gemini API key available. User must provide valid API key to proceed.');
+      }
       const endpoint = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
       let instruction = `You are an expert address extraction AI. Your task is to process a list of business data, each containing a business name, its location context (city), and a list of address candidates extracted from Google Maps HTML.

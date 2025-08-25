@@ -6,6 +6,7 @@ import { startUnifiedScraper } from './lib/startUnifiedScraper.js';
 import { createRequire } from 'module';
 import chalk from 'chalk';
 import { getMessage } from './languages.js';
+
 import AdminManager from './lib/admin-manager.js';
 
 const require = createRequire(import.meta.url);
@@ -69,6 +70,20 @@ class ProgressSimulator {
         message: 'Progress: 100% — Scraping complete!'
       });
     }
+  }
+
+  /**
+   * Stop the progress simulation without sending completion message
+   */
+  stop() {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+    }
+    
+    this.isComplete = true;
+    this.isStarted = false;
+    // Don't send any progress message - just stop silently
   }
 
   /**
@@ -194,6 +209,7 @@ const PENDING_RESULTS_FILE = path.join(__dirname, 'pending_results.json');
 // Active jobs tracking with offline resilience
 const activeJobs = new Map(); // jid -> { abort: AbortController, status: string, startTime: Date, results: any, progressSimulator: ProgressSimulator }
 const pendingResults = new Map(); // jid -> { filePath: string, meta: any, timestamp: Date }
+
 
 // Admin management
 const adminManager = new AdminManager();
@@ -645,11 +661,13 @@ function getHelpMessage() {
           `**Navigation Tip:** At any numbered selection step, reply with \`0\` to go back to the previous step.`;
  }
 
+
 // Helper function to format API keys for display
 function formatApiKey(key, maxLength = 20) {
   if (!key) return '❌ MISSING';
   if (key.length <= maxLength) return `\`${key}\``;
-  
+
+
   const prefix = key.substring(0, 8);
   const suffix = key.substring(key.length - 8);
   return `\`${prefix}...${suffix}\` (${key.length} chars)`;
@@ -670,6 +688,7 @@ async function handleMessage(sock, message) {
   let sessions = loadJson(SESSIONS_FILE, {});
   const codesDb = loadJson(CODES_FILE, {});
 
+
   // Initialize session if not exists (but don't send welcome message yet)
   if (!sessions[jid]) {
     sessions[jid] = {
@@ -686,6 +705,7 @@ async function handleMessage(sock, message) {
         createdAt: new Date().toISOString(),
         totalJobs: 0,
         lastNiche: null
+
       },
       security: {
         failedAuthAttempts: 0,
@@ -696,6 +716,7 @@ async function handleMessage(sock, message) {
     };
     saveJson(SESSIONS_FILE, sessions);
     
+
     // DON'T send welcome message for new users - they must authenticate first
     // The welcome message will only be sent after they provide a valid CODE
     console.log(chalk.yellow(`🔒 New user ${jid.split('@')[0]} created session - awaiting authentication`));
@@ -711,6 +732,7 @@ async function handleMessage(sock, message) {
     
     if (!adminCode) {
     await sock.sendMessage(jid, { 
+
         text: `🔐 **Admin Authentication Required**\n\nUsage: ADMIN: <admin_code>\nExample: ADMIN: admin123`
       });
       return;
@@ -1046,8 +1068,9 @@ async function handleMessage(sock, message) {
       message += `• **ADMIN SESSIONSFILE** - Show user sessions file content\n`;
       message += `• **ADMIN REFRESH** - Refresh admin data from disk\n`;
       message += `• **ADMIN CLEAR** - Clear all admin sessions (debug)\n`;
-      message += `• **ADMIN AUTH <code>** - Re-authenticate with admin code\n`;
-      message += `• **ADMIN ME** - Show your current admin session details\n`;
+              message += `• **ADMIN AUTH <code>** - Re-authenticate with admin code\n`;
+        message += `• **ADMIN LOGOUT** - Logout from admin session (switch to user mode)\n`;
+        message += `• **ADMIN ME** - Show your current admin session details\n`;
       message += `• **ADMIN INFO** - Show system information and version\n`;
       message += `• **ADMIN TEST** - Test your admin permissions\n`;
       message += `• **ADMIN RELOAD** - Reload admin manager completely\n`;
@@ -1840,10 +1863,31 @@ async function handleMessage(sock, message) {
           text: `❌ **Internal Error:** ${error.message}` 
         });
       }
-      return;
-    }
+              return;
+      }
 
-    // Admin command: Clear all admin sessions (debug)
+      // Admin command: Logout from admin session
+      if (text.toUpperCase() === 'ADMIN LOGOUT') {
+        try {
+          const adminCode = adminSessions.get(jid)?.adminCode;
+          adminSessions.delete(jid);
+          saveAdminSessions();
+          
+          await sock.sendMessage(jid, { 
+            text: `🔓 **Admin Logout Successful!**\n\n✅ You have been logged out of your admin session.\n\n💡 **To log back in:**\n• Send ADMIN: <admin_code> to authenticate again\n• Example: ADMIN: admin123\n\n💡 **To use as regular user:**\n• Send CODE: <user_code> to start a user session\n• Example: CODE: user1`
+          });
+          
+          console.log(chalk.yellow(`🔓 Admin ${jid.split('@')[0]} logged out (was using code: ${adminCode})`));
+        } catch (error) {
+          console.error(chalk.red(`❌ Error in admin logout:`, error.message));
+          await sock.sendMessage(jid, { 
+            text: `❌ **Error during logout:** ${error.message}` 
+          });
+        }
+        return;
+      }
+
+      // Admin command: Clear all admin sessions (debug)
     if (text.toUpperCase() === 'ADMIN CLEAR') {
       try {
         const sessionCount = adminSessions.size;
@@ -1865,7 +1909,7 @@ async function handleMessage(sock, message) {
     // If admin session exists but no command matched, show available commands
     if (!text.toUpperCase().startsWith('ADMIN ')) {
       await sock.sendMessage(jid, { 
-        text: `🔐 **Admin Session Active**\n\n💡 Type **ADMIN HELP** to see available commands.\n\n💡 Type **ADMIN USERS** to list all users.\n\n💡 Type **ADMIN STATUS** to view system status.`
+        text: `🔐 **Admin Session Active**\n\n💡 Type **ADMIN HELP** to see available commands.\n\n💡 Type **ADMIN USERS** to list all users.\n\n💡 Type **ADMIN STATUS** to view system status.\n\n💡 Type **ADMIN LOGOUT** to switch to user mode.`
       });
       return;
     }
@@ -1881,7 +1925,7 @@ async function handleMessage(sock, message) {
         'ADMIN SESSIONS', 'ADMIN REFRESH', 'ADMIN ADMINSESSIONSFILE', 
         'ADMIN USERSESSIONSFILE', 'ADMIN FILES', 'ADMIN DEBUG', 'ADMIN LOG',
         'ADMIN SESSIONSFILE', 'ADMIN RESET', 'ADMIN CONFIGFILE', 'ADMIN CODESFILE',
-        'ADMIN CLEAR', 'ADMIN AUTH', 'ADMIN ME', 'ADMIN INFO', 'ADMIN TEST',
+        'ADMIN CLEAR', 'ADMIN AUTH', 'ADMIN LOGOUT', 'ADMIN ME', 'ADMIN INFO', 'ADMIN TEST',
         'ADMIN RELOAD', 'ADMIN CONFIG', 'ADMIN CODES', 'ADMIN SESSIONS'
       ];
 
@@ -1895,7 +1939,7 @@ async function handleMessage(sock, message) {
 
       if (!isValidCommand) {
         await sock.sendMessage(jid, { 
-          text: `❌ **Invalid Admin Command!**\n\n⚠️ The command "${text}" is not recognized.\n\n💡 **Available Commands:**\n• ADMIN USERS - List all users\n• ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>\n• ADMIN REMOVE USER <code>\n• ADMIN ADMINS - List all admins\n• ADMIN STATUS - System status\n• ADMIN HELP - Show detailed help\n\n🔄 **Try again with a valid command!**`
+          text: `❌ **Invalid Admin Command!**\n\n⚠️ The command "${text}" is not recognized.\n\n💡 **Available Commands:**\n• ADMIN USERS - List all users\n• ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>\n• ADMIN REMOVE USER <code>\n• ADMIN ADMINS - List all admins\n• ADMIN STATUS - System status\n• ADMIN HELP - Show detailed help\n• ADMIN LOGOUT - Switch to user mode\n\n🔄 **Try again with a valid command!**`
         });
         return;
       }
@@ -1983,6 +2027,7 @@ async function handleMessage(sock, message) {
       const code = text.replace(/^CODE:?\s+/i, '').trim();
       
       if (!codesDb[code]) {
+
         // Log security attempt
         console.log(chalk.red(`🚨 Invalid access code attempt from ${jid.split('@')[0]}: "${code}"`));
         
@@ -2022,6 +2067,7 @@ async function handleMessage(sock, message) {
       codesDb[code].meta.useCount = (codesDb[code].meta.useCount || 0) + 1;
       saveJson(CODES_FILE, codesDb);
 
+
       // Log successful authentication
       console.log(chalk.green(`🔓 Access granted to ${jid.split('@')[0]} with code: ${code}`));
 
@@ -2039,6 +2085,7 @@ async function handleMessage(sock, message) {
       sessions[jid] = session;
       saveJson(SESSIONS_FILE, sessions);
 
+
       // Send welcome message first (since this is their first interaction after authentication)
       await sock.sendMessage(jid, { 
         text: getMessage('en', 'welcome') // Always use English for welcome
@@ -2053,9 +2100,38 @@ async function handleMessage(sock, message) {
         })
       });
       
+      // Send logout information
+      await sock.sendMessage(jid, { 
+        text: `💡 **Tip:** You can logout anytime by sending **LOGOUT** to switch accounts or become admin.`
+      });
+      
       session.currentStep = 'awaiting_niche';
       session.previousMessage = null;
       saveJson(SESSIONS_FILE, sessions);
+      return;
+    }
+
+    // User command: Logout from user session
+    if (text.toUpperCase() === 'LOGOUT' && session.apiKeys) {
+      try {
+        const userCode = session.code;
+        const phoneNumber = jid.split('@')[0];
+        
+        // Clear the user session
+        delete sessions[jid];
+        saveJson(SESSIONS_FILE, sessions);
+        
+        await sock.sendMessage(jid, { 
+          text: `🔓 **User Logout Successful!**\n\n✅ You have been logged out of your user session.\n\n💡 **To log back in:**\n• Send CODE: <user_code> to start a new user session\n• Example: CODE: user1\n\n💡 **To become admin:**\n• Send ADMIN: <admin_code> to start an admin session\n• Example: ADMIN: admin123\n\n💡 **Available accounts:**\n• User codes: ${Object.keys(codesDb).join(', ')}\n• Admin codes: ${Object.keys(adminManager.admins).join(', ')}`
+        });
+        
+        console.log(chalk.yellow(`🔓 User ${phoneNumber} logged out (was using code: ${userCode})`));
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in user logout:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error during logout:** ${error.message}` 
+        });
+      }
       return;
     }
 
@@ -2095,10 +2171,12 @@ async function handleMessage(sock, message) {
       
       sessions[targetJid + '@s.whatsapp.net'] = targetSession;
         saveJson(SESSIONS_FILE, sessions);
+
       
       console.log(chalk.green(`🔓 Admin ${jid.split('@')[0]} unblocked user ${targetJid}`));
         
         await sock.sendMessage(jid, { 
+
         text: `✅ **User Unblocked**\n\nUser ${targetJid} has been unblocked and can now authenticate again.`
       });
       
@@ -2114,12 +2192,14 @@ async function handleMessage(sock, message) {
         return;
       }
       
+
     // Admin command: SECURITY STATUS (only works for users with valid codes)
     if (text.toUpperCase().startsWith('ADMIN: STATUS') && session.apiKeys) {
       const targetJid = text.replace(/^ADMIN:\s*STATUS\s+/i, '').trim();
       
       if (!targetJid) {
       await sock.sendMessage(jid, { 
+
           text: `❌ **Admin Command Error**\n\nUsage: ADMIN: STATUS <phone_number>\nExample: ADMIN: STATUS 1234567890`
         });
         return;
@@ -2612,9 +2692,64 @@ async function handleMessage(sock, message) {
                                     }
                                 }
                             }
+                        },
+                        
+                        // ✅ CRITICAL FIX: Add onError callback to catch internal scraper errors
+                        onError: async (error) => {
+                            console.error(chalk.red(`🚨 Internal scraper error caught: ${error.message}`));
+                            
+                            // Stop the progress simulator immediately
+                            const jobStatus = activeJobs.get(jid);
+                            if (jobStatus && jobStatus.progressSimulator) {
+                                console.log(chalk.yellow(`🛑 Stopping progress simulator due to internal error: ${jid}`));
+                                jobStatus.progressSimulator.complete();
+                            }
+                            
+                            // Send error message to user
+                            let errorMessage = '';
+                            
+                            if (error.message.includes('Request failed with status code 400')) {
+                                errorMessage = `🚨 **API Key Validation Failed!**\n\n` +
+                                    `❌ **Your API keys are invalid or have expired.**\n\n` +
+                                    `💡 **Solutions:**\n` +
+                                    `• Contact admin to update your API keys\n` +
+                                    `• Ensure your Google Search and Gemini AI keys are valid\n` +
+                                    `• Check if your API keys have exceeded daily quotas\n\n` +
+                                    `🛑 **Scraping stopped - invalid API configuration.**`;
+                            } else if (error.message.includes('No main queries generated')) {
+                                errorMessage = `🚨 **AI Query Generation Failed!**\n\n` +
+                                    `❌ **The AI system could not generate search queries.**\n\n` +
+                                    `💡 **Possible causes:**\n` +
+                                    `• Invalid Gemini API key\n` +
+                                    `• API quota exceeded\n` +
+                                    `• Network connectivity issues\n\n` +
+                                    `🛑 **Scraping stopped - AI system unavailable.**`;
+                            } else {
+                                errorMessage = `🚨 **Scraping Error!**\n\n` +
+                                    `❌ **An error occurred during scraping:** ${error.message}\n\n` +
+                                    `💡 **Solutions:**\n` +
+                                    `• Try again with a different search term\n` +
+                                    `• Contact support if the issue persists\n\n` +
+                                    `🛑 **Scraping stopped due to error.**`;
+                            }
+                            
+                            try {
+                                await sock.sendMessage(jid, { text: errorMessage });
+                            } catch (sendError) {
+                                console.error('Failed to send error message to user:', sendError.message);
+                            }
+                            
+                            // Clean up the job
+                            activeJobs.delete(jid);
+                            session.status = 'idle';
+                            session.currentStep = 'awaiting_niche';
+                            sessions[jid] = session;
+                            saveJson(SESSIONS_FILE, sessions);
                         }
                     }
                 });
+                
+
 
                 // Introduce a small delay to allow the 100% progress message to be sent first
                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -2705,6 +2840,14 @@ async function handleMessage(sock, message) {
                 console.error(chalk.red(`❌ Job failed: ${error.message}`));
                 console.error(chalk.red(`❌ Job failed stack: ${error.stack}`)); // Added error stack log
                 
+                // ✅ CRITICAL FIX: Stop progress simulator before cleanup
+                const activeJob = activeJobs.get(jid);
+                if (activeJob && activeJob.progressSimulator) {
+                    console.log(chalk.yellow(`🛑 Stopping progress simulator for failed job: ${jid}`));
+                    // Stop the progress simulator without sending completion message
+                    activeJob.progressSimulator.stop();
+                }
+                
                 // Clean up
                 activeJobs.delete(jid);
                 session.status = 'idle';
@@ -2712,16 +2855,114 @@ async function handleMessage(sock, message) {
                 sessions[jid] = session;
                 saveJson(SESSIONS_FILE, sessions);
 
+                // ✅ ENHANCED: Handle specific API key and quota errors
+                let errorMessage = '';
+                
                 if (error.message.includes('aborted')) {
-                    await sock.sendMessage(jid, { 
-                        text: '🛑 **Job was cancelled.** You can send a new search query when ready.'
-                    });
+                    errorMessage = '🛑 **Job was cancelled.** You can send a new search query when ready.';
+                } else if (error.message.includes('ALL_USER_API_KEYS_QUOTA_EXCEEDED')) {
+                    errorMessage = `🚨 **Daily Quota Exceeded!**\n\n` +
+                        `❌ **All your Google Search API keys have exceeded their daily quota.**\n\n` +
+                        `💡 **Solutions:**\n` +
+                        `• Wait until tomorrow when quotas reset\n` +
+                        `• Add more Google Search API keys\n` +
+                        `• Contact admin to add more keys to your account\n\n` +
+                        `🛑 **Scraping stopped - no more API access available.**`;
+                        
+                } else if (error.message.includes('GEMINI_API_QUOTA_EXCEEDED')) {
+                    errorMessage = `🚨 **Gemini AI Quota Exceeded!**\n\n` +
+                        `❌ **Your Gemini AI API key has exceeded its daily quota.**\n\n` +
+                        `💡 **Solutions:**\n` +
+                        `• Wait until tomorrow when quota resets\n` +
+                        `• Add more Gemini AI API keys\n` +
+                        `• Contact admin to add more keys to your account\n\n` +
+                        `🛑 **Scraping stopped - no AI query generation available.**`;
+                        
+                } else if (error.message.includes('GEMINI_API_RATE_LIMITED')) {
+                    errorMessage = `🚨 **Gemini AI Rate Limited!**\n\n` +
+                        `❌ **Your Gemini AI API key has hit rate limits.**\n\n` +
+                        `💡 **Solutions:**\n` +
+                        `• Wait a few minutes before trying again\n` +
+                        `• Add more Gemini AI API keys\n` +
+                        `• Contact admin to add more keys to your account\n\n` +
+                        `🛑 **Scraping stopped - rate limit exceeded.**`;
+                        
+                } else if (error.message.includes('GEMINI_API_INVALID_KEY')) {
+                    errorMessage = `🚨 **Invalid Gemini AI API Key!**\n\n` +
+                        `❌ **The Gemini AI API key in your account is invalid.**\n\n` +
+                        `💡 **Solutions:**\n` +
+                        `• Contact admin to update your Gemini API key\n` +
+                        `• Ensure your API key is valid and active\n\n` +
+                        `🛑 **Scraping stopped - invalid API key.**`;
+                        
+                } else if (error.message.includes('ALL_USER_API_KEYS_EXHAUSTED')) {
+                    errorMessage = `🚨 **All API Keys Exhausted!**\n\n` +
+                        `❌ **All your API keys have been exhausted.**\n\n` +
+                        `💡 **Solutions:**\n` +
+                        `• Wait until tomorrow when quotas reset\n` +
+                        `• Add more API keys\n` +
+                        `• Contact admin to add more keys to your account\n\n` +
+                        `🛑 **Scraping stopped - no more API access available.**`;
+                        
+                } else if (error.message.includes('No Google Search API keys configured') || 
+                           error.message.includes('No Gemini API key configured')) {
+                    errorMessage = `🚨 **Missing API Keys!**\n\n` +
+                        `❌ **Your account is missing required API keys.**\n\n` +
+                        `💡 **Solutions:**\n` +
+                        `• Contact admin to add API keys to your account\n` +
+                        `• Ensure you have both Google Search and Gemini AI keys\n\n` +
+                        `🛑 **Scraping stopped - missing API configuration.**`;
+                        
+                } else if (error.message.includes('Request failed with status code 400')) {
+                    errorMessage = `🚨 **API Key Validation Failed!**\n\n` +
+                        `❌ **Your API keys are invalid or have expired.**\n\n` +
+                        `💡 **Solutions:**\n` +
+                        `• Contact admin to update your API keys\n` +
+                        `• Ensure your Google Search and Gemini AI keys are valid\n` +
+                        `• Check if your API keys have exceeded daily quotas\n\n` +
+                        `🛑 **Scraping stopped - invalid API configuration.**`;
+                        
+                } else if (error.message.includes('No main queries generated')) {
+                    errorMessage = `🚨 **AI Query Generation Failed!**\n\n` +
+                        `❌ **The AI system could not generate search queries.**\n\n` +
+                        `💡 **Possible causes:**\n` +
+                        `• Invalid Gemini API key\n` +
+                        `• API quota exceeded\n` +
+                        `• Network connectivity issues\n\n` +
+                        `🛑 **Scraping stopped - AI system unavailable.**`;
+                        
+                } else if (error.message.includes('Maps scraper exited with code 1')) {
+                    errorMessage = `🚨 **Daily Request Limit Reached!**\n\n` +
+                        `❌ **Your API keys have exceeded their daily quota or are invalid.**\n\n` +
+                        `💡 **What happened:**\n` +
+                        `• The AI system could not generate search queries\n` +
+                        `• This usually means your Gemini API key is invalid or quota exceeded\n` +
+                        `• Or your Google Search API keys have reached daily limits\n\n` +
+                        `💡 **Solutions:**\n` +
+                        `• Wait until tomorrow when quotas reset\n` +
+                        `• Contact admin to update your API keys\n` +
+                        `• Add more valid API keys to your account\n\n` +
+                        `🛑 **Scraping stopped - no more API access available today.**`;
+                        
+                } else if (error.message.includes('exited with code 1') && 
+                           (error.message.includes('Gemini API key not configured') || 
+                            error.message.includes('GEMINI_API_ERROR'))) {
+                    errorMessage = `🚨 **API Key Validation Failed!**\n\n` +
+                        `❌ **Your API keys are invalid or have expired.**\n\n` +
+                        `💡 **Solutions:**\n` +
+                        `• Contact admin to update your API keys\n` +
+                        `• Ensure your Google Search and Gemini AI keys are valid\n` +
+                        `• Check if your API keys have exceeded daily quotas\n\n` +
+                        `🛑 **Scraping stopped - invalid API configuration.**`;
+                        
                 } else {
-                    await sock.sendMessage(jid, { 
-                        text: `❌ **Error occurred:** ${error.message}\n\n` +
-                              `💡 Please try again with a different niche or contact support if the issue persists.`
-                    });
+                    // Generic error handling
+                    errorMessage = `❌ **Error occurred:** ${error.message}\n\n` +
+                        `💡 Please try again with a different niche or contact support if the issue persists.`;
                 }
+
+                // Send error message to user
+                await sock.sendMessage(jid, { text: errorMessage });
             }
             
             return;
@@ -2747,6 +2988,7 @@ async function handleMessage(sock, message) {
             return;
         }
     } else if (session.currentStep === 'scraping_in_progress') {
+
         // Only allow STOP and STATUS commands during scraping
         if (text.toUpperCase() === 'STOP') {
             const activeJob = activeJobs.get(jid);
@@ -2758,11 +3000,13 @@ async function handleMessage(sock, message) {
         } else if (text.toUpperCase() === 'STATUS') {
             // Handled below by the general STATUS command
         } else {
+
             // Only respond if user is authenticated
             if (session.apiKeys) {
             await sock.sendMessage(jid, { 
                 text: '⏳ A scraping job is currently in progress. You can type STATUS to check its progress or STOP to cancel it.'
             });
+
             }
             return;
         }
@@ -2773,6 +3017,7 @@ async function handleMessage(sock, message) {
     // The step-specific handling above should take precedence.
     
     if (/^STATUS$/i.test(text)) {
+
       // Only allow STATUS command for authenticated users
       if (!session.apiKeys) {
         console.log(chalk.yellow(`🔒 Unauthorized STATUS command from ${jid.split('@')[0]} - Ignoring silently`));
@@ -2807,6 +3052,7 @@ async function handleMessage(sock, message) {
     }
 
     if (/^STOP$/i.test(text)) {
+
       // Only allow STOP command for authenticated users
       if (!session.apiKeys) {
         console.log(chalk.yellow(`🔒 Unauthorized STOP command from ${jid.split('@')[0]} - Ignoring silently`));
@@ -2838,6 +3084,7 @@ async function handleMessage(sock, message) {
     }
 
     if (/^RESET$/i.test(text)) {
+
       // Only allow RESET command for authenticated users
       if (!session.apiKeys) {
         console.log(chalk.yellow(`🔒 Unauthorized RESET command from ${jid.split('@')[0]} - Ignoring silently`));
@@ -2867,6 +3114,7 @@ async function handleMessage(sock, message) {
     }
 
     if (/^LIMIT:?\s+/i.test(text)) {
+
       // Only allow LIMIT command for authenticated users
       if (!session.apiKeys) {
         console.log(chalk.yellow(`🔒 Unauthorized LIMIT command from ${jid.split('@')[0]} - Ignoring silently`));
@@ -2898,6 +3146,7 @@ async function handleMessage(sock, message) {
     }
 
     if (/^HELP$/i.test(text)) {
+
       // Only allow HELP command for authenticated users
       if (!session.apiKeys) {
         console.log(chalk.yellow(`🔒 Unauthorized HELP command from ${jid.split('@')[0]} - Ignoring silently`));
@@ -2910,6 +3159,7 @@ async function handleMessage(sock, message) {
       saveJson(SESSIONS_FILE, sessions);
       return;
     }
+
 
         // Check if there are pending results for this user (only if authenticated)
     if (pendingResults.has(jid) && session.apiKeys) {
@@ -2982,6 +3232,7 @@ async function startBot() {
     
     // Load pending results from disk
     loadPendingResults();
+
     
     // Load admin sessions from disk
     loadAdminSessions();
@@ -3066,6 +3317,7 @@ async function startBot() {
         console.log(chalk.gray('   npm run admin:list    - List access codes'));
         console.log(chalk.gray('   npm run admin:add     - Add new user'));
         console.log(chalk.gray('   npm run admin:remove  - Remove user\n'));
+
          console.log(chalk.cyan('📱 WhatsApp Admin Commands:'));
          console.log(chalk.gray('   ADMIN: admin123       - Authenticate as admin'));
          console.log(chalk.gray('   ADMIN USERS           - List all users'));
@@ -3080,11 +3332,13 @@ async function startBot() {
     // Save credentials when updated
     sock.ev.on('creds.update', saveCreds);
 
+
          // Keep connection alive with periodic status checks and refresh admin data
     const connectionCheckInterval = setInterval(() => {
       if (sock && sock.user) {
         // Just log connection status
         console.log(chalk.gray('📡 Connection status: Active'));
+
          
          // Refresh admin manager data every 5 minutes
          if (Date.now() % 300000 < 60000) { // Every 5 minutes
@@ -3136,3 +3390,4 @@ async function startBot() {
   startBot();
 
 export { startBot };
+
