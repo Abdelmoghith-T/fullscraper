@@ -29,7 +29,13 @@
     "admin:add": "node manage_codes.js add",
     "admin:list": "node manage_codes.js list",
     "admin:remove": "node manage_codes.js remove",
-    "admin:generate": "node manage_codes.js generate"
+    "admin:generate": "node manage_codes.js generate",
+    "admin:manage": "node manage_admins.js",
+    "admin:add-admin": "node manage_admins.js add",
+    "admin:list-admins": "node manage_admins.js list",
+    "admin:remove-admin": "node manage_admins.js remove",
+    "admin:generate-admin": "node manage_admins.js generate",
+    "admin:roles": "node manage_admins.js roles"
   },
   "keywords": [
     "scraper",

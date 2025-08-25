@@ -1,0 +1,13 @@
+{
+  "212691708186@s.whatsapp.net": {
+    "adminCode": "admin123",
+    "role": "super_admin",
+    "permissions": [
+      "manage_users",
+      "manage_admins",
+      "view_logs",
+      "system_control"
+    ],
+    "authenticatedAt": "2025-08-25T02:04:36.226Z"
+  }
+}

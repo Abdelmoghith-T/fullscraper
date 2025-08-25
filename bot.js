@@ -6,6 +6,7 @@ import { startUnifiedScraper } from './lib/startUnifiedScraper.js';
 import { createRequire } from 'module';
 import chalk from 'chalk';
 import { getMessage } from './languages.js';
+import AdminManager from './lib/admin-manager.js';
 
 const require = createRequire(import.meta.url);
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('baileys');
@@ -193,6 +194,49 @@ const PENDING_RESULTS_FILE = path.join(__dirname, 'pending_results.json');
 // Active jobs tracking with offline resilience
 const activeJobs = new Map(); // jid -> { abort: AbortController, status: string, startTime: Date, results: any, progressSimulator: ProgressSimulator }
 const pendingResults = new Map(); // jid -> { filePath: string, meta: any, timestamp: Date }
+
+// Admin management
+const adminManager = new AdminManager();
+const adminSessions = new Map(); // jid -> { adminCode: string, role: string, permissions: string[], authenticatedAt: Date }
+
+// Load admin sessions from disk
+function loadAdminSessions() {
+  try {
+    const adminSessionsFile = path.join(__dirname, 'admin_sessions.json');
+    if (fs.existsSync(adminSessionsFile)) {
+      const data = JSON.parse(fs.readFileSync(adminSessionsFile, 'utf8'));
+      for (const [jid, session] of Object.entries(data)) {
+        // Convert string dates back to Date objects
+        if (session.authenticatedAt) {
+          session.authenticatedAt = new Date(session.authenticatedAt);
+        }
+        adminSessions.set(jid, session);
+      }
+      console.log(chalk.blue(`📱 Loaded ${adminSessions.size} admin sessions from disk`));
+      console.log(chalk.blue(`📊 Admin sessions loaded:`, Array.from(adminSessions.keys()).map(k => k.split('@')[0])));
+    } else {
+      console.log(chalk.blue(`📱 No admin sessions file found, starting with empty sessions`));
+    }
+  } catch (error) {
+    console.error('❌ Failed to load admin sessions:', error.message);
+    console.log(chalk.blue(`📱 Starting with empty admin sessions`));
+  }
+}
+
+// Save admin sessions to disk
+function saveAdminSessions() {
+  try {
+    const adminSessionsFile = path.join(__dirname, 'admin_sessions.json');
+    const data = {};
+    for (const [jid, session] of adminSessions.entries()) {
+      data[jid] = session;
+    }
+    fs.writeFileSync(adminSessionsFile, JSON.stringify(data, null, 2));
+    console.log(chalk.blue(`💾 Admin sessions saved to disk`));
+  } catch (error) {
+    console.error('❌ Failed to save admin sessions:', error.message);
+  }
+}
 
 // Connection management
 let sock = null;
@@ -601,7 +645,15 @@ function getHelpMessage() {
           `**Navigation Tip:** At any numbered selection step, reply with \`0\` to go back to the previous step.`;
  }
 
-
+// Helper function to format API keys for display
+function formatApiKey(key, maxLength = 20) {
+  if (!key) return '❌ MISSING';
+  if (key.length <= maxLength) return `\`${key}\``;
+  
+  const prefix = key.substring(0, 8);
+  const suffix = key.substring(key.length - 8);
+  return `\`${prefix}...${suffix}\` (${key.length} chars)`;
+}
 
 async function handleMessage(sock, message) {
   const jid = message.key.remoteJid;
@@ -652,7 +704,1211 @@ async function handleMessage(sock, message) {
 
   const session = sessions[jid];
 
-  // STRICT AUTHENTICATION: No responses until CODE is provided
+  // ADMIN AUTHENTICATION: Check if user is trying to authenticate as admin
+  // Only run this if there's no active admin session for this user
+  if (/^ADMIN:?\s+/i.test(text) && !adminSessions.has(jid)) {
+    const adminCode = text.replace(/^ADMIN:?\s+/i, '').trim();
+    
+    if (!adminCode) {
+    await sock.sendMessage(jid, { 
+        text: `🔐 **Admin Authentication Required**\n\nUsage: ADMIN: <admin_code>\nExample: ADMIN: admin123`
+      });
+      return;
+    }
+
+    const authResult = adminManager.authenticateAdmin(adminCode);
+    
+    if (authResult.success) {
+      // Store admin session
+      adminSessions.set(jid, {
+        adminCode: adminCode,
+        role: authResult.admin.role,
+        permissions: authResult.admin.permissions,
+        authenticatedAt: new Date()
+      });
+
+      // Save admin sessions to disk
+      saveAdminSessions();
+
+      console.log(chalk.green(`🔓 Admin access granted to ${jid.split('@')[0]} with role: ${authResult.admin.role}`));
+      console.log(chalk.blue(`📊 Admin sessions Map now contains ${adminSessions.size} sessions:`, Array.from(adminSessions.keys()).map(k => k.split('@')[0])));
+
+      await sock.sendMessage(jid, { 
+        text: `🔐 **Admin Access Granted!**\n\n👑 **Role:** ${authResult.admin.role}\n📝 **Description:** ${authResult.admin.roleDescription}\n🔑 **Permissions:** ${authResult.admin.permissions.join(', ')}\n\n💡 **Available Commands:**\n• ADMIN USERS - List all users with their API keys\n• ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2> - Add new user with API keys (any format)\n• ADMIN REMOVE USER <code>\n• ADMIN ADMINS - List all admins\n• ADMIN ADD ADMIN <code> <role>\n• ADMIN REMOVE ADMIN <code>\n• ADMIN STATUS - System status\n• ADMIN HELP - Show detailed admin help`
+      });
+      return;
+    } else {
+      await sock.sendMessage(jid, { 
+        text: `❌ **Admin Authentication Failed**\n\n${authResult.error}\n\n💡 Please check your admin code and try again.`
+      });
+      return;
+    }
+  }
+
+  // ADMIN COMMANDS: Process admin commands before strict authentication check
+  const adminSession = adminSessions.get(jid);
+  console.log(chalk.blue(`🔍 Admin command check for ${jid.split('@')[0]}: adminSession=${!!adminSession}, text="${text}"`));
+  console.log(chalk.blue(`📊 Admin sessions Map contents:`, Array.from(adminSessions.entries()).map(([k, v]) => `${k.split('@')[0]}: ${v.adminCode}`)));
+  
+  if (adminSession) {
+    console.log(chalk.green(`✅ Admin session found for ${jid.split('@')[0]} with code: ${adminSession.adminCode}`));
+    // Admin command: List users
+    if (text.toUpperCase() === 'ADMIN USERS') {
+      try {
+        const result = adminManager.listUsers(adminSession.adminCode);
+        console.log(chalk.blue(`🔍 ADMIN USERS result:`, JSON.stringify(result, null, 2)));
+        
+        if (result.success) {
+          let message = `👥 **User Codes List**\n\n`;
+          if (result.users.length === 0) {
+            message += `No user codes found.`;
+          } else {
+            result.users.forEach((user, index) => {
+              message += `${index + 1}. **${user.code}**\n`;
+              message += `   📅 Created: ${new Date(user.createdAt).toLocaleString()}\n`;
+              message += `   👤 Issued by: ${user.issuedBy}\n`;
+              message += `   🔑 **Google Search API Keys:**\n`;
+              message += `      • Key 1: ${formatApiKey(user.googleSearchKeys[0])}\n`;
+              message += `      • Key 2: ${formatApiKey(user.googleSearchKeys[1])}\n`;
+              message += `   🤖 **Gemini API Keys:**\n`;
+              message += `      • Key 1: ${formatApiKey(user.geminiKeys[0])}\n`;
+              message += `      • Key 2: ${formatApiKey(user.geminiKeys[1])}\n`;
+              message += `   📊 Use count: ${user.useCount}\n`;
+              if (user.lastUsed) {
+                message += `   ⏰ Last used: ${new Date(user.lastUsed).toLocaleString()}\n`;
+              }
+              if (user.expiresAt) {
+                message += `   ⏳ Expires: ${new Date(user.expiresAt).toLocaleString()}\n`;
+              }
+              message += '\n';
+            });
+          }
+          message += `**Total User Codes:** ${result.users.length}`;
+          await sock.sendMessage(jid, { text: message });
+        } else {
+          await sock.sendMessage(jid, { text: `❌ **Error:** ${result.error}` });
+        }
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN USERS command:`, error.message));
+        await sock.sendMessage(jid, { text: `❌ **Internal Error:** ${error.message}` });
+      }
+      return;
+    }
+
+    // Admin command: Add user
+    if (text.toUpperCase().startsWith('ADMIN ADD USER')) {
+      const parts = text.split(' ');
+      if (parts.length < 7) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Invalid Format!**\n\n📝 **Correct Usage:** ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>\n\n💡 **Example:** ADMIN ADD USER abc123 google_key1 google_key2 gemini_key1 gemini_key2\n\n⚠️ **Please provide:**\n• User code\n• 2 Google Search API keys\n• 2 Gemini API keys\n\n🔄 **Try again with the correct format!**`
+        });
+        return;
+      }
+
+      const userCode = parts[3];
+      const googleKey1 = parts[4];
+      const googleKey2 = parts[5];
+      const geminiKey1 = parts[6];
+      const geminiKey2 = parts[7];
+
+      // Validate that all keys are provided and not empty
+      if (!userCode || !googleKey1 || !googleKey2 || !geminiKey1 || !geminiKey2) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Missing Required Information!**\n\n📝 **You provided:**\n• Code: ${userCode || '❌ MISSING'}\n• Google Key 1: ${formatApiKey(googleKey1)}\n• Google Key 2: ${formatApiKey(googleKey2)}\n• Gemini Key 1: ${formatApiKey(geminiKey1)}\n• Gemini Key 2: ${formatApiKey(geminiKey2)}\n\n💡 **Please provide all 5 required fields and try again!**`
+        });
+        return;
+      }
+
+      // Validate key formats (basic validation)
+      if (googleKey1 === googleKey2) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Duplicate Google Keys!**\n\n⚠️ Google Key 1 and Google Key 2 must be different.\n\n🔄 **Please provide different Google API keys and try again!**`
+        });
+        return;
+      }
+
+      if (geminiKey1 === geminiKey2) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Duplicate Gemini Keys!**\n\n⚠️ Gemini Key 1 and Gemini Key 2 must be different.\n\n🔄 **Please provide different Gemini API keys and try again!**`
+        });
+        return;
+      }
+
+      // Basic validation: ensure keys are not empty strings
+      if (googleKey1.trim() === '' || googleKey2.trim() === '' || geminiKey1.trim() === '' || geminiKey2.trim() === '') {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Empty Keys Not Allowed!**\n\n⚠️ All API keys must contain actual values.\n\n🔍 **Your keys:**\n• Google Key 1: ${formatApiKey(googleKey1)}\n• Google Key 2: ${formatApiKey(googleKey2)}\n• Gemini Key 1: ${formatApiKey(geminiKey1)}\n• Gemini Key 2: ${formatApiKey(geminiKey2)}\n\n🔄 **Please provide non-empty keys and try again!**`
+        });
+        return;
+      }
+
+      // Check if user code already exists
+      const existingUser = adminManager.getUserDetails(userCode);
+      if (existingUser) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **User Code Already Exists!**\n\n⚠️ The user code \`${userCode}\` is already registered.\n\n💡 **Options:**\n• Use a different user code\n• Use \`ADMIN REMOVE USER ${userCode}\` to remove the existing one first\n• Use \`ADMIN USERS\` to see all existing user codes\n\n🔄 **Please try again with a different code!**`
+        });
+        return;
+      }
+
+      const apiKeys = {
+        googleSearchKeys: [googleKey1, googleKey2],
+        geminiKeys: [geminiKey1, geminiKey2]
+      };
+
+      const result = adminManager.addUser(adminSession.adminCode, userCode, apiKeys);
+      
+      if (result.success) {
+        // Get the newly added user details to display
+        const userDetails = adminManager.getUserDetails(userCode);
+        if (userDetails) {
+          // Get total user count for the success message
+          const totalUsers = Object.keys(adminManager.codes).length;
+          
+          let successMessage = `✅ **User Added Successfully!**\n\n`;
+          successMessage += `👤 **User Code:** ${userCode}\n`;
+          successMessage += `📅 **Created:** ${new Date(userDetails.createdAt).toLocaleString()}\n`;
+          successMessage += `👑 **Issued by:** ${userDetails.meta?.issuedBy || 'unknown'}\n\n`;
+          successMessage += `🔑 **Google Search API Keys:**\n`;
+          successMessage += `   • Key 1: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[0])}\n`;
+          successMessage += `   • Key 2: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[1])}\n\n`;
+          successMessage += `🤖 **Gemini API Keys:**\n`;
+          successMessage += `   • Key 1: ${formatApiKey(userDetails.apiKeys.geminiKeys[0])}\n`;
+          successMessage += `   • Key 2: ${formatApiKey(userDetails.apiKeys.geminiKeys[1])}\n\n`;
+          successMessage += `📊 **Status:** Active\n`;
+          successMessage += `⏰ **Expires:** Never\n`;
+          successMessage += `🔄 **Use Count:** 0\n\n`;
+          successMessage += `📈 **Total Users:** ${totalUsers}`;
+          
+          await sock.sendMessage(jid, { text: successMessage });
+        } else {
+          await sock.sendMessage(jid, { text: `✅ **${result.message}**` });
+        }
+      } else {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error Adding User:** ${result.error}\n\n🔄 **Please check the error and try again!**`
+        });
+      }
+      return;
+    }
+
+    // Admin command: Remove user
+    if (text.toUpperCase().startsWith('ADMIN REMOVE USER')) {
+      const parts = text.split(' ');
+      if (parts.length < 4) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Usage:** ADMIN REMOVE USER <code>\n\n💡 **Example:** ADMIN REMOVE USER abc123`
+        });
+        return;
+      }
+
+      const userCode = parts[3];
+      const result = adminManager.removeUser(adminSession.adminCode, userCode);
+      await sock.sendMessage(jid, { 
+        text: result.success ? `✅ **${result.message}**` : `❌ **Error:** ${result.error}`
+      });
+      return;
+    }
+
+    // Admin command: List admins
+    if (text.toUpperCase() === 'ADMIN ADMINS') {
+      const result = adminManager.listAdmins(adminSession.adminCode);
+      if (result.success) {
+        let message = `👑 **Admin List**\n\n`;
+        if (result.admins.length === 0) {
+          message += `No admins found.`;
+        } else {
+          result.admins.forEach((admin, index) => {
+            message += `${index + 1}. **${admin.code}** - ${admin.role}\n`;
+            message += `   Description: ${admin.roleDescription}\n`;
+            message += `   Permissions: ${admin.permissions.join(', ')}\n`;
+            message += `   Created: ${new Date(admin.createdAt).toLocaleString()}\n`;
+            message += `   Use count: ${admin.useCount}\n\n`;
+          });
+        }
+        message += `**Total Admins:** ${result.admins.length}`;
+        await sock.sendMessage(jid, { text: message });
+      } else {
+        await sock.sendMessage(jid, { text: `❌ **Error:** ${result.error}` });
+      }
+      return;
+    }
+
+    // Admin command: Add admin
+    if (text.toUpperCase().startsWith('ADMIN ADD ADMIN')) {
+      const parts = text.split(' ');
+      if (parts.length < 5) {
+        const availableRoles = adminManager.getAvailableRoles().join(', ');
+        await sock.sendMessage(jid, { 
+          text: `❌ **Usage:** ADMIN ADD ADMIN <code> <role>\n\n💡 **Available roles:** ${availableRoles}\n\n💡 **Example:** ADMIN ADD ADMIN mod123 moderator`
+        });
+        return;
+      }
+
+      const newAdminCode = parts[3];
+      const role = parts[4];
+
+      const result = adminManager.addAdmin(adminSession.adminCode, newAdminCode, role);
+      await sock.sendMessage(jid, { 
+        text: result.success ? `✅ **${result.message}**` : `❌ **Error:** ${result.error}`
+      });
+      return;
+    }
+
+    // Admin command: Remove admin
+    if (text.toUpperCase().startsWith('ADMIN REMOVE ADMIN')) {
+      const parts = text.split(' ');
+      if (parts.length < 4) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Usage:** ADMIN REMOVE ADMIN <code>\n\n💡 **Example:** ADMIN REMOVE ADMIN mod123`
+        });
+        return;
+      }
+
+      const targetAdminCode = parts[3];
+      const result = adminManager.removeAdmin(adminSession.adminCode, targetAdminCode);
+      await sock.sendMessage(jid, { 
+        text: result.success ? `✅ **${result.message}**` : `❌ **Error:** ${result.error}`
+      });
+      return;
+    }
+
+    // Admin command: System status
+    if (text.toUpperCase() === 'ADMIN STATUS') {
+      console.log(chalk.blue(`🔍 Processing ADMIN STATUS command for ${adminSession.adminCode}`));
+      try {
+        const result = adminManager.getSystemStatus(adminSession.adminCode);
+        console.log(chalk.blue(`🔍 ADMIN STATUS result:`, JSON.stringify(result, null, 2)));
+        
+        if (result.success) {
+          const status = result.status;
+          let message = `📊 **System Status**\n\n`;
+          message += `👥 **Users:** ${status.totalUsers} total, ${status.authenticatedUsers} active, ${status.blockedUsers} blocked\n`;
+          message += `🔑 **Codes:** ${status.totalCodes} user codes\n`;
+          message += `👑 **Admins:** ${status.totalAdmins} admin codes\n\n`;
+          message += `⚙️ **System Settings:**\n`;
+          message += `• Max failed attempts: ${status.systemSettings.max_failed_auth_attempts}\n`;
+          message += `• Auto-unblock hours: ${status.systemSettings.auto_unblock_hours}\n`;
+          message += `• Session timeout: ${status.systemSettings.session_timeout_hours} hours\n`;
+          message += `• Max users per admin: ${status.systemSettings.max_users_per_admin}\n`;
+          
+          await sock.sendMessage(jid, { text: message });
+        } else {
+          await sock.sendMessage(jid, { text: `❌ **Error:** ${result.error}` });
+        }
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN STATUS command:`, error.message));
+        await sock.sendMessage(jid, { text: `❌ **Internal Error:** ${error.message}` });
+      }
+      return;
+    }
+
+    // Admin command: Help
+    if (text.toUpperCase() === 'ADMIN HELP') {
+      const permissions = adminSession.permissions;
+      let message = `🔐 **Admin Commands Help**\n\n`;
+      message += `👑 **Your Role:** ${adminSession.role}\n`;
+      message += `🔑 **Your Permissions:** ${permissions.join(', ')}\n\n`;
+      
+      message += `📋 **Available Commands:**\n\n`;
+      
+      if (permissions.includes('view_sessions') || permissions.includes('view_all_sessions')) {
+        message += `• **ADMIN USERS** - List all users and their status\n`;
+      }
+      
+      if (permissions.includes('manage_users')) {
+        message += `• **ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>** - Add new user with API keys (any format)\n`;
+        message += `• **ADMIN REMOVE USER <code>** - Remove user code\n`;
+      }
+      
+      if (permissions.includes('manage_admins')) {
+        message += `• **ADMIN ADMINS** - List all admin codes\n`;
+        message += `• **ADMIN ADD ADMIN <code> <role>** - Add new admin\n`;
+        message += `• **ADMIN REMOVE ADMIN <code>** - Remove admin code\n`;
+      }
+      
+      if (permissions.includes('system_control')) {
+        message += `• **ADMIN STATUS** - View system status and statistics\n`;
+      }
+      
+      message += `• **ADMIN HELP** - Show this help message\n`;
+      message += `• **ADMIN SESSIONS** - Show current admin sessions (debug)\n`;
+      message += `• **ADMIN USERSESSIONS** - Show all user sessions\n`;
+      message += `• **ADMIN FILES** - Check admin system files\n`;
+      message += `• **ADMIN DEBUG** - Run admin system diagnostics\n`;
+      message += `• **ADMIN LOG** - Show admin system logs\n`;
+      message += `• **ADMIN SESSIONSFILE** - Show admin sessions file content\n`;
+      message += `• **ADMIN USERSESSIONSFILE** - Show user sessions file content\n`;
+      message += `• **ADMIN ADMINSESSIONSFILE** - Show admin sessions file content\n`;
+      message += `• **ADMIN RESET** - Reset admin system completely\n`;
+      message += `• **ADMIN CONFIGFILE** - Show admin config file content\n`;
+      message += `• **ADMIN CODESFILE** - Show user codes file content\n`;
+      message += `• **ADMIN SESSIONSFILE** - Show user sessions file content\n`;
+      message += `• **ADMIN REFRESH** - Refresh admin data from disk\n`;
+      message += `• **ADMIN CLEAR** - Clear all admin sessions (debug)\n`;
+      message += `• **ADMIN AUTH <code>** - Re-authenticate with admin code\n`;
+      message += `• **ADMIN ME** - Show your current admin session details\n`;
+      message += `• **ADMIN INFO** - Show system information and version\n`;
+      message += `• **ADMIN TEST** - Test your admin permissions\n`;
+      message += `• **ADMIN RELOAD** - Reload admin manager completely\n`;
+      message += `• **ADMIN CONFIG** - Show admin configuration details\n`;
+      message += `• **ADMIN CODES** - Show all user codes\n`;
+      message += `• **ADMIN SESSIONS** - Show all user sessions\n\n`;
+      
+      message += `💡 **Note:** You can only use commands that match your permissions.`;
+      
+      await sock.sendMessage(jid, { text: message });
+      return;
+    }
+
+    // Admin command: Show current admin sessions (debug)
+    if (text.toUpperCase() === 'ADMIN SESSIONS') {
+      let message = `🔐 **Current Admin Sessions**\n\n`;
+      if (adminSessions.size === 0) {
+        message += `No active admin sessions.`;
+      } else {
+        for (const [sessionJid, sessionData] of adminSessions.entries()) {
+          const phone = sessionJid.split('@')[0];
+          const timeSinceAuth = Math.floor((Date.now() - sessionData.authenticatedAt) / 1000 / 60);
+          message += `📱 **${phone}**\n`;
+          message += `   Code: ${sessionData.adminCode}\n`;
+          message += `   Role: ${sessionData.role}\n`;
+          message += `   Authenticated: ${timeSinceAuth} minutes ago\n`;
+          message += `   Permissions: ${sessionData.permissions.join(', ')}\n\n`;
+        }
+      }
+      message += `**Total Active Sessions:** ${adminSessions.size}`;
+      await sock.sendMessage(jid, { text: message });
+      return;
+    }
+
+    // Admin command: Refresh admin data from disk
+    if (text.toUpperCase() === 'ADMIN REFRESH') {
+      try {
+        // Refresh admin manager data
+        adminManager.adminConfig = adminManager.loadAdminConfig();
+        adminManager.codes = adminManager.loadCodes();
+        adminManager.sessions = adminManager.loadSessions();
+        
+        // Reload admin sessions from disk
+        loadAdminSessions();
+        
+        await sock.sendMessage(jid, { 
+          text: `🔄 **Admin Data Refreshed**\n\n✅ Admin configuration reloaded\n✅ User codes reloaded\n✅ User sessions reloaded\n✅ Admin sessions reloaded\n\n📊 Current admin sessions: ${adminSessions.size}`
+        });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error refreshing admin data:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error refreshing admin data:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show admin sessions file content
+    if (text.toUpperCase() === 'ADMIN ADMINSESSIONSFILE') {
+      try {
+        let message = `📄 **Admin Sessions File Content**\n\n`;
+        
+        const adminSessionsFile = path.join(__dirname, 'admin_sessions.json');
+        
+        if (fs.existsSync(adminSessionsFile)) {
+          try {
+            const content = fs.readFileSync(adminSessionsFile, 'utf8');
+            const data = JSON.parse(content);
+            
+            message += `📁 **File:** admin_sessions.json\n`;
+            message += `📏 **Size:** ${(content.length / 1024).toFixed(2)} KB\n`;
+            message += `🔐 **Sessions:** ${Object.keys(data).length}\n\n`;
+            
+            if (Object.keys(data).length > 0) {
+              message += `🔐 **Session Details:**\n`;
+              for (const [sessionJid, sessionData] of Object.entries(data)) {
+                const phone = sessionJid.split('@')[0];
+                message += `• **${phone}**\n`;
+                message += `  Admin Code: ${sessionData.adminCode}\n`;
+                message += `  Role: ${sessionData.role}\n`;
+                message += `  Permissions: ${sessionData.permissions.join(', ')}\n`;
+                if (sessionData.authenticatedAt) {
+                  const authTime = new Date(sessionData.authenticatedAt);
+                  message += `  Auth Time: ${authTime.toLocaleString()}\n`;
+                }
+                message += '\n';
+              }
+            } else {
+              message += `🔐 **Session Details:** No sessions found`;
+            }
+            
+          } catch (error) {
+            message += `❌ **Error reading file:** ${error.message}`;
+          }
+        } else {
+          message += `❌ **File not found:** admin_sessions.json`;
+        }
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN ADMINSESSIONSFILE command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show user sessions file content
+    if (text.toUpperCase() === 'ADMIN USERSESSIONSFILE') {
+      try {
+        let message = `📄 **User Sessions File Content**\n\n`;
+        
+        const sessionsFile = path.join(__dirname, 'sessions.json');
+        
+        if (fs.existsSync(sessionsFile)) {
+          try {
+            const content = fs.readFileSync(sessionsFile, 'utf8');
+            const data = JSON.parse(content);
+            
+            message += `📁 **File:** sessions.json\n`;
+            message += `📏 **Size:** ${(content.length / 1024).toFixed(2)} KB\n`;
+            message += `📱 **Sessions:** ${Object.keys(data).length}\n\n`;
+            
+            if (Object.keys(data).length > 0) {
+              message += `📱 **Session Details:**\n`;
+              for (const [sessionJid, sessionData] of Object.entries(data)) {
+                const phone = sessionJid.split('@')[0];
+                message += `• **${phone}**\n`;
+                message += `  Status: ${sessionData.status || 'unknown'}\n`;
+                message += `  Current Step: ${sessionData.currentStep || 'unknown'}\n`;
+                message += `  Authenticated: ${sessionData.apiKeys ? '✅ Yes' : '❌ No'}\n`;
+                message += `  Created: ${new Date(sessionData.meta?.createdAt || Date.now()).toLocaleString()}\n`;
+                if (sessionData.security?.isBlocked) {
+                  message += `  🔒 Blocked: Yes\n`;
+                }
+                if (sessionData.security?.failedAuthAttempts > 0) {
+                  message += `  ⚠️ Failed attempts: ${sessionData.security.failedAuthAttempts}/5\n`;
+                }
+                if (sessionData.meta?.totalJobs > 0) {
+                  message += `  📈 Total jobs: ${sessionData.meta.totalJobs}\n`;
+                }
+                message += '\n';
+              }
+            } else {
+              message += `📱 **Session Details:** No sessions found`;
+            }
+            
+          } catch (error) {
+            message += `❌ **Error reading file:** ${error.message}`;
+          }
+        } else {
+          message += `❌ **File not found:** sessions.json`;
+        }
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN USERSESSIONSFILE command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show user codes file content
+    if (text.toUpperCase() === 'ADMIN CODESFILE') {
+      try {
+        let message = `📄 **User Codes File Content**\n\n`;
+        
+        const codesFile = path.join(__dirname, 'codes.json');
+        
+        if (fs.existsSync(codesFile)) {
+          try {
+            const content = fs.readFileSync(codesFile, 'utf8');
+            const data = JSON.parse(content);
+            
+            message += `📁 **File:** codes.json\n`;
+            message += `📏 **Size:** ${(content.length / 1024).toFixed(2)} KB\n`;
+            message += `🔑 **Codes:** ${Object.keys(data).length}\n\n`;
+            
+            if (Object.keys(data).length > 0) {
+              message += `🔑 **Code Details:**\n`;
+              for (const [code, codeData] of Object.entries(data)) {
+                message += `• **${code}**\n`;
+                message += `  Google Keys: ${codeData.apiKeys.googleSearchKeys.length} keys\n`;
+                message += `  Gemini Keys: ${codeData.apiKeys.geminiKeys.length} keys\n`;
+                message += `  Created: ${new Date(codeData.createdAt).toLocaleString()}\n`;
+                if (codeData.meta?.issuedBy) {
+                  message += `  Issued by: ${codeData.meta.issuedBy}\n`;
+                }
+                if (codeData.meta?.useCount) {
+                  message += `  Use count: ${codeData.meta.useCount}\n`;
+                }
+                if (codeData.meta?.lastUsed) {
+                  message += `  Last used: ${new Date(codeData.meta.lastUsed).toLocaleString()}\n`;
+                }
+                message += '\n';
+              }
+            } else {
+              message += `🔑 **Code Details:** No codes found`;
+            }
+            
+          } catch (error) {
+            message += `❌ **Error reading file:** ${error.message}`;
+          }
+        } else {
+          message += `❌ **File not found:** codes.json`;
+        }
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN CODESFILE command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show admin config file content
+    if (text.toUpperCase() === 'ADMIN CONFIGFILE') {
+      try {
+        let message = `📄 **Admin Config File Content**\n\n`;
+        
+        const adminConfigFile = path.join(__dirname, 'admin_config.json');
+        
+        if (fs.existsSync(adminConfigFile)) {
+          try {
+            const content = fs.readFileSync(adminConfigFile, 'utf8');
+            const data = JSON.parse(content);
+            
+            message += `📁 **File:** admin_config.json\n`;
+            message += `📏 **Size:** ${(content.length / 1024).toFixed(2)} KB\n\n`;
+            
+            // Show admin codes
+            if (data.admin_codes) {
+              message += `👑 **Admin Codes:**\n`;
+              for (const [code, adminData] of Object.entries(data.admin_codes)) {
+                message += `• **${code}**\n`;
+                message += `  Role: ${adminData.role}\n`;
+                message += `  Permissions: ${adminData.permissions.join(', ')}\n`;
+                message += `  Created: ${new Date(adminData.createdAt).toLocaleString()}\n`;
+                message += `  Use count: ${adminData.useCount}\n\n`;
+              }
+            }
+            
+            // Show roles
+            if (data.admin_roles) {
+              message += `🎭 **Roles:**\n`;
+              for (const [role, roleData] of Object.entries(data.admin_roles)) {
+                message += `• **${role}**\n`;
+                message += `  Description: ${roleData.description}\n`;
+                message += `  Permissions: ${roleData.permissions.join(', ')}\n\n`;
+              }
+            }
+            
+            // Show system settings
+            if (data.system_settings) {
+              message += `⚙️ **System Settings:**\n`;
+              const settings = data.system_settings;
+              message += `• Max failed attempts: ${settings.max_failed_auth_attempts}\n`;
+              message += `• Auto-unblock hours: ${settings.auto_unblock_hours}\n`;
+              message += `• Session timeout: ${settings.session_timeout_hours} hours\n`;
+              message += `• Max users per admin: ${settings.max_users_per_admin}`;
+            }
+            
+          } catch (error) {
+            message += `❌ **Error reading file:** ${error.message}`;
+          }
+        } else {
+          message += `❌ **File not found:** admin_config.json`;
+        }
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN CONFIGFILE command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show admin sessions file content
+    if (text.toUpperCase() === 'ADMIN SESSIONSFILE') {
+      try {
+        let message = `📄 **Admin Sessions File Content**\n\n`;
+        
+        const adminSessionsFile = path.join(__dirname, 'admin_sessions.json');
+        
+        if (fs.existsSync(adminSessionsFile)) {
+          try {
+            const content = fs.readFileSync(adminSessionsFile, 'utf8');
+            const data = JSON.parse(content);
+            
+            message += `📁 **File:** admin_sessions.json\n`;
+            message += `📏 **Size:** ${(content.length / 1024).toFixed(2)} KB\n`;
+            message += `🔑 **Sessions:** ${Object.keys(data).length}\n\n`;
+            
+            if (Object.keys(data).length > 0) {
+              message += `📱 **Session Details:**\n`;
+              for (const [sessionJid, sessionData] of Object.entries(data)) {
+                const phone = sessionJid.split('@')[0];
+                message += `• **${phone}**\n`;
+                message += `  Code: ${sessionData.adminCode}\n`;
+                message += `  Role: ${sessionData.role}\n`;
+                message += `  Permissions: ${sessionData.permissions.join(', ')}\n`;
+                if (sessionData.authenticatedAt) {
+                  const authTime = new Date(sessionData.authenticatedAt);
+                  message += `  Auth Time: ${authTime.toLocaleString()}\n`;
+                }
+                message += '\n';
+              }
+            } else {
+              message += `📱 **Session Details:** No sessions found`;
+            }
+          } catch (error) {
+            message += `❌ **Error reading file:** ${error.message}`;
+          }
+        } else {
+          message += `❌ **File not found:** admin_sessions.json`;
+        }
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN SESSIONSFILE command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Reset admin system completely
+    if (text.toUpperCase() === 'ADMIN RESET') {
+      try {
+        // Clear all admin sessions
+        const sessionCount = adminSessions.size;
+        adminSessions.clear();
+        
+        // Delete admin sessions file
+        const adminSessionsFile = path.join(__dirname, 'admin_sessions.json');
+        if (fs.existsSync(adminSessionsFile)) {
+          fs.unlinkSync(adminSessionsFile);
+        }
+        
+        // Reload admin manager
+        adminManager.adminConfig = adminManager.loadAdminConfig();
+        adminManager.codes = adminManager.loadCodes();
+        adminManager.sessions = adminManager.loadSessions();
+        
+        await sock.sendMessage(jid, { 
+          text: `🔄 **Admin System Reset**\n\n✅ Cleared ${sessionCount} admin sessions\n✅ Deleted admin sessions file\n✅ Reloaded admin manager\n✅ All admins will need to re-authenticate\n\n💡 Use ADMIN: <code> to authenticate again`
+        });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error resetting admin system:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error resetting admin system:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show admin system logs
+    if (text.toUpperCase() === 'ADMIN LOG') {
+      try {
+        let message = `📋 **Admin System Logs**\n\n`;
+        
+        // Show recent admin actions
+        message += `🔐 **Recent Admin Actions:**\n`;
+        message += `• Admin sessions loaded: ${adminSessions.size}\n`;
+        message += `• Admin manager initialized: ✅\n`;
+        message += `• Admin config loaded: ${adminManager.adminConfig ? '✅' : '❌'}\n`;
+        message += `• User codes loaded: ${Object.keys(adminManager.codes).length}\n`;
+        message += `• User sessions loaded: ${Object.keys(adminManager.sessions).length}\n\n`;
+        
+        // Show admin session details
+        if (adminSessions.size > 0) {
+          message += `📱 **Active Admin Sessions:**\n`;
+          for (const [sessionJid, sessionData] of adminSessions.entries()) {
+            const phone = sessionJid.split('@')[0];
+            const timeSinceAuth = Math.floor((Date.now() - sessionData.authenticatedAt) / 1000 / 60);
+            message += `• ${phone} (${sessionData.adminCode}) - ${timeSinceAuth}m ago\n`;
+          }
+        } else {
+          message += `📱 **Active Admin Sessions:** None\n`;
+        }
+        
+        message += `\n💡 **System Status:** All systems operational`;
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN LOG command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Run admin system diagnostics
+    if (text.toUpperCase() === 'ADMIN DEBUG') {
+      try {
+        let message = `🔍 **Admin System Diagnostics**\n\n`;
+        
+        // Test admin manager methods
+        message += `🧪 **Method Tests:**\n`;
+        
+        try {
+          const authTest = adminManager.authenticateAdmin('admin123');
+          message += `✅ **Authentication Test:** ${authTest.success ? 'PASSED' : 'FAILED'}\n`;
+          if (authTest.success) {
+            message += `   Role: ${authTest.admin.role}\n`;
+            message += `   Permissions: ${authTest.admin.permissions.join(', ')}\n`;
+          }
+        } catch (error) {
+          message += `❌ **Authentication Test:** ERROR - ${error.message}\n`;
+        }
+        
+        try {
+          const usersTest = adminManager.listUsers('admin123');
+          message += `✅ **List Users Test:** ${usersTest.success ? 'PASSED' : 'FAILED'}\n`;
+          if (usersTest.success) {
+            message += `   Users found: ${usersTest.users.length}\n`;
+          }
+        } catch (error) {
+          message += `❌ **List Users Test:** ERROR - ${error.message}\n`;
+        }
+        
+        try {
+          const statusTest = adminManager.getSystemStatus('admin123');
+          message += `✅ **System Status Test:** ${statusTest.success ? 'PASSED' : 'FAILED'}\n`;
+          if (statusTest.success) {
+            message += `   Total users: ${statusTest.status.totalUsers}\n`;
+            message += `   Total codes: ${statusTest.status.totalCodes}\n`;
+          }
+        } catch (error) {
+          message += `❌ **System Status Test:** ERROR - ${error.message}\n`;
+        }
+        
+        message += `\n📊 **System Health:**\n`;
+        message += `• Admin Manager: ✅ Loaded\n`;
+        message += `• Admin Config: ${adminManager.adminConfig ? '✅' : '❌'}\n`;
+        message += `• User Codes: ${adminManager.codes ? '✅' : '❌'}\n`;
+        message += `• User Sessions: ${adminManager.sessions ? '✅' : '❌'}\n`;
+        message += `• Admin Sessions Map: ${adminSessions ? '✅' : '❌'}\n`;
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN DEBUG command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Check admin system files
+    if (text.toUpperCase() === 'ADMIN FILES') {
+      try {
+        let message = `📁 **Admin System Files**\n\n`;
+        
+        const files = [
+          { name: 'admin_config.json', path: path.join(__dirname, 'admin_config.json') },
+          { name: 'codes.json', path: path.join(__dirname, 'codes.json') },
+          { name: 'sessions.json', path: path.join(__dirname, 'sessions.json') },
+          { name: 'admin_sessions.json', path: path.join(__dirname, 'admin_sessions.json') }
+        ];
+        
+        for (const file of files) {
+          const exists = fs.existsSync(file.path);
+          const status = exists ? '✅' : '❌';
+          message += `${status} **${file.name}**\n`;
+          
+          if (exists) {
+            try {
+              const stats = fs.statSync(file.path);
+              const size = (stats.size / 1024).toFixed(2);
+              message += `   📏 Size: ${size} KB\n`;
+              message += `   📅 Modified: ${stats.mtime.toLocaleString()}\n`;
+              
+              // Try to read and parse the file
+              const content = fs.readFileSync(file.path, 'utf8');
+              const data = JSON.parse(content);
+              const keys = Object.keys(data);
+              message += `   🔑 Keys: ${keys.join(', ')}\n`;
+            } catch (error) {
+              message += `   ⚠️ Error reading: ${error.message}\n`;
+            }
+          }
+          message += '\n';
+        }
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN FILES command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show all user sessions
+    if (text.toUpperCase() === 'ADMIN USERSESSIONS') {
+      try {
+        let message = `📱 **User Sessions**\n\n`;
+        
+        const userSessions = Object.keys(adminManager.sessions);
+        if (userSessions.length === 0) {
+          message += `No user sessions found.`;
+        } else {
+          for (const [index, sessionJid] of userSessions.entries()) {
+            const sessionData = adminManager.sessions[sessionJid];
+            const phone = sessionJid.split('@')[0];
+            message += `${index + 1}. **${phone}**\n`;
+            message += `   📅 Created: ${new Date(sessionData.meta?.createdAt || Date.now()).toLocaleString()}\n`;
+            message += `   🔐 Authenticated: ${sessionData.apiKeys ? '✅ Yes' : '❌ No'}\n`;
+            message += `   📊 Status: ${sessionData.status || 'unknown'}\n`;
+            message += `   🎯 Current Step: ${sessionData.currentStep || 'unknown'}\n`;
+            message += `   🔒 Blocked: ${sessionData.security?.isBlocked ? '🚫 Yes' : '✅ No'}\n`;
+            if (sessionData.security?.failedAuthAttempts > 0) {
+              message += `   ⚠️ Failed attempts: ${sessionData.security.failedAuthAttempts}/5\n`;
+            }
+            if (sessionData.meta?.totalJobs > 0) {
+              message += `   📈 Total jobs: ${sessionData.meta.totalJobs}\n`;
+            }
+            message += '\n';
+          }
+        }
+        
+        message += `**Total User Sessions:** ${userSessions.length}`;
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN USERSESSIONS command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show all user codes
+    if (text.toUpperCase() === 'ADMIN CODES') {
+      try {
+        let message = `🔑 **User Codes**\n\n`;
+        
+        const userCodes = Object.keys(adminManager.codes);
+        if (userCodes.length === 0) {
+          message += `No user codes found.`;
+        } else {
+          for (const [index, userCode] of userCodes.entries()) {
+            const userData = adminManager.codes[userCode];
+            message += `${index + 1}. **${userCode}**\n`;
+            message += `   📅 Created: ${new Date(userData.createdAt).toLocaleString()}\n`;
+            message += `   🔑 Google Keys: ${userData.apiKeys.googleSearchKeys.length} keys\n`;
+            message += `   🤖 Gemini Keys: ${userData.apiKeys.geminiKeys.length} keys\n`;
+            if (userData.meta?.issuedBy) {
+              message += `   👤 Issued by: ${userData.meta.issuedBy}\n`;
+            }
+            if (userData.meta?.useCount) {
+              message += `   📊 Use count: ${userData.meta.useCount}\n`;
+            }
+            if (userData.meta?.lastUsed) {
+              message += `   ⏰ Last used: ${new Date(userData.meta.lastUsed).toLocaleString()}\n`;
+            }
+            message += '\n';
+          }
+        }
+        
+        message += `**Total User Codes:** ${userCodes.length}`;
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN CODES command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show admin configuration details
+    if (text.toUpperCase() === 'ADMIN CONFIG') {
+      try {
+        let message = `⚙️ **Admin Configuration**\n\n`;
+        
+        // Show admin codes
+        message += `👑 **Admin Codes:**\n`;
+        for (const [code, adminData] of Object.entries(adminManager.adminConfig.admin_codes)) {
+          message += `• **${code}** - ${adminData.role}\n`;
+          message += `  Permissions: ${adminData.permissions.join(', ')}\n`;
+          message += `  Created: ${new Date(adminData.createdAt).toLocaleString()}\n`;
+          message += `  Use count: ${adminData.useCount}\n\n`;
+        }
+        
+        // Show roles
+        message += `🎭 **Roles:**\n`;
+        for (const [role, roleData] of Object.entries(adminManager.adminConfig.admin_roles)) {
+          message += `• **${role}** - ${roleData.description}\n`;
+          message += `  Permissions: ${roleData.permissions.join(', ')}\n\n`;
+        }
+        
+        // Show system settings
+        message += `⚙️ **System Settings:**\n`;
+        const settings = adminManager.adminConfig.system_settings;
+        message += `• Max failed attempts: ${settings.max_failed_auth_attempts}\n`;
+        message += `• Auto-unblock hours: ${settings.auto_unblock_hours}\n`;
+        message += `• Session timeout: ${settings.session_timeout_hours} hours\n`;
+        message += `• Max users per admin: ${settings.max_users_per_admin}`;
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN CONFIG command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Reload admin manager completely
+    if (text.toUpperCase() === 'ADMIN RELOAD') {
+      try {
+        // Create a new admin manager instance
+        const newAdminManager = new AdminManager();
+        
+        // Replace the old one
+        Object.assign(adminManager, newAdminManager);
+        
+        // Reload admin sessions from disk
+        loadAdminSessions();
+        
+        await sock.sendMessage(jid, { 
+          text: `🔄 **Admin Manager Reloaded**\n\n✅ Admin manager recreated\n✅ All data reloaded from disk\n✅ Admin sessions refreshed\n\n📊 Current admin sessions: ${adminSessions.size}`
+        });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error reloading admin manager:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error reloading admin manager:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Test admin permissions
+    if (text.toUpperCase() === 'ADMIN TEST') {
+      try {
+        let message = `🧪 **Admin Permission Test**\n\n`;
+        message += `👑 **Your Role:** ${adminSession.role}\n`;
+        message += `🔑 **Your Code:** ${adminSession.adminCode}\n\n`;
+        
+        message += `🔍 **Permission Tests:**\n`;
+        
+        // Test each permission
+        const permissions = adminSession.permissions;
+        const allPermissions = [
+          'view_sessions', 'view_all_sessions', 'manage_users', 
+          'manage_admins', 'view_logs', 'system_control'
+        ];
+        
+        for (const permission of allPermissions) {
+          const hasPermission = permissions.includes(permission);
+          const status = hasPermission ? '✅' : '❌';
+          message += `${status} **${permission}**\n`;
+        }
+        
+        message += `\n📊 **Test Results:**\n`;
+        message += `• Total Permissions: ${permissions.length}\n`;
+        message += `• Can view users: ${permissions.includes('view_sessions') || permissions.includes('view_all_sessions') ? '✅' : '❌'}\n`;
+        message += `• Can manage users: ${permissions.includes('manage_users') ? '✅' : '❌'}\n`;
+        message += `• Can manage admins: ${permissions.includes('manage_admins') ? '✅' : '❌'}\n`;
+        message += `• Can view system: ${permissions.includes('system_control') ? '✅' : '❌'}\n`;
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN TEST command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show system information
+    if (text.toUpperCase() === 'ADMIN INFO') {
+      try {
+        const uptime = Math.floor(process.uptime());
+        const hours = Math.floor(uptime / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        const seconds = uptime % 60;
+        
+        let message = `🤖 **System Information**\n\n`;
+        message += `📱 **Bot Version:** WhatsApp Business Scraper v2.0\n`;
+        message += `⏰ **Uptime:** ${hours}h ${minutes}m ${seconds}s\n`;
+        message += `🔧 **Node.js:** ${process.version}\n`;
+        message += `💾 **Platform:** ${process.platform}\n`;
+        message += `📊 **Memory:** ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)}MB\n\n`;
+        
+        message += `📁 **Files:**\n`;
+        message += `• Admin Config: ${fs.existsSync(path.join(__dirname, 'admin_config.json')) ? '✅' : '❌'}\n`;
+        message += `• User Codes: ${fs.existsSync(path.join(__dirname, 'codes.json')) ? '✅' : '❌'}\n`;
+        message += `• User Sessions: ${fs.existsSync(path.join(__dirname, 'sessions.json')) ? '✅' : '❌'}\n`;
+        message += `• Admin Sessions: ${fs.existsSync(path.join(__dirname, 'admin_sessions.json')) ? '✅' : '❌'}\n\n`;
+        
+        message += `👥 **Current Status:**\n`;
+        message += `• Admin Sessions: ${adminSessions.size}\n`;
+        message += `• User Codes: ${Object.keys(adminManager.codes).length}\n`;
+        message += `• User Sessions: ${Object.keys(adminManager.sessions).length}`;
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN INFO command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show current admin session details
+    if (text.toUpperCase() === 'ADMIN ME') {
+      try {
+        const timeSinceAuth = Math.floor((Date.now() - adminSession.authenticatedAt) / 1000 / 60);
+        let message = `🔐 **Your Admin Session**\n\n`;
+        message += `👑 **Role:** ${adminSession.role}\n`;
+        message += `🔑 **Admin Code:** ${adminSession.adminCode}\n`;
+        message += `📱 **Phone:** ${jid.split('@')[0]}\n`;
+        message += `⏰ **Authenticated:** ${timeSinceAuth} minutes ago\n`;
+        message += `🔑 **Permissions:** ${adminSession.permissions.join(', ')}\n\n`;
+        
+        // Show role description
+        const roleInfo = adminManager.adminConfig.admin_roles[adminSession.role];
+        if (roleInfo) {
+          message += `📝 **Role Description:** ${roleInfo.description}\n\n`;
+        }
+        
+        message += `💡 **Available Commands:**\n`;
+        message += `• ADMIN USERS - List all users\n`;
+        message += `• ADMIN STATUS - System status\n`;
+        message += `• ADMIN HELP - Show all commands`;
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN ME command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Re-authenticate with admin code
+    if (text.toUpperCase().startsWith('ADMIN AUTH ')) {
+      try {
+        const adminCode = text.replace(/^ADMIN AUTH\s+/i, '').trim();
+        
+        if (!adminCode) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Usage:** ADMIN AUTH <admin_code>\n\n💡 **Example:** ADMIN AUTH admin123`
+          });
+          return;
+        }
+
+        const authResult = adminManager.authenticateAdmin(adminCode);
+        
+        if (authResult.success) {
+          // Update existing admin session
+          adminSessions.set(jid, {
+            adminCode: adminCode,
+            role: authResult.admin.role,
+            permissions: authResult.admin.permissions,
+            authenticatedAt: new Date()
+          });
+
+          // Save admin sessions to disk
+          saveAdminSessions();
+
+          await sock.sendMessage(jid, { 
+            text: `🔐 **Admin Re-authentication Successful!**\n\n👑 **Role:** ${authResult.admin.role}\n📝 **Description:** ${authResult.admin.roleDescription}\n🔑 **Permissions:** ${authResult.admin.permissions.join(', ')}\n\n✅ Your admin session has been refreshed.`
+          });
+        } else {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Admin Re-authentication Failed**\n\n${authResult.error}\n\n💡 Please check your admin code and try again.`
+          });
+        }
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN AUTH command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Clear all admin sessions (debug)
+    if (text.toUpperCase() === 'ADMIN CLEAR') {
+      try {
+        const sessionCount = adminSessions.size;
+        adminSessions.clear();
+        saveAdminSessions();
+        
+        await sock.sendMessage(jid, { 
+          text: `🧹 **Admin Sessions Cleared**\n\n✅ Cleared ${sessionCount} admin sessions\n✅ All admins will need to re-authenticate\n\n💡 Use ADMIN REFRESH to reload data from disk`
+        });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error clearing admin sessions:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error clearing admin sessions:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // If admin session exists but no command matched, show available commands
+    if (!text.toUpperCase().startsWith('ADMIN ')) {
+      await sock.sendMessage(jid, { 
+        text: `🔐 **Admin Session Active**\n\n💡 Type **ADMIN HELP** to see available commands.\n\n💡 Type **ADMIN USERS** to list all users.\n\n💡 Type **ADMIN STATUS** to view system status.`
+      });
+      return;
+    }
+
+    // If admin session exists and text starts with ADMIN but no specific command matched, show error
+    if (text.toUpperCase().startsWith('ADMIN ')) {
+      const command = text.toUpperCase().trim();
+      
+      // Check if it's a valid admin command
+      const validCommands = [
+        'ADMIN USERS', 'ADMIN ADD USER', 'ADMIN REMOVE USER', 'ADMIN ADMINS', 
+        'ADMIN ADD ADMIN', 'ADMIN REMOVE ADMIN', 'ADMIN STATUS', 'ADMIN HELP',
+        'ADMIN SESSIONS', 'ADMIN REFRESH', 'ADMIN ADMINSESSIONSFILE', 
+        'ADMIN USERSESSIONSFILE', 'ADMIN FILES', 'ADMIN DEBUG', 'ADMIN LOG',
+        'ADMIN SESSIONSFILE', 'ADMIN RESET', 'ADMIN CONFIGFILE', 'ADMIN CODESFILE',
+        'ADMIN CLEAR', 'ADMIN AUTH', 'ADMIN ME', 'ADMIN INFO', 'ADMIN TEST',
+        'ADMIN RELOAD', 'ADMIN CONFIG', 'ADMIN CODES', 'ADMIN SESSIONS'
+      ];
+
+      let isValidCommand = false;
+      for (const validCmd of validCommands) {
+        if (command.startsWith(validCmd)) {
+          isValidCommand = true;
+          break;
+        }
+      }
+
+      if (!isValidCommand) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Invalid Admin Command!**\n\n⚠️ The command "${text}" is not recognized.\n\n💡 **Available Commands:**\n• ADMIN USERS - List all users\n• ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>\n• ADMIN REMOVE USER <code>\n• ADMIN ADMINS - List all admins\n• ADMIN STATUS - System status\n• ADMIN HELP - Show detailed help\n\n🔄 **Try again with a valid command!**`
+        });
+        return;
+      }
+    }
+  } else {
+     // Debug: Show why admin commands aren't working
+     if (text.toUpperCase().startsWith('ADMIN ')) {
+       console.log(chalk.yellow(`⚠️ Admin command "${text}" from ${jid.split('@')[0]} but no admin session found`));
+       console.log(chalk.blue(`📊 Current admin sessions:`, Array.from(adminSessions.keys()).map(k => k.split('@')[0])));
+     }
+   }
+
+   // STRICT AUTHENTICATION: No responses until CODE is provided (for regular users)
   if (!session.apiKeys && !/^CODE:?\s+/i.test(text)) {
     // SILENT IGNORE: Don't respond to any messages until authentication
     console.log(chalk.yellow(`🔒 Unauthorized message from ${jid.split('@')[0]}: "${shortText}" - Ignoring silently`));
@@ -838,11 +2094,11 @@ async function handleMessage(sock, message) {
       targetSession.security.blockedAt = null;
       
       sessions[targetJid + '@s.whatsapp.net'] = targetSession;
-      saveJson(SESSIONS_FILE, sessions);
+        saveJson(SESSIONS_FILE, sessions);
       
       console.log(chalk.green(`🔓 Admin ${jid.split('@')[0]} unblocked user ${targetJid}`));
-      
-      await sock.sendMessage(jid, { 
+        
+        await sock.sendMessage(jid, { 
         text: `✅ **User Unblocked**\n\nUser ${targetJid} has been unblocked and can now authenticate again.`
       });
       
@@ -855,15 +2111,15 @@ async function handleMessage(sock, message) {
         console.log(chalk.yellow(`⚠️ Could not notify unblocked user ${targetJid}: ${error.message}`));
       }
       
-      return;
-    }
-
+        return;
+      }
+      
     // Admin command: SECURITY STATUS (only works for users with valid codes)
     if (text.toUpperCase().startsWith('ADMIN: STATUS') && session.apiKeys) {
       const targetJid = text.replace(/^ADMIN:\s*STATUS\s+/i, '').trim();
       
       if (!targetJid) {
-        await sock.sendMessage(jid, { 
+      await sock.sendMessage(jid, { 
           text: `❌ **Admin Command Error**\n\nUsage: ADMIN: STATUS <phone_number>\nExample: ADMIN: STATUS 1234567890`
         });
         return;
@@ -915,62 +2171,64 @@ async function handleMessage(sock, message) {
       return;
     }
 
-    // Admin command: SECURITY LOG (only works for users with valid codes)
-    if (text.toUpperCase() === 'ADMIN: LOG' && session.apiKeys) {
-      // Get all sessions and find security issues
-      const securityIssues = [];
-      
-      for (const [sessionJid, sessionData] of Object.entries(sessions)) {
-        if (sessionData.security) {
-          const security = sessionData.security;
-          if (security.isBlocked || security.failedAuthAttempts > 0) {
-            const phone = sessionJid.split('@')[0];
-            const status = security.isBlocked ? '🚫 BLOCKED' : '⚠️ WARNING';
-            const attempts = security.failedAuthAttempts;
-            const lastFailed = security.lastFailedAttempt ? new Date(security.lastFailedAttempt).toLocaleString() : 'Never';
-            const blockedAt = security.blockedAt ? new Date(security.blockedAt).toLocaleString() : 'N/A';
-            
-            securityIssues.push({
-              phone,
-              status,
-              attempts,
-              lastFailed,
-              blockedAt,
-              createdAt: sessionData.meta?.createdAt ? new Date(sessionData.meta.createdAt).toLocaleString() : 'Unknown'
-            });
-          }
-        }
-      }
-      
-      if (securityIssues.length === 0) {
-        await sock.sendMessage(jid, { 
-          text: `✅ **Security Status: All Clear**\n\nNo security issues detected. All users are secure.`
-        });
-        return;
-      }
-      
-      // Sort by severity (blocked first, then by failed attempts)
-      securityIssues.sort((a, b) => {
-        if (a.status.includes('BLOCKED') && !b.status.includes('BLOCKED')) return -1;
-        if (!a.status.includes('BLOCKED') && b.status.includes('BLOCKED')) return 1;
-        return b.attempts - a.attempts;
-      });
-      
-      let logMessage = `🔒 **Security Log**\n\n`;
-      
-      for (const issue of securityIssues) {
-        logMessage += `${issue.status} **${issue.phone}**\n` +
-          `Failed Attempts: ${issue.attempts}/5\n` +
-          `Last Failed: ${issue.lastFailed}\n` +
-          `Blocked At: ${issue.blockedAt}\n` +
-          `Created: ${issue.createdAt}\n\n`;
-      }
-      
-      logMessage += `**Total Issues:** ${securityIssues.length}`;
-      
-      await sock.sendMessage(jid, { text: logMessage });
-      return;
-    }
+         // Admin command: SECURITY LOG (only works for users with valid codes)
+     if (text.toUpperCase() === 'ADMIN: LOG' && session.apiKeys) {
+       // Get all sessions and find security issues
+       const securityIssues = [];
+       
+       for (const [sessionJid, sessionData] of Object.entries(sessions)) {
+         if (sessionData.security) {
+           const security = sessionData.security;
+           if (security.isBlocked || security.failedAuthAttempts > 0) {
+             const phone = sessionJid.split('@')[0];
+             const status = security.isBlocked ? '🚫 BLOCKED' : '⚠️ WARNING';
+             const attempts = security.failedAuthAttempts;
+             const lastFailed = security.lastFailedAttempt ? new Date(security.lastFailedAttempt).toLocaleString() : 'Never';
+             const blockedAt = security.blockedAt ? new Date(security.blockedAt).toLocaleString() : 'N/A';
+             
+             securityIssues.push({
+               phone,
+               status,
+               attempts,
+               lastFailed,
+               blockedAt,
+               createdAt: sessionData.meta?.createdAt ? new Date(sessionData.meta.createdAt).toLocaleString() : 'Unknown'
+             });
+           }
+         }
+       }
+       
+       if (securityIssues.length === 0) {
+         await sock.sendMessage(jid, { 
+           text: `✅ **Security Status: All Clear**\n\nNo security issues detected. All users are secure.`
+         });
+         return;
+       }
+       
+       // Sort by severity (blocked first, then by failed attempts)
+       securityIssues.sort((a, b) => {
+         if (a.status.includes('BLOCKED') && !b.status.includes('BLOCKED')) return -1;
+         if (!a.status.includes('BLOCKED') && b.status.includes('BLOCKED')) return 1;
+         return b.attempts - a.attempts;
+       });
+       
+       let logMessage = `🔒 **Security Log**\n\n`;
+       
+       for (const issue of securityIssues) {
+         logMessage += `${issue.status} **${issue.phone}**\n` +
+           `Failed Attempts: ${issue.attempts}/5\n` +
+           `Last Failed: ${issue.lastFailed}\n` +
+           `Blocked At: ${issue.blockedAt}\n` +
+           `Created: ${issue.createdAt}\n\n`;
+       }
+       
+       logMessage += `**Total Issues:** ${securityIssues.length}`;
+       
+       await sock.sendMessage(jid, { text: logMessage });
+       return;
+     }
+
+
 
     // Handle incoming messages based on conversation step
     const inputNumber = parseInt(text);
@@ -1502,9 +2760,9 @@ async function handleMessage(sock, message) {
         } else {
             // Only respond if user is authenticated
             if (session.apiKeys) {
-                await sock.sendMessage(jid, { 
-                    text: '⏳ A scraping job is currently in progress. You can type STATUS to check its progress or STOP to cancel it.'
-                });
+            await sock.sendMessage(jid, { 
+                text: '⏳ A scraping job is currently in progress. You can type STATUS to check its progress or STOP to cancel it.'
+            });
             }
             return;
         }
@@ -1683,9 +2941,9 @@ async function handleMessage(sock, message) {
         // Only inform if not already in a specific state and not a common command
         if (!['awaiting_niche', 'awaiting_source', 'awaiting_type', 'awaiting_format', 'ready_to_start', 'scraping_in_progress'].includes(session.currentStep) &&
             !['STATUS', 'STOP', 'RESET', 'LIMIT', 'HELP'].some(cmd => text.toUpperCase().startsWith(cmd))) {
-          await sock.sendMessage(jid, { 
-            text: `📎 **You have pending results.** Reply \`SEND\` to receive them, or \`SKIP\` to discard. Continuing with your new message...`
-          });
+            await sock.sendMessage(jid, { 
+                text: `📎 **You have pending results.** Reply \`SEND\` to receive them, or \`SKIP\` to discard. Continuing with your new message...`
+            });
         }
       }
     }
@@ -1724,6 +2982,9 @@ async function startBot() {
     
     // Load pending results from disk
     loadPendingResults();
+    
+    // Load admin sessions from disk
+    loadAdminSessions();
     
     // Create socket
     const sock = makeWASocket({
@@ -1805,6 +3066,11 @@ async function startBot() {
         console.log(chalk.gray('   npm run admin:list    - List access codes'));
         console.log(chalk.gray('   npm run admin:add     - Add new user'));
         console.log(chalk.gray('   npm run admin:remove  - Remove user\n'));
+         console.log(chalk.cyan('📱 WhatsApp Admin Commands:'));
+         console.log(chalk.gray('   ADMIN: admin123       - Authenticate as admin'));
+         console.log(chalk.gray('   ADMIN USERS           - List all users'));
+         console.log(chalk.gray('   ADMIN ADMINS          - List all admins'));
+         console.log(chalk.gray('   ADMIN STATUS          - System status\n'));
         
         // Check for pending results to send when user comes back online
         await checkAndSendPendingResults();
@@ -1814,11 +3080,19 @@ async function startBot() {
     // Save credentials when updated
     sock.ev.on('creds.update', saveCreds);
 
-    // Keep connection alive with periodic status checks
+         // Keep connection alive with periodic status checks and refresh admin data
     const connectionCheckInterval = setInterval(() => {
       if (sock && sock.user) {
         // Just log connection status
         console.log(chalk.gray('📡 Connection status: Active'));
+         
+         // Refresh admin manager data every 5 minutes
+         if (Date.now() % 300000 < 60000) { // Every 5 minutes
+           adminManager.adminConfig = adminManager.loadAdminConfig();
+           adminManager.codes = adminManager.loadCodes();
+           adminManager.sessions = adminManager.loadSessions();
+           console.log(chalk.blue('🔄 Admin manager data refreshed'));
+         }
       }
     }, 60000); // Every 60 seconds
 
@@ -1859,6 +3133,6 @@ async function startBot() {
 }
 
 // Start the bot
-startBot();
+  startBot();
 
 export { startBot };

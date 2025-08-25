@@ -17,5 +17,43 @@
       "lastUsed": "2025-08-24T20:59:52.214Z",
       "useCount": 22
     }
+  },
+  "test": {
+    "apiKeys": {
+      "googleSearchKeys": [
+        "test",
+        "test"
+      ],
+      "geminiKeys": [
+        "test",
+        null
+      ]
+    },
+    "createdAt": "2025-08-25T02:36:09.653Z",
+    "expiresAt": null,
+    "meta": {
+      "issuedBy": "admin123",
+      "lastUsed": null,
+      "useCount": 0
+    }
+  },
+  "testuser": {
+    "apiKeys": {
+      "googleSearchKeys": [
+        "api1",
+        "api2"
+      ],
+      "geminiKeys": [
+        "g1",
+        "g2"
+      ]
+    },
+    "createdAt": "2025-08-25T03:14:54.596Z",
+    "expiresAt": null,
+    "meta": {
+      "issuedBy": "admin123",
+      "lastUsed": null,
+      "useCount": 0
+    }
   }
 }
