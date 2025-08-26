@@ -210,10 +210,145 @@ const PENDING_RESULTS_FILE = path.join(__dirname, 'pending_results.json');
 const activeJobs = new Map(); // jid -> { abort: AbortController, status: string, startTime: Date, results: any, progressSimulator: ProgressSimulator }
 const pendingResults = new Map(); // jid -> { filePath: string, meta: any, timestamp: Date }
 
+// Daily scraping limits
+const DAILY_SCRAPING_LIMIT = 4; // Maximum scrapings per day per user
+
+/**
+ * Helper function to safely reset session state when clearing active jobs
+ * @param {string} jid - User's JID
+ * @param {Object} sessions - Current sessions data
+ */
+function resetSessionState(jid, sessions) {
+  const session = sessions[jid];
+  if (session) {
+    session.currentStep = 'awaiting_niche';
+    session.status = 'idle';
+    session.currentLoadingPercentage = 0;
+    session.lastLoadingUpdateTimestamp = 0;
+    sessions[jid] = session;
+    saveJson(SESSIONS_FILE, sessions);
+    console.log(chalk.yellow(`🔧 Session state reset for ${jid}: currentStep -> 'awaiting_niche'`));
+  }
+}
 
 // Admin management
 const adminManager = new AdminManager();
 const adminSessions = new Map(); // jid -> { adminCode: string, role: string, permissions: string[], authenticatedAt: Date }
+
+/**
+ * Check if user has reached daily scraping limit
+ * @param {string} jid - User's JID
+ * @param {Object} sessions - Current sessions data
+ * @returns {Object} - { canScrape: boolean, remaining: number, resetTime: string }
+ */
+function checkDailyScrapingLimit(jid, sessions) {
+  const session = sessions[jid];
+  if (!session) {
+    return { canScrape: false, remaining: 0, resetTime: null };
+  }
+
+  // Initialize daily tracking if not exists
+  if (!session.dailyScraping) {
+    session.dailyScraping = {
+      date: new Date().toDateString(),
+      count: 0,
+      lastReset: new Date().toISOString()
+    };
+  }
+
+  const today = new Date().toDateString();
+  const lastReset = new Date(session.dailyScraping.lastReset);
+  const lastResetDate = lastReset.toDateString();
+
+  // Check if it's a new day
+  if (today !== lastResetDate) {
+    // Reset daily count for new day
+    session.dailyScraping.date = today;
+    session.dailyScraping.count = 0;
+    session.dailyScraping.lastReset = new Date().toISOString();
+    
+    // Save updated session
+    sessions[jid] = session;
+    saveJson(SESSIONS_FILE, sessions);
+  }
+
+  const remaining = Math.max(0, DAILY_SCRAPING_LIMIT - session.dailyScraping.count);
+  const canScrape = remaining > 0;
+
+  // Calculate next reset time (tomorrow at midnight)
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const resetTime = tomorrow.toLocaleString();
+
+  console.log(chalk.blue(`🔍 Daily limit calculation for ${jid.split('@')[0]}: count=${session.dailyScraping.count}, limit=${DAILY_SCRAPING_LIMIT}, remaining=${remaining}, canScrape=${canScrape}`));
+
+  return { canScrape, remaining, resetTime };
+}
+
+/**
+ * Increment daily scraping count for user
+ * @param {string} jid - User's JID
+ * @param {Object} sessions - Current sessions data
+ * @returns {boolean} - Success status
+ */
+function incrementDailyScrapingCount(jid, sessions) {
+  try {
+    const session = sessions[jid];
+    if (!session) {
+      return false;
+    }
+
+    // Initialize daily tracking if not exists
+    if (!session.dailyScraping) {
+      session.dailyScraping = {
+        date: new Date().toDateString(),
+        count: 0,
+        lastReset: new Date().toISOString()
+      };
+    }
+
+    const today = new Date().toDateString();
+    const lastReset = new Date(session.dailyScraping.lastReset);
+    const lastResetDate = lastReset.toDateString();
+
+    // Check if it's a new day
+    if (today !== lastResetDate) {
+      // Reset daily count for new day
+      session.dailyScraping.date = today;
+      session.dailyScraping.count = 0;
+      session.dailyScraping.lastReset = new Date().toISOString();
+    }
+
+    // Increment count
+    session.dailyScraping.count += 1;
+    
+    // Save updated session
+    sessions[jid] = session;
+    saveJson(SESSIONS_FILE, sessions);
+    
+    console.log(chalk.blue(`📊 Daily scraping count updated for ${jid.split('@')[0]}: ${session.dailyScraping.count}/${DAILY_SCRAPING_LIMIT}`));
+    console.log(chalk.blue(`💾 Session saved for ${jid.split('@')[0]} with daily count: ${session.dailyScraping.count}`));
+    return true;
+  } catch (error) {
+    console.error(chalk.red(`❌ Error updating daily scraping count for ${jid}:`, error.message));
+    return false;
+  }
+}
+
+/**
+ * Get daily scraping status message
+ * @param {Object} limitInfo - Limit check result
+ * @param {string} language - User's language
+ * @returns {string} - Formatted status message
+ */
+function getDailyScrapingStatusMessage(limitInfo, language = 'en') {
+  if (limitInfo.canScrape) {
+    return `📊 **Daily Scraping Status:** ${limitInfo.remaining}/${DAILY_SCRAPING_LIMIT} remaining\n⏰ **Resets:** Tomorrow at midnight`;
+  } else {
+    return `🚫 **Daily Limit Reached**\n\nYou have used all ${DAILY_SCRAPING_LIMIT} daily scrapings.\n⏰ **Come back tomorrow** to continue scraping.\n\n💡 **Next reset:** ${limitInfo.resetTime}`;
+  }
+}
 
 // Load admin sessions from disk
 function loadAdminSessions() {
@@ -642,7 +777,7 @@ function getHelpMessage() {
           `📏 **LIMIT: <number>**\n` +
           `   Set max results (1-500). Default: 300\n\n` +
           `📊 **STATUS**\n` +
-          `   Check current job status\n\n` +
+          `   Check current job status and daily limits\n\n` +
           `🛑 **STOP**\n` +
           `   Cancel current scraping job\n\n` +
           `♻️ **RESET**\n` +
@@ -651,6 +786,10 @@ function getHelpMessage() {
           `   Restart the entire process from niche selection\n\n` +
           `❓ **HELP**\n` +
           `   Show this help message\n\n` +
+          `📅 **Daily Limits:**\n` +
+          `• Each user can perform ${DAILY_SCRAPING_LIMIT} scraping jobs per day\n` +
+          `• Limits reset at midnight local time\n` +
+          `• Use STATUS command to check your remaining scrapings\n\n` +
           `💡 **Getting Started:**\n` +
           `1. Get your access code from admin\n` +
           `2. Send: CODE: your_code_here\n` +
@@ -687,6 +826,9 @@ async function handleMessage(sock, message) {
   // Load session data
   let sessions = loadJson(SESSIONS_FILE, {});
   const codesDb = loadJson(CODES_FILE, {});
+  
+  // Debug: Log session loading
+  console.log(chalk.gray(`📱 Session data loaded for ${jid.split('@')[0]}: ${Object.keys(sessions).length} total sessions`));
 
 
   // Initialize session if not exists (but don't send welcome message yet)
@@ -705,13 +847,17 @@ async function handleMessage(sock, message) {
         createdAt: new Date().toISOString(),
         totalJobs: 0,
         lastNiche: null
-
       },
       security: {
         failedAuthAttempts: 0,
         lastFailedAttempt: null,
         isBlocked: false,
         blockedAt: null
+      },
+      dailyScraping: {
+        date: new Date().toDateString(),
+        count: 0,
+        lastReset: new Date().toISOString()
       }
     };
     saveJson(SESSIONS_FILE, sessions);
@@ -724,6 +870,17 @@ async function handleMessage(sock, message) {
   }
 
   const session = sessions[jid];
+
+  // Debug: Log current session state
+  if (session && session.dailyScraping) {
+    console.log(chalk.gray(`📊 Current daily count for ${jid.split('@')[0]}: ${session.dailyScraping.count}/${DAILY_SCRAPING_LIMIT}`));
+  }
+
+  // FIX: Safety check to automatically fix stuck session states
+  if (session.currentStep === 'scraping_in_progress' && !activeJobs.has(jid)) {
+    console.log(chalk.yellow(`🔧 Auto-fixing stuck session state for ${jid}: resetting from 'scraping_in_progress' to 'awaiting_niche'`));
+    resetSessionState(jid, sessions);
+  }
 
   // ADMIN AUTHENTICATION: Check if user is trying to authenticate as admin
   // Only run this if there's no active admin session for this user
@@ -1055,30 +1212,31 @@ async function handleMessage(sock, message) {
       
       message += `• **ADMIN HELP** - Show this help message\n`;
       message += `• **ADMIN SESSIONS** - Show current admin sessions (debug)\n`;
-      message += `• **ADMIN USERSESSIONS** - Show all user sessions\n`;
-      message += `• **ADMIN FILES** - Check admin system files\n`;
-      message += `• **ADMIN DEBUG** - Run admin system diagnostics\n`;
-      message += `• **ADMIN LOG** - Show admin system logs\n`;
-      message += `• **ADMIN SESSIONSFILE** - Show admin sessions file content\n`;
-      message += `• **ADMIN USERSESSIONSFILE** - Show user sessions file content\n`;
-      message += `• **ADMIN ADMINSESSIONSFILE** - Show admin sessions file content\n`;
-      message += `• **ADMIN RESET** - Reset admin system completely\n`;
-      message += `• **ADMIN CONFIGFILE** - Show admin config file content\n`;
-      message += `• **ADMIN CODESFILE** - Show user codes file content\n`;
-      message += `• **ADMIN SESSIONSFILE** - Show user sessions file content\n`;
-      message += `• **ADMIN REFRESH** - Refresh admin data from disk\n`;
-      message += `• **ADMIN CLEAR** - Clear all admin sessions (debug)\n`;
-              message += `• **ADMIN AUTH <code>** - Re-authenticate with admin code\n`;
+              message += `• **ADMIN USERSESSIONS** - Show all user sessions (includes daily scraping limits)\n`;
+        message += `• **ADMIN FILES** - Check admin system files\n`;
+        message += `• **ADMIN DEBUG** - Run admin system diagnostics\n`;
+        message += `• **ADMIN LOG** - Show admin system logs\n`;
+        message += `• **ADMIN SESSIONSFILE** - Show admin sessions file content\n`;
+        message += `• **ADMIN USERSESSIONSFILE** - Show user sessions file content\n`;
+        message += `• **ADMIN ADMINSESSIONSFILE** - Show admin sessions file content\n`;
+        message += `• **ADMIN RESET** - Reset admin system completely\n`;
+        message += `• **ADMIN CONFIGFILE** - Show admin config file content\n`;
+        message += `• **ADMIN CODESFILE** - Show user codes file content\n`;
+        message += `• **ADMIN SESSIONSFILE** - Show user sessions file content\n`;
+        message += `• **ADMIN REFRESH** - Refresh admin data from disk\n`;
+        message += `• **ADMIN CLEAR** - Clear all admin sessions (debug)\n`;
+        message += `• **ADMIN AUTH <code>** - Re-authenticate with admin code\n`;
         message += `• **ADMIN LOGOUT** - Logout from admin session (switch to user mode)\n`;
         message += `• **ADMIN ME** - Show your current admin session details\n`;
-      message += `• **ADMIN INFO** - Show system information and version\n`;
-      message += `• **ADMIN TEST** - Test your admin permissions\n`;
-      message += `• **ADMIN RELOAD** - Reload admin manager completely\n`;
-      message += `• **ADMIN CONFIG** - Show admin configuration details\n`;
-      message += `• **ADMIN CODES** - Show all user codes\n`;
-      message += `• **ADMIN SESSIONS** - Show all user sessions\n\n`;
-      
-      message += `💡 **Note:** You can only use commands that match your permissions.`;
+        message += `• **ADMIN INFO** - Show system information and version\n`;
+        message += `• **ADMIN TEST** - Test your admin permissions\n`;
+        message += `• **ADMIN RELOAD** - Reload admin manager completely\n`;
+        message += `• **ADMIN CONFIG** - Show admin configuration details\n`;
+        message += `• **ADMIN CODES** - Show all user codes\n`;
+        message += `• **ADMIN SESSIONS** - Show all user sessions\n\n`;
+        
+        message += `📅 **Daily Scraping Limits:** Each user can perform ${DAILY_SCRAPING_LIMIT} scraping jobs per day. Limits reset at midnight.\n\n`;
+        message += `💡 **Note:** You can only use commands that match your permissions.`;
       
       await sock.sendMessage(jid, { text: message });
       return;
@@ -1599,6 +1757,22 @@ async function handleMessage(sock, message) {
             if (sessionData.meta?.totalJobs > 0) {
               message += `   📈 Total jobs: ${sessionData.meta.totalJobs}\n`;
             }
+            
+            // Add daily scraping information
+            if (sessionData.dailyScraping) {
+              const today = new Date().toDateString();
+              const lastReset = new Date(sessionData.dailyScraping.lastReset);
+              const lastResetDate = lastReset.toDateString();
+              
+              if (today === lastResetDate) {
+                message += `   📅 Daily scraping: ${sessionData.dailyScraping.count}/${DAILY_SCRAPING_LIMIT}\n`;
+              } else {
+                message += `   📅 Daily scraping: 0/${DAILY_SCRAPING_LIMIT} (new day)\n`;
+              }
+            } else {
+              message += `   📅 Daily scraping: 0/${DAILY_SCRAPING_LIMIT} (not initialized)\n`;
+            }
+            
             message += '\n';
           }
         }
@@ -2111,6 +2285,34 @@ async function handleMessage(sock, message) {
       return;
     }
 
+    // User command: Check status (including daily limits)
+    if (text.toUpperCase() === 'STATUS' && session.apiKeys) {
+      try {
+        const limitInfo = checkDailyScrapingLimit(jid, sessions);
+        const statusMessage = getDailyScrapingStatusMessage(limitInfo, session.language);
+        
+        let message = `📊 **Your Scraping Status**\n\n`;
+        message += statusMessage;
+        message += `\n\n🎯 **Current Settings:**\n`;
+        message += `• Source: ${session.prefs.source}\n`;
+        message += `• Format: ${session.prefs.format}\n`;
+        message += `• Limit: ${session.prefs.limit} results\n`;
+        message += `• Language: ${session.language.toUpperCase()}\n\n`;
+        message += `📈 **Account Stats:**\n`;
+        message += `• Total Jobs: ${session.meta.totalJobs || 0}\n`;
+        message += `• Last Niche: ${session.meta.lastNiche || 'None'}\n`;
+        message += `• Session Created: ${new Date(session.meta.createdAt).toLocaleString()}`;
+        
+        await sock.sendMessage(jid, { text: message });
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in STATUS command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error checking status:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
     // User command: Logout from user session
     if (text.toUpperCase() === 'LOGOUT' && session.apiKeys) {
       try {
@@ -2132,15 +2334,15 @@ async function handleMessage(sock, message) {
           text: `❌ **Error during logout:** ${error.message}` 
         });
       }
-      return;
-    }
-
+        return;
+      }
+      
     // Admin command: UNBLOCK (only works for users with valid codes)
     if (text.toUpperCase().startsWith('ADMIN: UNBLOCK') && session.apiKeys) {
       const targetJid = text.replace(/^ADMIN:\s*UNBLOCK\s+/i, '').trim();
       
       if (!targetJid) {
-        await sock.sendMessage(jid, { 
+      await sock.sendMessage(jid, { 
           text: `❌ **Admin Command Error**\n\nUsage: ADMIN: UNBLOCK <phone_number>\nExample: ADMIN: UNBLOCK 1234567890`
         });
         return;
@@ -2568,21 +2770,55 @@ async function handleMessage(sock, message) {
                 return;
             }
 
+            // CRITICAL FIX: Reload sessions from disk to get the most up-to-date daily counts
+            sessions = loadJson(SESSIONS_FILE, {});
+            const currentSession = sessions[jid];
+            
+            // Check daily scraping limit before starting
+            const limitInfo = checkDailyScrapingLimit(jid, sessions);
+            console.log(chalk.yellow(`🔍 Daily limit check for ${jid.split('@')[0]}: ${JSON.stringify(limitInfo)}`));
+            
+            if (!limitInfo.canScrape) {
+                console.log(chalk.red(`🚫 User ${jid.split('@')[0]} attempted to scrape but daily limit reached: ${limitInfo.remaining}/${DAILY_SCRAPING_LIMIT}`));
+                const limitMessage = getDailyScrapingStatusMessage(limitInfo, currentSession.language);
+                await sock.sendMessage(jid, { text: limitMessage });
+                
+                // Reset session state
+                currentSession.currentStep = 'awaiting_niche';
+                sessions[jid] = currentSession;
+                saveJson(SESSIONS_FILE, sessions);
+                return;
+            }
+            
+            console.log(chalk.green(`✅ User ${jid.split('@')[0]} can scrape: ${limitInfo.remaining}/${DAILY_SCRAPING_LIMIT} remaining`));
+
             // Now start the actual scraping job
-            const niche = session.pendingNiche;
-            const { source, dataType, format, limit } = session.prefs;
+            const niche = currentSession.pendingNiche;
+            const { source, dataType, format, limit } = currentSession.prefs;
             
             // Clear pending niche
-            delete session.pendingNiche;
-            session.currentStep = 'scraping_in_progress';
-            sessions[jid] = session;
+            delete currentSession.pendingNiche;
+            currentSession.currentStep = 'scraping_in_progress';
+            
+            // Increment daily scraping count BEFORE starting
+            incrementDailyScrapingCount(jid, sessions);
+            
+            // CRITICAL: Verify the count was incremented and save
+            sessions[jid] = currentSession;
             saveJson(SESSIONS_FILE, sessions);
+            
+            // Double-check: Reload and verify the count was saved
+            const verificationSessions = loadJson(SESSIONS_FILE, {});
+            const verificationSession = verificationSessions[jid];
+            if (verificationSession && verificationSession.dailyScraping) {
+                console.log(chalk.green(`✅ Daily count verification: ${verificationSession.dailyScraping.count}/${DAILY_SCRAPING_LIMIT}`));
+            }
             
             // Start the scraping job
             console.log(chalk.cyan(`🔍 Job started: "${niche}" (${source}/${dataType}/${format}/${limit})`));
 
             await sock.sendMessage(jid, { 
-                text: getMessage(session.language, 'job_starting', {
+                text: getMessage(currentSession.language, 'job_starting', {
                   niche: niche,
                   source: source,
                   format: format,
@@ -2596,8 +2832,8 @@ async function handleMessage(sock, message) {
             // Create abort controller
             const abortController = new AbortController();
 
-            session.status = 'running';
-            session.meta.lastNiche = niche;
+            currentSession.status = 'running';
+            currentSession.meta.lastNiche = niche;
             
             // Initialize progress simulator for this job
             const progressSimulator = new ProgressSimulator();
@@ -2609,9 +2845,9 @@ async function handleMessage(sock, message) {
                 progressSimulator: progressSimulator
             });
 
-            session.status = 'running';
-            session.meta.lastNiche = niche;
-            sessions[jid] = session;
+            currentSession.status = 'running';
+            currentSession.meta.lastNiche = niche;
+            sessions[jid] = currentSession;
             saveJson(SESSIONS_FILE, sessions);
 
             let resultCount = 0;
@@ -2857,7 +3093,7 @@ async function handleMessage(sock, message) {
 
                 // ✅ ENHANCED: Handle specific API key and quota errors
                 let errorMessage = '';
-                
+
                 if (error.message.includes('aborted')) {
                     errorMessage = '🛑 **Job was cancelled.** You can send a new search query when ready.';
                 } else if (error.message.includes('ALL_USER_API_KEYS_QUOTA_EXCEEDED')) {
@@ -3010,6 +3246,19 @@ async function handleMessage(sock, message) {
             }
             return;
         }
+    } else if (session.currentStep === 'scraping_in_progress' && !activeJobs.has(jid)) {
+        // FIX: If session step is 'scraping_in_progress' but no active job exists,
+        // reset the session state to prevent stuck state
+        console.log(chalk.yellow(`🔧 Fixing stuck session state for ${jid}: resetting from 'scraping_in_progress' to 'awaiting_niche'`));
+        resetSessionState(jid, sessions);
+        
+        // Send message to user about the reset
+        if (session.apiKeys) {
+            await sock.sendMessage(jid, { 
+                text: '🔄 **Session state reset.** You can now send a new search query to begin scraping.'
+            });
+        }
+        return;
     }
 
     // Existing general commands (STATUS, STOP, RESET, HELP, LIMIT) - re-evaluate their placement
@@ -3076,9 +3325,19 @@ async function handleMessage(sock, message) {
           text: '🛑 **Job cancelled successfully.** You can send a new search query when ready.'
         });
       } else {
-        await sock.sendMessage(jid, { 
-          text: '📊 No active job to cancel. You can send a search query to start scraping.'
-        });
+        // FIX: If no active job but session is stuck, reset the session state
+        if (session.currentStep === 'scraping_in_progress') {
+          console.log(chalk.yellow(`🔧 STOP command fixing stuck session state for ${jid}: resetting from 'scraping_in_progress' to 'awaiting_niche'`));
+          resetSessionState(jid, sessions);
+          
+          await sock.sendMessage(jid, { 
+            text: '🔄 **Session state reset.** You can now send a new search query to begin scraping.'
+          });
+        } else {
+          await sock.sendMessage(jid, { 
+            text: '📊 No active job to cancel. You can send a search query to start scraping.'
+          });
+        }
       }
       return;
     }
@@ -3378,6 +3637,32 @@ async function startBot() {
       
       console.log(chalk.green('✅ Bot shut down gracefully'));
       process.exit(0);
+    });
+
+    // Additional safety: Handle unexpected exits
+    process.on('exit', () => {
+      console.log(chalk.yellow('\n🛑 Bot process exiting...'));
+      // activeJobs.clear() is not needed here as the process is terminating
+    });
+
+    process.on('uncaughtException', (error) => {
+      console.error(chalk.red('\n❌ Uncaught Exception:'), error);
+      console.log(chalk.yellow('🛑 Bot shutting down due to uncaught exception...'));
+      
+      // Clear connection check interval
+      if (connectionCheckInterval) {
+        clearInterval(connectionCheckInterval);
+      }
+      
+      // Cancel all active jobs
+      for (const [jid, job] of activeJobs.entries()) {
+        if (job.abort) {
+          job.abort.abort();
+        }
+      }
+      activeJobs.clear();
+      
+      process.exit(1);
     });
 
   } catch (error) {

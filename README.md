@@ -12,6 +12,8 @@ A powerful, unified business intelligence scraper that combines **Google Search*
 - **📊 Multiple Formats**: Export to Excel, CSV, or JSON
 - **⚡ High Performance**: Concurrent processing and smart rate limiting
 - **🛡️ Anti-Ban Protection**: Built-in safeguards and retry mechanisms
+- **📅 Daily Limits**: 4 scraping jobs per day per user with automatic reset
+- **🔧 State Management**: Automatic recovery from stuck session states
 
 ## 🏗️ Architecture
 
@@ -29,7 +31,24 @@ unified-business-scraper/
 │   └── all-sources-wrapper.js
 ├── google search + linkdin scraper/  # Existing Google Search + LinkedIn project
 └── maps_scraper/               # Existing Google Maps project
-```
+
+## 🔧 Recent Fixes & Improvements
+
+### Session State Management Fix (Latest)
+- **Fixed critical bug** where bot would show "scraping in progress" even when no job was running
+- **Enhanced STOP command** to properly reset stuck session states  
+- **Automatic state recovery** prevents users from getting stuck in infinite loops
+- **Multiple safety layers** ensure robust state management
+
+See [SESSION_STATE_FIX.md](./SESSION_STATE_FIX.md) for detailed information.
+
+### Daily Scraping Limit Enforcement Fix (Latest)
+- **Fixed critical bug** where users could bypass daily scraping limits
+- **Enhanced session synchronization** ensures daily counts are always accurate
+- **Comprehensive logging** for debugging and monitoring
+- **Strict enforcement** of 4 scraping jobs per day per user
+
+See [DAILY_LIMIT_FIX.md](./DAILY_LIMIT_FIX.md) for detailed information.
 
 ## 🚀 Quick Start
 
@@ -320,6 +339,12 @@ Scan the QR code with WhatsApp → **Linked Devices** → **Link a Device**
 CODE: abc123
 ```
 Authenticate with your access code (provided by admin)
+
+#### 📅 Daily Limits
+```
+STATUS
+```
+Check your daily scraping limits and account status
 
 #### ⚙️ Configuration Commands
 ```

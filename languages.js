@@ -11,7 +11,7 @@ export const languages = {
     // Authentication
     auth_required: "🔐 **Authentication required.** Please send your access code first.\n\n💬 **Format:** CODE: your_code_here\n💬 **Example:** CODE: user1\n\n💡 Contact admin if you don't have an access code.\n\n0️⃣ **CHANGE LANGUAGE** - Select a different language",
     invalid_code: "❌ Invalid access code. Please contact admin for a valid code.",
-    access_granted: "✅ **Access granted!** Welcome to the Business Scraper.\n\n📝 Send a search query (e.g., \"restaurant casablanca\").",
+    access_granted: "✅ **Access granted!** Welcome to the Business Scraper.\n\n📝 Send a search query (e.g., \"restaurant casablanca\").\n\n📅 **Daily Limits:** You can perform 4 scraping jobs per day. Limits reset at midnight.\n\n💡 Use STATUS command to check your remaining scrapings.",
     
     // Search Flow
     enter_niche: "🎯 **Enter your search query:**\n\n💬 **Examples:**\n• dentist casablanca\n• restaurant marrakech\n• web developer fes\n\n💡 **Tip:** Include location for better results",
@@ -74,7 +74,7 @@ export const languages = {
     // Authentication
     auth_required: "🔐 **Authentification requise.** Veuillez d'abord envoyer votre code d'accès.\n\n💬 **Format:** CODE: votre_code_ici\n💬 **Exemple:** CODE: user1\n\n💡 Contactez l'administrateur si vous n'avez pas de code d'accès.\n\n0️⃣ **CHANGER DE LANGUE** - Sélectionner une langue différente",
     invalid_code: "❌ Code d'accès invalide. Veuillez contacter l'administrateur pour un code valide.",
-    access_granted: "✅ **Accès accordé!** Bienvenue dans le Scraper Business.\n\n📝 Envoyez une requête de recherche (ex: \"restaurant casablanca\").",
+    access_granted: "✅ **Accès accordé!** Bienvenue dans le Scraper Business.\n\n📝 Envoyez une requête de recherche (ex: \"restaurant casablanca\").\n\n📅 **Limites Quotidiennes:** Vous pouvez effectuer 4 jobs de scraping par jour. Les limites se réinitialisent à minuit.\n\n💡 Utilisez la commande STATUS pour vérifier vos scrapings restants.",
     
     // Search Flow
     enter_niche: "🎯 **Entrez votre requête de recherche:**\n\n💬 **Exemples:**\n• dentiste casablanca\n• restaurant marrakech\n• développeur web fes\n\n💡 **Conseil:** Incluez la localisation pour de meilleurs résultats",
@@ -137,7 +137,7 @@ export const languages = {
     // Authentication
     auth_required: "🔐 **مطلوب مصادقة.** يرجى إرسال رمز الوصول أولاً.\n\n💬 **التنسيق:** CODE: رمزك_هنا\n💬 **مثال:** CODE: user1\n\n💡 اتصل بالمدير إذا لم يكن لديك رمز وصول.\n\n0️⃣ **تغيير اللغة** - اختر لغة مختلفة",
     invalid_code: "❌ رمز وصول غير صحيح. يرجى الاتصال بالمدير للحصول على رمز صحيح.",
-    access_granted: "✅ **تم منح الوصول!** مرحباً بك في مستخرج البيانات التجارية.\n\n📝 أرسل استعلام بحث (مثال: \"مطعم الدار البيضاء\").",
+    access_granted: "✅ **تم منح الوصول!** مرحباً بك في مستخرج البيانات التجارية.\n\n📝 أرسل استعلام بحث (مثال: \"مطعم الدار البيضاء\").\n\n📅 **الحدود اليومية:** يمكنك أداء 4 مهام استخراج يومياً. يتم إعادة تعيين الحدود عند منتصف الليل.\n\n💡 استخدم أمر STATUS للتحقق من عمليات الاستخراج المتبقية.",
     
     // Search Flow
     enter_niche: "🎯 **أدخل استعلام البحث الخاص بك:**\n\n💬 **أمثلة:**\n• طبيب أسنان الدار البيضاء\n• مطعم مراكش\n• مطور ويب فاس\n\n💡 **نصيحة:** أضف الموقع للحصول على نتائج أفضل",
