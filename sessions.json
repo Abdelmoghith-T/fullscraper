@@ -1,17 +1,18 @@
 {
   "212691708186@s.whatsapp.net": {
     "prefs": {
-      "source": "ALL",
+      "source": "MAPS",
       "format": "XLSX",
-      "limit": 300
+      "limit": 300,
+      "dataType": "COMPLETE"
     },
     "status": "idle",
-    "currentStep": "awaiting_language",
-    "previousMessage": null,
+    "currentStep": "awaiting_auth",
+    "previousMessage": "🎯 **Select Data Source for \"Dentist in fes\":**\n\n1️⃣ **GOOGLE** - Business websites & contact pages\n2️⃣ **LINKEDIN** - Professional profiles & companies\n3️⃣ **MAPS** - Business directory & local listings\n4️⃣ **ALL** - Combined multi-source scraping\n\n0️⃣ **BACK** - Go back to niche input\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
     "language": "en",
     "meta": {
-      "createdAt": "2025-08-24T21:20:55.611Z",
-      "totalJobs": 0,
+      "createdAt": "2025-08-26T14:54:53.536Z",
+      "totalJobs": 1,
       "lastNiche": null
     },
     "security": {
@@ -19,6 +20,23 @@
       "lastFailedAttempt": null,
       "isBlocked": false,
       "blockedAt": null
-    }
+    },
+    "dailyScraping": {
+      "date": "Tue Aug 26 2025",
+      "count": 0,
+      "lastReset": "2025-08-26T14:54:53.536Z"
+    },
+    "code": "user1",
+    "apiKeys": {
+      "googleSearchKeys": [
+        "AIzaSyAyj4AstBsA8z3_kOIXOIaYv6Bv57krIUs",
+        "AIzaSyDr3PnZTocarHxtJbRrSwW-SAmraq5nXn4"
+      ],
+      "geminiKeys": [
+        "AIzaSyDxAGzysjaW5yK_kJulYzv-pHaqn1P0H4E",
+        "AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo"
+      ]
+    },
+    "pendingNiche": "Dentist in fes"
   }
 }

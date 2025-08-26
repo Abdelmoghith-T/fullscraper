@@ -1,0 +1,51 @@
+{
+  "admin_codes": {
+    "admin123": {
+      "role": "super_admin",
+      "permissions": [
+        "manage_users",
+        "manage_admins",
+        "view_logs",
+        "system_control",
+        "view_sessions"
+      ],
+      "createdAt": "2025-08-25T01:56:28.679Z",
+      "createdBy": "system",
+      "lastUsed": "2025-08-26T18:31:18.429Z",
+      "useCount": 25
+    }
+  },
+  "admin_roles": {
+    "super_admin": {
+      "description": "Full system access",
+      "permissions": [
+        "manage_users",
+        "manage_admins",
+        "view_logs",
+        "system_control",
+        "view_all_sessions"
+      ]
+    },
+    "admin": {
+      "description": "Standard admin access",
+      "permissions": [
+        "manage_users",
+        "view_logs",
+        "view_sessions"
+      ]
+    },
+    "moderator": {
+      "description": "Limited admin access",
+      "permissions": [
+        "view_logs",
+        "view_sessions"
+      ]
+    }
+  },
+  "system_settings": {
+    "max_failed_auth_attempts": 5,
+    "auto_unblock_hours": 24,
+    "session_timeout_hours": 168,
+    "max_users_per_admin": 100
+  }
+}

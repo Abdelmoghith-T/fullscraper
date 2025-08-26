@@ -17,8 +17,20 @@ export async function generateQueriesWithGemini(niche, source = 'google_search',
     const totalQueries = 25;
     console.log(chalk.gray(`   📊 Requested queries: ${totalQueries}`));
 
+    // ✅ ENHANCED: Require valid API key from user session
+    console.log(chalk.yellow(`🔍 DEBUG: Checking Gemini API key configuration...`));
+    console.log(chalk.yellow(`   config.gemini.apiKey: ${config.gemini.apiKey ? 'SET' : 'NULL/UNDEFINED'}`));
+    console.log(chalk.yellow(`   config.gemini.apiKey value: ${config.gemini.apiKey || 'N/A'}`));
+    console.log(chalk.yellow(`   process.env.GEMINI_API_KEY: ${process.env.GEMINI_API_KEY ? 'SET' : 'NOT SET'}`));
+    console.log(chalk.yellow(`   process.env.GEMINI_API_KEY value: ${process.env.GEMINI_API_KEY || 'N/A'}`));
+    
     if (!config.gemini.apiKey) {
-      throw new Error('Gemini API key not configured');
+      throw new Error('Gemini API key not configured. User must provide valid API key to proceed.');
+    }
+
+    // ✅ ENHANCED: Validate API key is not placeholder
+    if (config.gemini.apiKey.includes('YOUR_') || config.gemini.apiKey.includes('PLACEHOLDER') || config.gemini.apiKey.trim() === '') {
+      throw new Error('Invalid Gemini API key. User must provide valid API key to proceed.');
     }
 
     // Determine language and keyword distribution based on niche and source
@@ -98,8 +110,50 @@ export async function generateQueriesWithGemini(niche, source = 'google_search',
 
   } catch (error) {
     console.error(chalk.red(`❌ Error generating queries with Gemini: ${error.message}`));
-    console.log(chalk.yellow('⚠️  Using fallback queries'));
-    return getFallbackQueries(niche, source).slice(0, 25); // Always return 25 fallback queries
+    
+    // ✅ ENHANCED: Check for quota exceeded errors
+    if (error.response && error.response.status === 403) {
+      const errorMessage = error.response.data?.error?.message || '';
+      if (errorMessage.includes('quota') || errorMessage.includes('Quota') || errorMessage.includes('exceeded')) {
+        console.error(chalk.red(`🚨 GEMINI API QUOTA EXCEEDED for user!`));
+        console.error(chalk.yellow(`💡 User must wait until tomorrow or add more Gemini API keys.`));
+        console.error(chalk.red(`🛑 Stopping scraping operation - no Gemini API access available.`));
+        
+        // ✅ NEW: Throw specific error to stop scraping
+        throw new Error('GEMINI_API_QUOTA_EXCEEDED: Daily quota exceeded for user Gemini API key. Please try again tomorrow or add more API keys.');
+      }
+    }
+    
+    // ✅ ENHANCED: Check for rate limiting
+    if (error.response && error.response.status === 429) {
+      console.error(chalk.red(`🚨 GEMINI API RATE LIMITED for user!`));
+      console.error(chalk.yellow(`💡 User must wait a few minutes or add more Gemini API keys.`));
+      console.error(chalk.red(`🛑 Stopping scraping operation - rate limit exceeded.`));
+      
+      // ✅ NEW: Throw specific error to stop scraping
+      throw new Error('GEMINI_API_RATE_LIMITED: Rate limit exceeded for user Gemini API key. Please wait a few minutes or add more API keys.');
+    }
+    
+    // ✅ ENHANCED: Check for invalid API key
+    if (error.response && error.response.status === 400) {
+      const errorMessage = error.response.data?.error?.message || '';
+      if (errorMessage.includes('API key') || errorMessage.includes('invalid')) {
+        console.error(chalk.red(`🚨 INVALID GEMINI API KEY for user!`));
+        console.error(chalk.yellow(`💡 User must provide valid Gemini API key.`));
+        console.error(chalk.red(`🛑 Stopping scraping operation - invalid API key.`));
+        
+        // ✅ NEW: Throw specific error to stop scraping
+        throw new Error('GEMINI_API_INVALID_KEY: Invalid Gemini API key provided by user. Please provide valid API key.');
+      }
+    }
+    
+    // ✅ ENHANCED: For other errors, still stop scraping instead of fallback
+    console.error(chalk.red(`🚨 UNEXPECTED GEMINI API ERROR for user!`));
+    console.error(chalk.yellow(`💡 Error: ${error.message}`));
+    console.error(chalk.red(`🛑 Stopping scraping operation - Gemini API error.`));
+    
+    // ✅ NEW: Throw error to stop scraping instead of fallback
+    throw new Error(`GEMINI_API_ERROR: ${error.message}. Please check your API key and try again.`);
   }
 }
 

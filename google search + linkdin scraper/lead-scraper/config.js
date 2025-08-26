@@ -1,11 +1,13 @@
 import fs from 'fs/promises';
 import path from 'path';
 
-// Load environment variables from env.config file
+// Load environment variables from env.config file AND process.env (process.env takes priority)
 async function loadEnvConfig() {
+  const envVars = {};
+  
+  // First, try to read from env.config file
   try {
     const envContent = await fs.readFile('env.config', 'utf8');
-    const envVars = {};
     
     envContent.split('\n').forEach(line => {
       const [key, value] = line.split('=');
@@ -14,11 +16,24 @@ async function loadEnvConfig() {
       }
     });
     
-    return envVars;
+    console.log('📄 Loaded environment variables from env.config file');
   } catch (error) {
-    console.warn('⚠️  env.config file not found, using default configuration');
-    return {};
+    console.log('📄 env.config file not found, using process.env only');
   }
+  
+  // Then, override with process.env variables (these take priority)
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value && value.trim()) {
+      envVars[key] = value.trim();
+    }
+  }
+  
+  console.log('🔍 Environment variables loaded:');
+  console.log(`   GOOGLE_API_KEY_1: ${envVars.GOOGLE_API_KEY_1 ? 'SET' : 'NOT SET'}`);
+  console.log(`   GOOGLE_API_KEY_2: ${envVars.GOOGLE_API_KEY_2 ? 'SET' : 'NOT SET'}`);
+  console.log(`   GEMINI_API_KEY: ${envVars.GEMINI_API_KEY ? 'SET' : 'NOT SET'}`);
+  
+  return envVars;
 }
 
 // Get API keys from environment - now supports unlimited keys
@@ -211,8 +226,9 @@ export async function initializeConfig() {
   if (!config.googleSearch.apiKeys || config.googleSearch.apiKeys.length === 0) {
     config.googleSearch.apiKeys = getApiKeys(envVars);
     if (config.googleSearch.apiKeys.length === 0) {
-      // Fallback to default key if no env keys
-      config.googleSearch.apiKeys = ["AIzaSyDB34zBGAHN4S-RxBKqlAX7UxuyIMWE-iM"];
+      // ❌ REMOVED: Hard-coded fallback API key
+      // ✅ NEW: Proper error handling - require user API keys
+      throw new Error('No Google Search API keys configured. User must provide valid API keys to proceed.');
     }
   }
   
@@ -226,7 +242,10 @@ export async function initializeConfig() {
     config.gemini.apiKey = envVars.GEMINI_API_KEY;
     console.log(`🤖 Gemini AI API key loaded`);
   } else {
-    console.log(`⚠️  Gemini AI API key not configured - AI query generation will use fallback queries`);
+    // ❌ REMOVED: Allow fallback to hard-coded key
+    // ✅ NEW: Require user Gemini API key
+    console.log(`⚠️  Gemini AI API key not configured - AI query generation requires user API key`);
+    config.gemini.apiKey = null; // Ensure it's null, not fallback
   }
   
   // Set request delay

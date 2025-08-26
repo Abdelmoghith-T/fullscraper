@@ -80,6 +80,13 @@ async function batchSelectAddressesWithGemini(businessDataArray) {
 async function generateMainQueriesWithGemini(userQuery, locationContext) {
   try {
     const apiKey = process.env.GEMINI_API_KEY || config.gemini.apiKey;
+    
+    // ❌ REMOVED: Hard-coded fallback API key
+    // ✅ NEW: Require valid API key
+    if (!apiKey) {
+      throw new Error('No Gemini API key available. User must provide valid API key to proceed.');
+    }
+    
     const endpoint = config.gemini.endpoint;
 
     const prompt = `You are a helpful AI assistant. Given a user's search query for a business type and location (e.g., "dentist in fes"), your task is to generate 5 diverse and unique search queries that are highly likely to find more results for that business type in or around the specified location. 
@@ -144,7 +151,13 @@ Generated Queries:`;
 // Helper: Generate sub-queries (neighborhoods/sub-cities) using Gemini
 async function generateSubQueriesWithGemini(mainQuery, locationContext) {
   try {
-    const apiKey = process.env.GEMINI_API_KEY || 'AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo';
+    const apiKey = process.env.GEMINI_API_KEY;
+    
+    // ❌ REMOVED: Hard-coded fallback API key
+    // ✅ NEW: Require valid API key
+    if (!apiKey) {
+      throw new Error('No Gemini API key available. User must provide valid API key to proceed.');
+    }
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
     const prompt = `You are a helpful AI assistant. Given a general business search query (e.g., "cabinet dentaire fes") and a location context (e.g., "Fes"), your task is to generate 10 highly specific sub-queries. Each sub-query should target a major neighborhood or a well-known smaller area within the given city/country, related to the business type.
@@ -845,7 +858,7 @@ async function orchestrateScraping(userQuery, maxResultsPerSubQuery) {
     const mainQueries = await generateMainQueriesWithGemini(userQuery, location);
     if (mainQueries.length === 0) {
       console.log(`❌ No main queries generated. Exiting.`);
-      return;
+      process.exit(1); // Exit with error code to signal failure to parent process
     }
     console.log(`✅ Generated ${mainQueries.length} main queries:`, mainQueries);
 

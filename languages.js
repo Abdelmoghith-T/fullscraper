@@ -11,10 +11,16 @@ export const languages = {
     // Authentication
     auth_required: "🔐 **Authentication required.** Please send your access code first.\n\n💬 **Format:** CODE: your_code_here\n💬 **Example:** CODE: user1\n\n💡 Contact admin if you don't have an access code.\n\n0️⃣ **CHANGE LANGUAGE** - Select a different language",
     invalid_code: "❌ Invalid access code. Please contact admin for a valid code.",
-    access_granted: "✅ **Access granted!** Welcome to the Business Scraper.\n\n📝 Send a search query (e.g., \"restaurant casablanca\").",
+    access_granted: "✅ **Access granted!** Welcome to the Business Scraper.\n\n📝 Send a search query (e.g., \"restaurant casablanca\").\n\n📅 **Daily Limits:** You can perform 4 scraping jobs per day. Limits reset at midnight.\n\n💡 Use STATUS command to check your remaining scrapings.",
+    
+    // Main Menu
+    main_menu: "🏠 **Main Menu**\n\nWhat would you like to do?\n\n1️⃣ **🚀 START SCRAPER** - Begin a new scraping job\n2️⃣ **📊 VIEW HISTORY** - See your previous scraping results\n3️⃣ **📈 STATUS** - Check your account status and daily limits\n4️⃣ **🌐 CHANGE LANGUAGE** - Switch to a different language\n5️⃣ **🔓 LOGOUT** - Sign out and switch accounts\n\n💬 **Reply with the number** corresponding to your choice.",
+    language_changed: "🌐 **Language changed successfully!**\n\nYour language preference has been updated and saved to your profile.\n\n💡 **Tip:** This setting will be remembered for future sessions.",
+    no_history: "📊 **No Scraping History**\n\nYou haven't completed any scraping jobs yet.\n\n🚀 **Get started:** Choose option 1 to begin your first scraping job!",
+    history_header: "📊 **Your Scraping History**\n\nHere are your recent scraping jobs:",
     
     // Search Flow
-    enter_niche: "🎯 **Enter your search query:**\n\n💬 **Examples:**\n• dentist casablanca\n• restaurant marrakech\n• web developer fes\n\n💡 **Tip:** Include location for better results",
+    enter_niche: "🎯 **Enter your search query:**\n\n💬 **Examples:**\n• dentist casablanca\n• restaurant marrakech\n• web developer fes\n\n💡 **Tip:** Include location for better results\n\n0️⃣ **BACK TO MENU** - Return to main menu",
     invalid_niche: "⚠️ Please send your search query (e.g., \"dentist casablanca\").",
     
     // Source Selection
@@ -74,10 +80,16 @@ export const languages = {
     // Authentication
     auth_required: "🔐 **Authentification requise.** Veuillez d'abord envoyer votre code d'accès.\n\n💬 **Format:** CODE: votre_code_ici\n💬 **Exemple:** CODE: user1\n\n💡 Contactez l'administrateur si vous n'avez pas de code d'accès.\n\n0️⃣ **CHANGER DE LANGUE** - Sélectionner une langue différente",
     invalid_code: "❌ Code d'accès invalide. Veuillez contacter l'administrateur pour un code valide.",
-    access_granted: "✅ **Accès accordé!** Bienvenue dans le Scraper Business.\n\n📝 Envoyez une requête de recherche (ex: \"restaurant casablanca\").",
+    access_granted: "✅ **Accès accordé!** Bienvenue dans le Scraper Business.\n\n📝 Envoyez une requête de recherche (ex: \"restaurant casablanca\").\n\n📅 **Limites Quotidiennes:** Vous pouvez effectuer 4 jobs de scraping par jour. Les limites se réinitialisent à minuit.\n\n💡 Utilisez la commande STATUS pour vérifier vos scrapings restants.",
+    
+    // Main Menu
+    main_menu: "🏠 **Menu Principal**\n\nQue souhaitez-vous faire?\n\n1️⃣ **🚀 DÉMARRER LE SCRAPER** - Commencer un nouveau job de scraping\n2️⃣ **📊 VOIR L'HISTORIQUE** - Voir vos résultats de scraping précédents\n3️⃣ **📈 STATUT** - Vérifier votre statut de compte et vos limites quotidiennes\n4️⃣ **🌐 CHANGER LA LANGUE** - Passer à une autre langue\n5️⃣ **🔓 DÉCONNEXION** - Se déconnecter et changer de compte\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
+    language_changed: "🌐 **Langue changée avec succès!**\n\nVotre préférence de langue a été mise à jour et enregistrée dans votre profil.\n\n💡 **Conseil:** Ce paramètre sera conservé pour les sessions futures.",
+    no_history: "📊 **Aucun Historique de Scraping**\n\nVous n'avez pas encore effectué de jobs de scraping.\n\n🚀 **Commencez:** Choisissez l'option 1 pour commencer votre premier job de scraping!",
+    history_header: "📊 **Votre Historique de Scraping**\n\nVoici vos derniers jobs de scraping:",
     
     // Search Flow
-    enter_niche: "🎯 **Entrez votre requête de recherche:**\n\n💬 **Exemples:**\n• dentiste casablanca\n• restaurant marrakech\n• développeur web fes\n\n💡 **Conseil:** Incluez la localisation pour de meilleurs résultats",
+    enter_niche: "🎯 **Entrez votre requête de recherche:**\n\n💬 **Exemples:**\n• dentiste casablanca\n• restaurant marrakech\n• développeur web fes\n\n💡 **Conseil:** Incluez la localisation pour de meilleurs résultats\n\n0️⃣ **RETOUR AU MENU** - Retourner au menu principal",
     invalid_niche: "⚠️ Veuillez envoyer votre requête de recherche (ex: \"dentiste casablanca\").",
     
     // Source Selection
@@ -137,10 +149,16 @@ export const languages = {
     // Authentication
     auth_required: "🔐 **مطلوب مصادقة.** يرجى إرسال رمز الوصول أولاً.\n\n💬 **التنسيق:** CODE: رمزك_هنا\n💬 **مثال:** CODE: user1\n\n💡 اتصل بالمدير إذا لم يكن لديك رمز وصول.\n\n0️⃣ **تغيير اللغة** - اختر لغة مختلفة",
     invalid_code: "❌ رمز وصول غير صحيح. يرجى الاتصال بالمدير للحصول على رمز صحيح.",
-    access_granted: "✅ **تم منح الوصول!** مرحباً بك في مستخرج البيانات التجارية.\n\n📝 أرسل استعلام بحث (مثال: \"مطعم الدار البيضاء\").",
+    access_granted: "✅ **تم منح الوصول!** مرحباً بك في مستخرج البيانات التجارية.\n\n📝 أرسل استعلام بحث (مثال: \"مطعم الدار البيضاء\").\n\n📅 **الحدود اليومية:** يمكنك أداء 4 مهام استخراج يومياً. يتم إعادة تعيين الحدود عند منتصف الليل.\n\n💡 استخدم أمر STATUS للتحقق من عمليات الاستخراج المتبقية.",
+    
+    // Main Menu
+    main_menu: "🏠 **قائمة الصفحة الرئيسية**\n\nماذا تريد أن تفعل؟\n\n1️⃣ **🚀 بدء مستخرج البيانات** - بدء مهمة استخراج جديدة\n2️⃣ **📊 عرض التاريخ** - عرض نتائج الاستخراج السابقة\n3️⃣ **📈 الحالة** - التحقق من حالة الحساب والحدود اليومية\n4️⃣ **🌐 تغيير اللغة** - تغيير اللغة المفضلة\n5️⃣ **🔓 تسجيل الخروج** - تسجيل الخروج وتغيير الحساب\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
+    language_changed: "�� **تم تغيير اللغة بنجاح!**\n\nتم تحديث تفضيل اللغة وحفظه في ملف الملف الشخصي.\n\n💡 **نصيحة:** سيتم تذكر هذه الإعداد للجلسات القادمة.",
+    no_history: "📊 **لا يوجد تاريخ استخراج البيانات**\n\nلم تكن قد أكملت أي مهام استخراج بعد.\n\n🚀 **ابدأ:** اختر الخيار 1 لبدء أول مهمة استخراج لك!",
+    history_header: "📊 **تاريخ استخراج البيانات الخاص بك**\n\nهذه هي آخر مهام استخراج البيانات الخاصة بك:",
     
     // Search Flow
-    enter_niche: "🎯 **أدخل استعلام البحث الخاص بك:**\n\n💬 **أمثلة:**\n• طبيب أسنان الدار البيضاء\n• مطعم مراكش\n• مطور ويب فاس\n\n💡 **نصيحة:** أضف الموقع للحصول على نتائج أفضل",
+    enter_niche: "🎯 **أدخل استعلام البحث الخاص بك:**\n\n💬 **أمثلة:**\n• طبيب أسنان الدار البيضاء\n• مطعم مراكش\n• مطور ويب فاس\n\n💡 **نصيحة:** أضف الموقع للحصول على نتائج أفضل\n\n0️⃣ **العودة إلى القائمة** - العودة إلى القائمة الرئيسية",
     invalid_niche: "⚠️ يرجى إرسال استعلام البحث الخاص بك (مثال: \"طبيب أسنان الدار البيضاء\").",
     
     // Source Selection

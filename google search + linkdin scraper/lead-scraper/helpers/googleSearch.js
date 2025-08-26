@@ -20,21 +20,39 @@ function rotateApiKey() {
 }
 
 /**
- * Search Google using Custom Search API with fallback keys
+ * Search Google using Custom Search API with user session keys ONLY
  * @param {string} query - Search query
  * @param {number} maxResults - Maximum number of results to return (default: 10)
  * @returns {Promise<Array>} - Array of search results with URLs
  */
 // Add startIndex param for paging
 export async function searchGoogle(query, maxResults = 10, startIndexOverride = null) {
+  // ✅ ENHANCED: Debug logging for API keys
+  console.log(chalk.yellow(`🔍 DEBUG: Google Search API key configuration...`));
+  console.log(chalk.yellow(`   config.googleSearch.apiKeys.length: ${config.googleSearch.apiKeys.length}`));
+  console.log(chalk.yellow(`   config.googleSearch.apiKeys: ${JSON.stringify(config.googleSearch.apiKeys)}`));
+  console.log(chalk.yellow(`   process.env.GOOGLE_API_KEY_1: ${process.env.GOOGLE_API_KEY_1 ? 'SET' : 'NOT SET'}`));
+  console.log(chalk.yellow(`   process.env.GOOGLE_API_KEY_2: ${process.env.GOOGLE_API_KEY_2 ? 'SET' : 'NOT SET'}`));
+  
   const maxRetries = config.googleSearch.apiKeys.length;
   const resultsPerPage = 10; // Google API max per page
   const totalPages = Math.ceil(maxResults / resultsPerPage);
   let allResults = [];
   
+  // ✅ ENHANCED: Track which keys have been exhausted
+  const exhaustedKeys = new Set();
+  
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const apiKey = getCurrentApiKey();
+      
+      // ✅ ENHANCED: Check if current key is already exhausted
+      if (exhaustedKeys.has(apiKey)) {
+        console.log(`⚠️  API key ${config.googleSearch.currentKeyIndex + 1} already exhausted, rotating...`);
+        rotateApiKey();
+        continue;
+      }
+      
       // If startIndexOverride is set, only fetch that page
       if (startIndexOverride !== null) {
         const params = new URLSearchParams({
@@ -97,13 +115,20 @@ export async function searchGoogle(query, maxResults = 10, startIndexOverride = 
                            error.response.status === 429;
         
         if (isQuotaError) {
-          console.log(`⚠️  API quota/rate limit exceeded for key ${config.googleSearch.currentKeyIndex + 1}, rotating...`);
+          console.log(`⚠️  API quota/rate limit exceeded for key ${config.googleSearch.currentKeyIndex + 1}, marking as exhausted...`);
           
-          // If this is the last key, show quota exceeded message
-          if (config.googleSearch.apiKeys.length === 1) {
-            console.log(chalk.red(`❌ Daily quota exceeded for your Google Search API key.`));
-            console.log(chalk.yellow(`💡 Please try again tomorrow or use a different API key.`));
-            return allResults.slice(0, maxResults);
+          // ✅ ENHANCED: Mark current key as exhausted
+          const currentKey = getCurrentApiKey();
+          exhaustedKeys.add(currentKey);
+          
+          // If this is the last key, show quota exceeded message and STOP
+          if (exhaustedKeys.size >= config.googleSearch.apiKeys.length) {
+            console.log(chalk.red(`❌ ALL user API keys have exceeded daily quota!`));
+            console.log(chalk.yellow(`💡 User must wait until tomorrow or add more API keys.`));
+            console.log(chalk.red(`🛑 Stopping scraping operation - no more keys available.`));
+            
+            // ✅ NEW: Throw error to stop scraping instead of returning partial results
+            throw new Error('ALL_USER_API_KEYS_QUOTA_EXCEEDED: Daily quota exceeded for all user API keys. Please try again tomorrow or add more API keys.');
           }
           
           rotateApiKey();
@@ -123,8 +148,9 @@ export async function searchGoogle(query, maxResults = 10, startIndexOverride = 
     }
   }
   
-  console.error(`❌ All API keys exhausted for query "${query}"`);
-  return allResults.slice(0, maxResults);
+  // ✅ ENHANCED: If we get here, all keys are exhausted
+  console.error(`❌ All user API keys exhausted for query "${query}"`);
+  throw new Error('ALL_USER_API_KEYS_EXHAUSTED: All user API keys have been exhausted. Please try again tomorrow or add more API keys.');
 }
 
 /**

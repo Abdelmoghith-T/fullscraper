@@ -42,7 +42,9 @@ module.exports = {
 
   // Gemini API settings
   gemini: {
-    apiKey: process.env.GEMINI_API_KEY || 'AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo', // Replace with your actual key or set GEMINI_API_KEY env var
+    // ❌ REMOVED: Hard-coded fallback API key
+    // ✅ NEW: Require environment variable or user session key
+    apiKey: process.env.GEMINI_API_KEY,
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
   }
 };
