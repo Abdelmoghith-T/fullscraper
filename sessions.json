@@ -1,25 +1,29 @@
 {
   "212691708186@s.whatsapp.net": {
     "prefs": {
-      "source": "GOOGLE",
-      "format": "TXT",
-      "limit": 300,
-      "dataType": "CONTACTS"
+      "source": "ALL",
+      "format": "XLSX",
+      "limit": 300
     },
     "status": "idle",
     "currentStep": "awaiting_niche",
-    "previousMessage": "💾 **Output format set to: TXT**\n\n🚀 **Ready to start scraping!**\n\n0️⃣ **BACK** - Go back to format selection\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Send:** START",
+    "previousMessage": null,
     "language": "en",
     "meta": {
-      "createdAt": "2025-08-25T14:49:49.611Z",
+      "createdAt": "2025-08-26T02:14:17.118Z",
       "totalJobs": 0,
-      "lastNiche": "DENTIST IN FES"
+      "lastNiche": null
     },
     "security": {
       "failedAuthAttempts": 0,
       "lastFailedAttempt": null,
       "isBlocked": false,
       "blockedAt": null
+    },
+    "dailyScraping": {
+      "date": "Tue Aug 26 2025",
+      "count": 0,
+      "lastReset": "2025-08-26T02:14:17.118Z"
     },
     "code": "user1",
     "apiKeys": {
@@ -31,14 +35,6 @@
         "AIzaSyDxAGzysjaW5yK_kJulYzv-pHaqn1P0H4E",
         "AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo"
       ]
-    },
-    "currentLoadingPercentage": 0,
-    "lastLoadingUpdateTimestamp": 0,
-    "dailyScraping": {
-      "date": "Tue Aug 26 2025",
-      "count": 4,
-      "lastReset": "2025-08-26T00:56:43.331Z"
-    },
-    "pendingNiche": "DENTIST IN FES"
+    }
   }
 }

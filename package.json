@@ -23,6 +23,8 @@
     "test:daily-limits": "node test-daily-limits.js",
     "test:state-fix": "node test-state-fix.js",
     "test:daily-limit-enforcement": "node test-daily-limit-enforcement.js",
+    "test:data-type-fix": "node test-data-type-fix.js",
+    "test:format-removal": "node test-format-removal.js",
     "demo:progress": "node test/demo-progress.js",
     "lint": "eslint .",
     "clean": "rm -rf results/*.xlsx results/*.csv results/*.json",

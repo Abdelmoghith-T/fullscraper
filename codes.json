@@ -14,8 +14,13 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin",
-      "lastUsed": "2025-08-25T22:52:53.204Z",
-      "useCount": 31
+      "lastUsed": "2025-08-26T02:14:24.751Z",
+      "useCount": 34
+    },
+    "dailyScraping": {
+      "date": "Tue Aug 26 2025",
+      "count": 4,
+      "lastReset": "2025-08-26T02:09:02.428Z"
     }
   },
   "test": {
@@ -52,8 +57,13 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-08-25T14:48:26.198Z",
-      "useCount": 10
+      "lastUsed": "2025-08-26T02:13:02.757Z",
+      "useCount": 11
+    },
+    "dailyScraping": {
+      "date": "Tue Aug 26 2025",
+      "count": 1,
+      "lastReset": "2025-08-26T02:13:30.058Z"
     }
   }
 }

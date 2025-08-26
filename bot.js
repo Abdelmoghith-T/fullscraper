@@ -203,6 +203,7 @@ class ProgressSimulator {
 // File paths
 const SESSIONS_FILE = path.join(__dirname, 'sessions.json');
 const CODES_FILE = path.join(__dirname, 'codes.json');
+const ACCESS_CODES_FILE = path.join(__dirname, 'codes.json');
 const AUTH_DIR = path.join(__dirname, 'auth_info');
 const PENDING_RESULTS_FILE = path.join(__dirname, 'pending_results.json');
 
@@ -243,13 +244,23 @@ const adminSessions = new Map(); // jid -> { adminCode: string, role: string, pe
  */
 function checkDailyScrapingLimit(jid, sessions) {
   const session = sessions[jid];
-  if (!session) {
+  if (!session || !session.code) {
+    return { canScrape: false, remaining: 0, resetTime: null };
+  }
+
+  // Load access codes to get daily limits
+  const accessCodes = loadJson(ACCESS_CODES_FILE, {});
+  const userCode = session.code;
+  const userAccess = accessCodes[userCode];
+  
+  if (!userAccess) {
+    console.log(chalk.red(`❌ Access code not found for user ${jid.split('@')[0]}: ${userCode}`));
     return { canScrape: false, remaining: 0, resetTime: null };
   }
 
   // Initialize daily tracking if not exists
-  if (!session.dailyScraping) {
-    session.dailyScraping = {
+  if (!userAccess.dailyScraping) {
+    userAccess.dailyScraping = {
       date: new Date().toDateString(),
       count: 0,
       lastReset: new Date().toISOString()
@@ -257,22 +268,23 @@ function checkDailyScrapingLimit(jid, sessions) {
   }
 
   const today = new Date().toDateString();
-  const lastReset = new Date(session.dailyScraping.lastReset);
+  const lastReset = new Date(userAccess.dailyScraping.lastReset);
   const lastResetDate = lastReset.toDateString();
 
   // Check if it's a new day
   if (today !== lastResetDate) {
     // Reset daily count for new day
-    session.dailyScraping.date = today;
-    session.dailyScraping.count = 0;
-    session.dailyScraping.lastReset = new Date().toISOString();
+    userAccess.dailyScraping.date = today;
+    userAccess.dailyScraping.count = 0;
+    userAccess.dailyScraping.lastReset = new Date().toISOString();
     
-    // Save updated session
-    sessions[jid] = session;
-    saveJson(SESSIONS_FILE, sessions);
+    // Save updated access codes
+    accessCodes[userCode] = userAccess;
+    saveJson(ACCESS_CODES_FILE, accessCodes);
+    console.log(chalk.blue(`🔄 Daily limit reset for access code ${userCode}: new day detected`));
   }
 
-  const remaining = Math.max(0, DAILY_SCRAPING_LIMIT - session.dailyScraping.count);
+  const remaining = Math.max(0, DAILY_SCRAPING_LIMIT - userAccess.dailyScraping.count);
   const canScrape = remaining > 0;
 
   // Calculate next reset time (tomorrow at midnight)
@@ -281,7 +293,7 @@ function checkDailyScrapingLimit(jid, sessions) {
   tomorrow.setHours(0, 0, 0, 0);
   const resetTime = tomorrow.toLocaleString();
 
-  console.log(chalk.blue(`🔍 Daily limit calculation for ${jid.split('@')[0]}: count=${session.dailyScraping.count}, limit=${DAILY_SCRAPING_LIMIT}, remaining=${remaining}, canScrape=${canScrape}`));
+  console.log(chalk.blue(`🔍 Daily limit calculation for ${jid.split('@')[0]} (${userCode}): count=${userAccess.dailyScraping.count}, limit=${DAILY_SCRAPING_LIMIT}, remaining=${remaining}, canScrape=${canScrape}`));
 
   return { canScrape, remaining, resetTime };
 }
@@ -295,13 +307,23 @@ function checkDailyScrapingLimit(jid, sessions) {
 function incrementDailyScrapingCount(jid, sessions) {
   try {
     const session = sessions[jid];
-    if (!session) {
+    if (!session || !session.code) {
+      return false;
+    }
+
+    // Load access codes to update daily limits
+    const accessCodes = loadJson(ACCESS_CODES_FILE, {});
+    const userCode = session.code;
+    const userAccess = accessCodes[userCode];
+    
+    if (!userAccess) {
+      console.log(chalk.red(`❌ Access code not found for user ${jid.split('@')[0]}: ${userCode}`));
       return false;
     }
 
     // Initialize daily tracking if not exists
-    if (!session.dailyScraping) {
-      session.dailyScraping = {
+    if (!userAccess.dailyScraping) {
+      userAccess.dailyScraping = {
         date: new Date().toDateString(),
         count: 0,
         lastReset: new Date().toISOString()
@@ -309,26 +331,26 @@ function incrementDailyScrapingCount(jid, sessions) {
     }
 
     const today = new Date().toDateString();
-    const lastReset = new Date(session.dailyScraping.lastReset);
+    const lastReset = new Date(userAccess.dailyScraping.lastReset);
     const lastResetDate = lastReset.toDateString();
 
     // Check if it's a new day
     if (today !== lastResetDate) {
       // Reset daily count for new day
-      session.dailyScraping.date = today;
-      session.dailyScraping.count = 0;
-      session.dailyScraping.lastReset = new Date().toISOString();
+      userAccess.dailyScraping.date = today;
+      userAccess.dailyScraping.count = 0;
+      userAccess.dailyScraping.lastReset = new Date().toISOString();
     }
 
     // Increment count
-    session.dailyScraping.count += 1;
+    userAccess.dailyScraping.count += 1;
     
-    // Save updated session
-    sessions[jid] = session;
-    saveJson(SESSIONS_FILE, sessions);
+    // Save updated access codes
+    accessCodes[userCode] = userAccess;
+    saveJson(ACCESS_CODES_FILE, accessCodes);
     
-    console.log(chalk.blue(`📊 Daily scraping count updated for ${jid.split('@')[0]}: ${session.dailyScraping.count}/${DAILY_SCRAPING_LIMIT}`));
-    console.log(chalk.blue(`💾 Session saved for ${jid.split('@')[0]} with daily count: ${session.dailyScraping.count}`));
+    console.log(chalk.blue(`📊 Daily scraping count updated for ${jid.split('@')[0]} (${userCode}): ${userAccess.dailyScraping.count}/${DAILY_SCRAPING_LIMIT}`));
+    console.log(chalk.blue(`💾 Access codes saved for ${userCode} with daily count: ${userAccess.dailyScraping.count}`));
     return true;
   } catch (error) {
     console.error(chalk.red(`❌ Error updating daily scraping count for ${jid}:`, error.message));
@@ -2574,17 +2596,26 @@ async function handleMessage(sock, message) {
             return;
         } else if (inputNumber >= 1 && inputNumber <= sourceOptions.length) {
             session.prefs.source = sourceOptions[inputNumber - 1];
+            
+            // For LinkedIn and Google Maps, automatically set dataType to 'COMPLETE' and format to 'XLSX', skip to ready_to_start
+            if (session.prefs.source === 'LINKEDIN' || session.prefs.source === 'MAPS') {
+                session.prefs.dataType = 'COMPLETE';
+                session.prefs.format = 'XLSX';
+                session.currentStep = 'ready_to_start';
+                session.previousMessage = getMessage(session.language, 'format_set', {
+                  format: session.prefs.format
+                });
+                await sock.sendMessage(jid, { text: session.previousMessage });
+                saveJson(SESSIONS_FILE, sessions);
+                return;
+            }
+            
+            // For Google and ALL sources, show data type options as before
             session.currentStep = 'awaiting_type';
             let dataTypeChoices;
             switch (session.prefs.source) {
                 case 'GOOGLE':
                     dataTypeChoices = getMessage(session.language, 'select_type_google');
-                    break;
-                case 'LINKEDIN':
-                    dataTypeChoices = getMessage(session.language, 'select_type_linkedin');
-                    break;
-                case 'MAPS':
-                    dataTypeChoices = getMessage(session.language, 'select_type_maps');
                     break;
                 case 'ALL':
                     dataTypeChoices = getMessage(session.language, 'select_type_all');
@@ -2606,12 +2637,6 @@ async function handleMessage(sock, message) {
         switch (session.prefs.source) {
             case 'GOOGLE':
                 validTypes = ['EMAILS', 'PHONES', 'CONTACTS'];
-                break;
-            case 'LINKEDIN':
-                validTypes = ['PROFILES', 'CONTACTS', 'COMPLETE'];
-                break;
-            case 'MAPS':
-                validTypes = ['PROFILES', 'CONTACTS', 'COMPLETE'];
                 break;
             case 'ALL':
                 validTypes = ['CONTACTS', 'COMPLETE'];
@@ -2644,89 +2669,14 @@ async function handleMessage(sock, message) {
             return;
         } else if (inputNumber >= 1 && inputNumber <= validTypes.length) {
             session.prefs.dataType = validTypes[inputNumber - 1];
-            session.currentStep = 'awaiting_format';
-            let formatChoices;
-            switch (session.prefs.source) {
-                case 'GOOGLE':
-                    formatChoices = getMessage(session.language, 'select_format_google');
-                    break;
-                case 'LINKEDIN':
-                    formatChoices = getMessage(session.language, 'select_format_linkedin');
-                    break;
-                case 'MAPS':
-                    formatChoices = getMessage(session.language, 'select_format_maps');
-                    break;
-                case 'ALL':
-                    formatChoices = getMessage(session.language, 'select_format_all');
-                    break;
+            
+            // Automatically set format based on source and skip to ready_to_start
+            if (session.prefs.source === 'GOOGLE') {
+                session.prefs.format = 'TXT';
+            } else if (session.prefs.source === 'ALL') {
+                session.prefs.format = 'XLSX';
             }
-            session.previousMessage = formatChoices;
-            await sock.sendMessage(jid, { text: formatChoices });
-            saveJson(SESSIONS_FILE, sessions);
-            return;
-        } else {
-            await sock.sendMessage(jid, { 
-                text: getMessage(session.language, 'invalid_selection', { max: validTypes.length })
-            });
-            await sock.sendMessage(jid, { text: session.previousMessage });
-            return;
-        }
-    } else if (session.currentStep === 'awaiting_format') {
-        let validFormats = [];
-        switch (session.prefs.source) {
-            case 'GOOGLE':
-                validFormats = ['TXT'];
-                break;
-            case 'LINKEDIN':
-                validFormats = ['XLSX'];
-                break;
-            case 'MAPS':
-                validFormats = ['JSON', 'XLSX']; // Changed from CSV to XLSX
-                break;
-            case 'ALL':
-                validFormats = ['XLSX', 'CSV', 'JSON'];
-                break;
-        }
-
-        if (text === '00') {
-            const activeJob = activeJobs.get(jid);
-            if (activeJob && activeJob.abort) {
-                activeJob.abort.abort();
-                activeJobs.delete(jid);
-            }
-            session.currentStep = 'awaiting_niche';
-            session.pendingNiche = null;
-            session.previousMessage = null;
-            session.status = 'idle';
-            sessions[jid] = session;
-            saveJson(SESSIONS_FILE, sessions);
-            await sock.sendMessage(jid, { 
-                text: getMessage(session.language, 'restart')
-            });
-            return;
-        } else if (inputNumber === 0) {
-            session.currentStep = 'awaiting_type';
-            let dataTypeChoices;
-            switch (session.prefs.source) {
-                case 'GOOGLE':
-                    dataTypeChoices = getMessage(session.language, 'select_type_google');
-                    break;
-                case 'LINKEDIN':
-                    dataTypeChoices = getMessage(session.language, 'select_type_linkedin');
-                    break;
-                case 'MAPS':
-                    dataTypeChoices = getMessage(session.language, 'select_type_maps');
-                    break;
-                case 'ALL':
-                    dataTypeChoices = getMessage(session.language, 'select_type_all');
-                    break;
-            }
-            session.previousMessage = dataTypeChoices;
-            await sock.sendMessage(jid, { text: dataTypeChoices });
-            saveJson(SESSIONS_FILE, sessions);
-            return;
-        } else if (inputNumber >= 1 && inputNumber <= validFormats.length) {
-            session.prefs.format = validFormats[inputNumber - 1];
+            
             session.currentStep = 'ready_to_start';
             session.previousMessage = getMessage(session.language, 'format_set', {
               format: session.prefs.format
@@ -2736,7 +2686,7 @@ async function handleMessage(sock, message) {
             return;
         } else {
             await sock.sendMessage(jid, { 
-                text: getMessage(session.language, 'invalid_selection', { max: validFormats.length })
+                text: getMessage(session.language, 'invalid_selection', { max: validTypes.length })
             });
             await sock.sendMessage(jid, { text: session.previousMessage });
             return;
@@ -3448,7 +3398,7 @@ async function handleMessage(sock, message) {
         });
       } else {
         // Only inform if not already in a specific state and not a common command
-        if (!['awaiting_niche', 'awaiting_source', 'awaiting_type', 'awaiting_format', 'ready_to_start', 'scraping_in_progress'].includes(session.currentStep) &&
+        if (!['awaiting_niche', 'awaiting_source', 'awaiting_type', 'ready_to_start', 'scraping_in_progress'].includes(session.currentStep) &&
             !['STATUS', 'STOP', 'RESET', 'LIMIT', 'HELP'].some(cmd => text.toUpperCase().startsWith(cmd))) {
             await sock.sendMessage(jid, { 
                 text: `📎 **You have pending results.** Reply \`SEND\` to receive them, or \`SKIP\` to discard. Continuing with your new message...`

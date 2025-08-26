@@ -12,7 +12,7 @@ A powerful, unified business intelligence scraper that combines **Google Search*
 - **📊 Multiple Formats**: Export to Excel, CSV, or JSON
 - **⚡ High Performance**: Concurrent processing and smart rate limiting
 - **🛡️ Anti-Ban Protection**: Built-in safeguards and retry mechanisms
-- **📅 Daily Limits**: 4 scraping jobs per day per user with automatic reset
+- **📅 Daily Limits**: 4 scraping jobs per day per user with automatic reset (stored securely in access codes)
 - **🔧 State Management**: Automatic recovery from stuck session states
 
 ## 🏗️ Architecture
@@ -34,6 +34,14 @@ unified-business-scraper/
 
 ## 🔧 Recent Fixes & Improvements
 
+### Secure Daily Limits System (Latest)
+- **🔒 Moved daily limits from sessions to access codes** for enhanced security
+- **📈 Limits persist through session deletion and logout** - no more manipulation
+- **🆔 Identity-based tracking** tied to access codes, not WhatsApp sessions
+- **✅ Enterprise-grade security** - users cannot bypass daily limits
+
+See [SECURE_DAILY_LIMITS.md](./SECURE_DAILY_LIMITS.md) for detailed information.
+
 ### Session State Management Fix (Latest)
 - **Fixed critical bug** where bot would show "scraping in progress" even when no job was running
 - **Enhanced STOP command** to properly reset stuck session states  
@@ -49,6 +57,22 @@ See [SESSION_STATE_FIX.md](./SESSION_STATE_FIX.md) for detailed information.
 - **Strict enforcement** of 4 scraping jobs per day per user
 
 See [DAILY_LIMIT_FIX.md](./DAILY_LIMIT_FIX.md) for detailed information.
+
+### Data Type Selection Fix (Latest)
+- **Fixed user confusion** with LinkedIn and Google Maps data type options
+- **Automatically sets dataType to 'COMPLETE'** for LinkedIn and Google Maps sources
+- **Skips non-functional options** (PROFILES, CONTACTS) that were causing errors
+- **Maintains full functionality** for Google and ALL sources
+
+See [DATA_TYPE_FIX.md](./DATA_TYPE_FIX.md) for detailed information.
+
+### Format Selection Removal Fix (Latest)
+- **Removed unnecessary format selection step** for all sources
+- **Automatically sets optimal format** for each source (TXT for Google, XLSX for others)
+- **Streamlined user workflow** from 3-4 steps to 2-3 steps
+- **Maintains full functionality** while improving user experience
+
+See [FORMAT_SELECTION_REMOVAL.md](./FORMAT_SELECTION_REMOVAL.md) for detailed information.
 
 ## 🚀 Quick Start
 
