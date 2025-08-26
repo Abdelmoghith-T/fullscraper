@@ -101,7 +101,8 @@ function addCode(args) {
         issuedBy: 'admin',
         lastUsed: null,
         useCount: 0
-      }
+      },
+      language: 'en' // Default language for new users
     };
 
     if (saveCodes(codes)) {
@@ -133,6 +134,7 @@ function listCodes() {
     console.log(`${index + 1}. Code: ${code}`);
     console.log(`   🔑 Google Keys: ${data.apiKeys.googleSearchKeys.map(maskApiKey).join(', ')}`);
     console.log(`   🤖 Gemini Keys: ${data.apiKeys.geminiKeys.map(maskApiKey).join(', ')}`);
+    console.log(`   🌐 Language: ${data.language || 'en'} (default)`);
     console.log(`   📅 Created: ${new Date(data.createdAt).toLocaleString()}`);
     console.log(`   📊 Usage: ${data.meta.useCount} times`);
     if (data.meta.lastUsed) {
@@ -195,6 +197,7 @@ function showCodeInfo(args) {
   data.apiKeys.geminiKeys.forEach((key, i) => {
     console.log(`   Key ${i + 1}: ${maskApiKey(key)}`);
   });
+  console.log(`🌐 Language: ${data.language || 'en'} (default)`);
   console.log(`📅 Created: ${new Date(data.createdAt).toLocaleString()}`);
   console.log(`📊 Usage Count: ${data.meta.useCount}`);
   console.log(`👤 Issued By: ${data.meta.issuedBy}`);
@@ -210,6 +213,249 @@ function showCodeInfo(args) {
     console.log(`⏳ Expires: ${new Date(data.expiresAt).toLocaleString()} ${isExpired ? '(EXPIRED)' : ''}`);
   } else {
     console.log(`⏳ Expires: Never`);
+  }
+
+  // Show daily scraping info if available
+  if (data.dailyScraping) {
+    console.log(`📊 Daily Scraping:`);
+    console.log(`   Date: ${data.dailyScraping.date}`);
+    console.log(`   Count: ${data.dailyScraping.count}/4`);
+    console.log(`   Last Reset: ${new Date(data.dailyScraping.lastReset).toLocaleString()}`);
+  }
+}
+
+// New functions for modifying users
+function modifyUserCode(args) {
+  const [oldCode, newCode] = args;
+  
+  if (!oldCode || !newCode) {
+    console.error('❌ Both old and new codes are required');
+    console.log('Usage: node manage_codes.js modify-code <old_code> <new_code>');
+    process.exit(1);
+  }
+
+  const codes = loadCodes();
+  
+  if (!codes[oldCode]) {
+    console.error(`❌ Old code '${oldCode}' not found`);
+    process.exit(1);
+  }
+
+  if (codes[newCode] && oldCode !== newCode) {
+    console.error(`❌ New code '${newCode}' already exists`);
+    process.exit(1);
+  }
+
+  // Copy user data to new code
+  codes[newCode] = { ...codes[oldCode] };
+  
+  // Update meta information
+  codes[newCode].meta = {
+    ...codes[newCode].meta,
+    modifiedBy: 'CLI',
+    modifiedAt: new Date().toISOString(),
+    previousCode: oldCode
+  };
+
+  // Remove old code
+  delete codes[oldCode];
+  
+  if (saveCodes(codes)) {
+    console.log(`✅ User code changed from '${oldCode}' to '${newCode}' successfully`);
+  } else {
+    console.error('❌ Failed to modify user code');
+    process.exit(1);
+  }
+}
+
+function modifyUserLanguage(args) {
+  const [code, language] = args;
+  
+  if (!code || !language) {
+    console.error('❌ Both code and language are required');
+    console.log('Usage: node manage_codes.js modify-language <code> <language>');
+    console.log('Available languages: en, fr, ar');
+    process.exit(1);
+  }
+
+  const validLanguages = ['en', 'fr', 'ar'];
+  if (!validLanguages.includes(language)) {
+    console.error(`❌ Invalid language '${language}'. Must be one of: ${validLanguages.join(', ')}`);
+    process.exit(1);
+  }
+
+  const codes = loadCodes();
+  
+  if (!codes[code]) {
+    console.error(`❌ Code '${code}' not found`);
+    process.exit(1);
+  }
+
+  // Store old language for audit
+  const oldLanguage = codes[code].language || 'en';
+  
+  // Update language
+  codes[code].language = language;
+  
+  // Update meta information
+  codes[code].meta = {
+    ...codes[code].meta,
+    modifiedBy: 'CLI',
+    modifiedAt: new Date().toISOString(),
+    previousLanguage: oldLanguage
+  };
+  
+  if (saveCodes(codes)) {
+    console.log(`✅ Language changed from '${oldLanguage}' to '${language}' for user '${code}' successfully`);
+  } else {
+    console.error('❌ Failed to update language');
+    process.exit(1);
+  }
+}
+
+function addDailyLimit(args) {
+  const [code, amount] = args;
+  
+  if (!code || !amount) {
+    console.error('❌ Both code and amount are required');
+    console.log('Usage: node manage_codes.js add-limit <code> <amount>');
+    process.exit(1);
+  }
+
+  const additionalLimit = parseInt(amount);
+  if (isNaN(additionalLimit) || additionalLimit <= 0) {
+    console.error('❌ Amount must be a positive integer');
+    process.exit(1);
+  }
+
+  const codes = loadCodes();
+  
+  if (!codes[code]) {
+    console.error(`❌ Code '${code}' not found`);
+    process.exit(1);
+  }
+
+  // Initialize dailyScraping if it doesn't exist
+  if (!codes[code].dailyScraping) {
+    codes[code].dailyScraping = {
+      date: new Date().toDateString(),
+      count: 0,
+      lastReset: new Date().toISOString()
+    };
+  }
+
+  // Add additional limit
+  const currentLimit = codes[code].dailyScraping.count || 0;
+  const newLimit = Math.max(0, currentLimit - additionalLimit); // Reduce count (increase remaining)
+  
+  codes[code].dailyScraping.count = newLimit;
+  
+  // Update meta information
+  codes[code].meta = {
+    ...codes[code].meta,
+    modifiedBy: 'CLI',
+    modifiedAt: new Date().toISOString(),
+    dailyLimitModification: {
+      previousCount: currentLimit,
+      additionalLimit: additionalLimit,
+      newCount: newLimit
+    }
+  };
+  
+  if (saveCodes(codes)) {
+    console.log(`✅ Daily scraping limit updated for user '${code}'`);
+    console.log(`   Previous: ${currentLimit}, Added: ${additionalLimit}, New: ${newLimit}`);
+  } else {
+    console.error('❌ Failed to update daily scraping limit');
+    process.exit(1);
+  }
+}
+
+function resetDailyLimit(args) {
+  const [code] = args;
+  
+  if (!code) {
+    console.error('❌ Code is required');
+    console.log('Usage: node manage_codes.js reset-limit <code>');
+    process.exit(1);
+  }
+
+  const codes = loadCodes();
+  
+  if (!codes[code]) {
+    console.error(`❌ Code '${code}' not found`);
+    process.exit(1);
+  }
+
+  // Store old limit for audit
+  const oldCount = codes[code].dailyScraping?.count || 0;
+  
+  // Reset daily limit
+  codes[code].dailyScraping = {
+    date: new Date().toDateString(),
+    count: 0,
+    lastReset: new Date().toISOString()
+  };
+  
+  // Update meta information
+  codes[code].meta = {
+    ...codes[code].meta,
+    modifiedBy: 'CLI',
+    modifiedAt: new Date().toISOString(),
+    dailyLimitReset: {
+      previousCount: oldCount,
+      resetAt: new Date().toISOString()
+    }
+  };
+  
+  if (saveCodes(codes)) {
+    console.log(`✅ Daily scraping limit reset for user '${code}'`);
+    console.log(`   Previous count: ${oldCount}, now reset to 0`);
+  } else {
+    console.error('❌ Failed to reset daily scraping limit');
+    process.exit(1);
+  }
+}
+
+function showDailyLimitStatus(args) {
+  const [code] = args;
+  
+  if (!code) {
+    console.error('❌ Code is required');
+    console.log('Usage: node manage_codes.js limit-status <code>');
+    process.exit(1);
+  }
+
+  const codes = loadCodes();
+  
+  if (!codes[code]) {
+    console.error(`❌ Code '${code}' not found`);
+    process.exit(1);
+  }
+
+  const dailyScraping = codes[code].dailyScraping || {
+    date: new Date().toDateString(),
+    count: 0,
+    lastReset: new Date().toISOString()
+  };
+
+  const DAILY_SCRAPING_LIMIT = 4; // Default limit
+  const remainingLimit = Math.max(0, DAILY_SCRAPING_LIMIT - dailyScraping.count);
+  const isLimitReached = dailyScraping.count >= DAILY_SCRAPING_LIMIT;
+
+  console.log(`📊 Daily Limit Status for ${code}`);
+  console.log('─'.repeat(50));
+  console.log(`📅 Current Date: ${dailyScraping.date}`);
+  console.log(`🔢 Used Today: ${dailyScraping.count}/${DAILY_SCRAPING_LIMIT}`);
+  console.log(`📈 Remaining Today: ${remainingLimit}`);
+  console.log(`⚠️  Limit Reached: ${isLimitReached ? 'Yes' : 'No'}`);
+  console.log(`🔄 Last Reset: ${new Date(dailyScraping.lastReset).toLocaleString()}`);
+  console.log(`⏰ Next Reset: ${new Date(new Date(dailyScraping.lastReset).getTime() + 24 * 60 * 60 * 1000).toLocaleString()}`);
+  
+  if (isLimitReached) {
+    console.log(`\n💡 User has reached daily limit. Use 'add-limit' command to give more attempts.`);
+  } else {
+    console.log(`\n💡 User can still perform ${remainingLimit} more scraping jobs today.`);
   }
 }
 
@@ -250,6 +496,21 @@ function showHelp() {
   console.log('  remove <code>');
   console.log('    Remove an existing code');
   console.log('');
+  console.log('  modify-code <old_code> <new_code>');
+  console.log('    Change a user\'s access code');
+  console.log('');
+  console.log('  modify-language <code> <language>');
+  console.log('    Change a user\'s language preference (en, fr, ar)');
+  console.log('');
+  console.log('  add-limit <code> <amount>');
+  console.log('    Add more daily scraping attempts for a user');
+  console.log('');
+  console.log('  reset-limit <code>');
+  console.log('    Reset a user\'s daily scraping count to 0');
+  console.log('');
+  console.log('  limit-status <code>');
+  console.log('    Check a user\'s daily scraping limit status');
+  console.log('');
   console.log('  help');
   console.log('    Show this help message');
   console.log('');
@@ -259,6 +520,11 @@ function showHelp() {
   console.log('  node manage_codes.js list');
   console.log('  node manage_codes.js info abc123');
   console.log('  node manage_codes.js remove abc123');
+  console.log('  node manage_codes.js modify-code abc123 xyz789');
+  console.log('  node manage_codes.js modify-language abc123 fr');
+  console.log('  node manage_codes.js add-limit abc123 2');
+  console.log('  node manage_codes.js reset-limit abc123');
+  console.log('  node manage_codes.js limit-status abc123');
 }
 
 // Main CLI handler
@@ -290,6 +556,21 @@ function main() {
     case 'show':
       showCodeInfo(commandArgs);
       break;
+    case 'modify-code':
+      modifyUserCode(commandArgs);
+      break;
+    case 'modify-language':
+      modifyUserLanguage(commandArgs);
+      break;
+    case 'add-limit':
+      addDailyLimit(commandArgs);
+      break;
+    case 'reset-limit':
+      resetDailyLimit(commandArgs);
+      break;
+    case 'limit-status':
+      showDailyLimitStatus(commandArgs);
+      break;
     case 'help':
     case '--help':
     case '-h':
@@ -303,8 +584,7 @@ function main() {
 }
 
 // Run if called directly
-if (import.meta.url === `file://${process.argv[1]}` || 
-    import.meta.url.startsWith('file:') && process.argv[1] && import.meta.url.includes(process.argv[1].replace(/\\/g, '/'))) {
+if (process.argv[1] && process.argv[1].endsWith('manage_codes.js')) {
   main();
 }
 

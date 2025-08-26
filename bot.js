@@ -925,7 +925,9 @@ async function handleMessage(sock, message) {
         adminCode: adminCode,
         role: authResult.admin.role,
         permissions: authResult.admin.permissions,
-        authenticatedAt: new Date()
+        authenticatedAt: new Date(),
+        currentMenu: 'main_admin_menu',
+        menuOptions: 10
       });
 
       // Save admin sessions to disk
@@ -935,8 +937,13 @@ async function handleMessage(sock, message) {
       console.log(chalk.blue(`📊 Admin sessions Map now contains ${adminSessions.size} sessions:`, Array.from(adminSessions.keys()).map(k => k.split('@')[0])));
 
       await sock.sendMessage(jid, { 
-        text: `🔐 **Admin Access Granted!**\n\n👑 **Role:** ${authResult.admin.role}\n📝 **Description:** ${authResult.admin.roleDescription}\n🔑 **Permissions:** ${authResult.admin.permissions.join(', ')}\n\n💡 **Available Commands:**\n• ADMIN USERS - List all users with their API keys\n• ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2> - Add new user with API keys (any format)\n• ADMIN REMOVE USER <code>\n• ADMIN ADMINS - List all admins\n• ADMIN ADD ADMIN <code> <role>\n• ADMIN REMOVE ADMIN <code>\n• ADMIN STATUS - System status\n• ADMIN HELP - Show detailed admin help`
+        text: `🔐 **Admin Access Granted!**\n\n👑 **Role:** ${authResult.admin.role}\n📝 **Description:** ${authResult.admin.roleDescription}\n🔑 **Permissions:** ${authResult.admin.permissions.join(', ')}\n\n💡 **Quick Start:**\n1️⃣ Type **ADMIN MENU** for simple numbered menu\n2️⃣ Type **ADMIN HELP** for detailed command list\n3️⃣ Type **ADMIN USERS** to see all users\n4️⃣ Type **ADMIN STATUS** to check system status\n\n💡 **Tip:** You can also directly send **1, 2, 3, or 4** for quick access!\n💡 **Tip:** Use **ADMIN MENU** for the easiest way to navigate!`
       });
+
+      // Save admin sessions to disk
+      saveAdminSessions();
+      
+      console.log(chalk.blue(`🔍 Admin session initialized for ${jid.split('@')[0]}: currentMenu=main_admin_menu, menuOptions=10`));
       return;
     } else {
       await sock.sendMessage(jid, { 
@@ -953,6 +960,1322 @@ async function handleMessage(sock, message) {
   
   if (adminSession) {
     console.log(chalk.green(`✅ Admin session found for ${jid.split('@')[0]} with code: ${adminSession.adminCode}`));
+    
+    // Ensure admin session has required properties
+    if (!adminSession.currentMenu) {
+      adminSession.currentMenu = 'main_admin_menu';
+      adminSession.menuOptions = 10;
+      adminSessions.set(jid, adminSession);
+      saveAdminSessions();
+      console.log(chalk.blue(`🔍 Fixed admin session: set currentMenu = "${adminSession.currentMenu}"`));
+    }
+    
+    // FULL ADMIN MENU: Handle numbers 1-9 when IN main menu (PRIORITY 1)
+    if (adminSession.currentMenu === 'main_admin_menu' && !isNaN(parseInt(text)) && parseInt(text) >= 1 && parseInt(text) <= 9) {
+      console.log(chalk.blue(`🔍 Full admin menu choice ${parseInt(text)} detected for admin ${adminSession.adminCode}`));
+      // Let the existing full menu system handle this
+      // (The logic below will process it)
+    } else if (!isNaN(parseInt(text)) && parseInt(text) >= 1 && parseInt(text) <= 4 && 
+               adminSession.currentMenu === 'main_admin_menu') {
+      // QUICK ACCESS: Handle numbers 1-4 only when in main menu (PRIORITY 3)
+      console.log(chalk.blue(`🔍 Quick access number ${parseInt(text)} detected for admin ${adminSession.adminCode}`));
+      
+      let quickAction = '';
+      
+      switch (parseInt(text)) {
+        case 1:
+          quickAction = 'ADMIN MENU';
+          break;
+        case 2:
+          quickAction = 'ADMIN HELP';
+          break;
+        case 3:
+          quickAction = 'ADMIN USERS';
+          break;
+        case 4:
+          quickAction = 'ADMIN STATUS';
+          break;
+      }
+      
+      console.log(chalk.blue(`🔍 Executing quick action: ${quickAction}`));
+      
+      // Execute the quick action
+      if (quickAction === 'ADMIN MENU') {
+        // Show the admin menu
+        const permissions = adminSession.permissions;
+        let message = `🔐 **Admin Menu**\n\n`;
+        message += `👑 **Your Role:** ${adminSession.role}\n`;
+        message += `🔑 **Your Permissions:** ${permissions.join(', ')}\n\n`;
+        
+        message += `📋 **Choose an option by number:**\n\n`;
+        
+        let optionNumber = 1;
+        
+        if (permissions.includes('view_sessions') || permissions.includes('view_all_sessions')) {
+          message += `${optionNumber}️⃣ **👥 LIST USERS** - View all users and their status\n`;
+          optionNumber++;
+        }
+        
+        if (permissions.includes('manage_users')) {
+          message += `2️⃣ **➕ ADD USER** - Create new user account\n`;
+          message += `3️⃣ **🗑️ REMOVE USER** - Delete user account\n`;
+          message += `4️⃣ **✏️ MODIFY USER** - Change user details\n`;
+          message += `5️⃣ **📊 MANAGE LIMITS** - Handle daily scraping limits\n`;
+        }
+        
+        if (permissions.includes('manage_admins')) {
+          message += `6️⃣ **👑 MANAGE ADMINS** - Admin user management\n`;
+        }
+        
+        if (permissions.includes('system_control')) {
+          message += `7️⃣ **📈 SYSTEM STATUS** - View system statistics\n`;
+        }
+        
+        message += `8️⃣ **❓ HELP** - Show detailed admin help\n`;
+        message += `9️⃣ **🔓 LOGOUT** - Exit admin session\n\n`;
+        
+        message += `💬 **Reply with the number** corresponding to your choice.\n`;
+        message += `💡 **Example:** Send "1" to list users`;
+        
+        // Store admin menu state
+        adminSession.currentMenu = 'main_admin_menu';
+        adminSession.menuOptions = optionNumber - 1;
+        adminSessions.set(jid, adminSession);
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      } else if (quickAction === 'ADMIN USERS') {
+        // Execute ADMIN USERS command
+        try {
+          console.log(chalk.blue(`🔍 Executing ADMIN USERS for ${adminSession.adminCode}`));
+          const result = adminManager.listUsers(adminSession.adminCode);
+          console.log(chalk.blue(`🔍 ADMIN USERS result:`, JSON.stringify(result, null, 2)));
+          
+          if (result.success) {
+            let message = `👥 **User Codes List**\n\n`;
+            if (result.users.length === 0) {
+              message += `No user codes found.`;
+            } else {
+              result.users.forEach((user, index) => {
+                message += `${index + 1}. **${user.code}**\n`;
+                message += `   📅 Created: ${new Date(user.createdAt).toLocaleString()}\n`;
+                message += `   👤 Issued by: ${user.issuedBy}\n`;
+                message += `   🔑 **Google Search API Keys:**\n`;
+                message += `      • Key 1: ${formatApiKey(user.googleSearchKeys[0])}\n`;
+                message += `      • Key 2: ${formatApiKey(user.googleSearchKeys[1])}\n`;
+                message += `   🤖 **Gemini API Keys:**\n`;
+                message += `      • Key 1: ${formatApiKey(user.geminiKeys[0])}\n`;
+                message += `      • Key 2: ${formatApiKey(user.geminiKeys[1])}\n`;
+                message += `   📊 Use count: ${user.useCount}\n`;
+                if (user.lastUsed) {
+                  message += `   ⏰ Last used: ${new Date(user.lastUsed).toLocaleString()}\n`;
+                }
+                if (user.expiresAt) {
+                  message += `   ⏳ Expires: ${new Date(user.expiresAt).toLocaleString()}\n`;
+                }
+                message += '\n';
+              });
+            }
+            message += `**Total User Codes:** ${result.users.length}\n\n`;
+            message += `💡 **Use ADMIN MENU** to return to the main menu.`;
+            await sock.sendMessage(jid, { text: message });
+          } else {
+            await sock.sendMessage(jid, { text: `❌ **Error:** ${result.error}` });
+          }
+        } catch (error) {
+          console.error(chalk.red(`❌ Error in ADMIN USERS command:`, error.message));
+          await sock.sendMessage(jid, { text: `❌ **Internal Error:** ${error.message}` });
+        }
+        return;
+      } else if (quickAction === 'ADMIN STATUS') {
+        // Execute ADMIN STATUS command
+        console.log(chalk.blue(`🔍 Processing ADMIN STATUS command for ${adminSession.adminCode}`));
+        try {
+          const result = adminManager.getSystemStatus(adminSession.adminCode);
+          console.log(chalk.blue(`🔍 ADMIN STATUS result:`, JSON.stringify(result, null, 2)));
+          
+          if (result.success) {
+            const status = result.status;
+            let message = `📊 **System Status**\n\n`;
+            message += `👥 **Users:** ${status.totalUsers} total, ${status.authenticatedUsers} active, ${status.blockedUsers} blocked\n`;
+            message += `🔑 **Codes:** ${status.totalCodes} user codes\n`;
+            message += `👑 **Admins:** ${status.totalAdmins} admin codes\n\n`;
+            message += `⚙️ **System Settings:**\n`;
+            message += `• Max failed auth attempts: ${status.systemSettings.max_failed_auth_attempts}\n`;
+            message += `• Auto unblock hours: ${status.systemSettings.auto_unblock_hours}\n`;
+            message += `• Session timeout hours: ${status.systemSettings.session_timeout_hours}\n`;
+            message += `• Max users per admin: ${status.systemSettings.max_users_per_admin}\n\n`;
+            message += `💡 **Use ADMIN MENU** to return to the main menu.`;
+            
+            await sock.sendMessage(jid, { text: message });
+          } else {
+            await sock.sendMessage(jid, { text: `❌ **Error:** ${result.error}` });
+          }
+        } catch (error) {
+          console.error(chalk.red(`❌ Error in ADMIN STATUS command:`, error.message));
+          await sock.sendMessage(jid, { text: `❌ **Internal Error:** ${error.message}` });
+        }
+        return;
+      } else if (quickAction === 'ADMIN HELP') {
+        // Execute ADMIN HELP command
+        const permissions = adminSession.permissions;
+        let message = `🔐 **Admin Commands Help**\n\n`;
+        message += `👑 **Your Role:** ${adminSession.role}\n`;
+        message += `🔑 **Your Permissions:** ${permissions.join(', ')}\n\n`;
+        
+        message += `📋 **Available Commands:**\n\n`;
+        
+        if (permissions.includes('view_sessions') || permissions.includes('view_all_sessions')) {
+          message += `• **ADMIN USERS** - List all users and their status\n`;
+        }
+        
+        if (permissions.includes('manage_users')) {
+          message += `• **ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>** - Add new user with API keys (any format)\n`;
+          message += `• **ADMIN REMOVE USER <code>** - Remove user code\n`;
+          message += `• **ADMIN MODIFY CODE <old_code> <new_code>** - Change user's access code\n`;
+          message += `• **ADMIN MODIFY KEYS <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>** - Update user's API keys\n`;
+          message += `• **ADMIN MODIFY LANGUAGE <code> <language>** - Change user's language preference\n`;
+          message += `• **ADMIN ADD LIMIT <code> <amount>** - Add more daily scraping attempts\n`;
+          message += `• **ADMIN RESET LIMIT <code>** - Reset user's daily scraping count\n`;
+          message += `• **ADMIN LIMIT STATUS <code>** - Check user's daily limit status\n`;
+        }
+        
+        if (permissions.includes('manage_admins')) {
+          message += `• **ADMIN ADD ADMIN <code> <role>** - Add new admin\n`;
+          message += `• **ADMIN REMOVE ADMIN <code>** - Remove admin code\n`;
+        }
+        
+        if (permissions.includes('system_control')) {
+          message += `• **ADMIN STATUS** - View system status and statistics\n`;
+        }
+        
+        message += `• **ADMIN HELP** - Show this help message\n`;
+        message += `• **ADMIN MENU** - Show numbered admin menu\n`;
+        message += `• **ADMIN LOGOUT** - Logout from admin session (switch to user mode)\n\n`;
+        
+        message += `📅 **Daily Scraping Limits:** Each user can perform ${DAILY_SCRAPING_LIMIT} scraping jobs per day. Limits reset at midnight.\n\n`;
+        message += `💡 **Tip:** Use **ADMIN MENU** for a simpler numbered interface!`;
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      }
+    }
+    
+    // INTERACTIVE MODIFY USER FLOW (PRIORITY 1 - Check this BEFORE main menu)
+    if (adminSession.currentMenu === 'modify_user_select') {
+      if (text === '0') {
+        // Go back to main menu
+        adminSession.currentMenu = 'main_admin_menu';
+        adminSession.modifyUserData = null;
+        adminSessions.set(jid, adminSession);
+        saveAdminSessions();
+        
+        // Show main menu again
+        const permissions = adminSession.permissions;
+        let message = `🔐 **Admin Menu**\n\n`;
+        message += `👑 **Your Role:** ${adminSession.role}\n`;
+        message += `🔑 **Your Permissions:** ${permissions.join(', ')}\n\n`;
+        
+        message += `📋 **Choose an option by number:**\n\n`;
+        
+        let menuOptionNumber = 1;
+        
+        if (permissions.includes('view_sessions') || permissions.includes('view_all_sessions')) {
+          message += `${menuOptionNumber}️⃣ **👥 LIST USERS** - View all users and their status\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('manage_users')) {
+          message += `${menuOptionNumber}️⃣ **➕ ADD USER** - Create new user account\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **🗑️ REMOVE USER** - Delete user account\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **✏️ MODIFY USER** - Change user details\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **📊 MANAGE LIMITS** - Handle daily scraping limits\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('manage_admins')) {
+          message += `${menuOptionNumber}️⃣ **👑 MANAGE ADMINS** - Admin user management\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('system_control')) {
+          message += `${menuOptionNumber}️⃣ **📈 SYSTEM STATUS** - View system statistics\n`;
+          menuOptionNumber++;
+        }
+        
+        message += `${menuOptionNumber}️⃣ **❓ HELP** - Show detailed admin help\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **🔓 LOGOUT** - Exit admin session\n\n`;
+        
+        message += `💬 **Reply with the number** corresponding to your choice.\n`;
+        message += `💡 **Example:** Send "2" to list users`;
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      }
+      
+      // Handle user selection
+      const userChoice = parseInt(text);
+      if (!isNaN(userChoice) && userChoice >= 1 && userChoice <= adminSession.modifyUserData.users.length) {
+        const selectedUser = adminSession.modifyUserData.users[userChoice - 1];
+        
+        let message = `✏️ **Modify User: ${selectedUser.code}**\n\n`;
+        message += `📋 **Current user information:**\n`;
+        message += `• **Code:** ${selectedUser.code}\n`;
+        message += `• **Created:** ${new Date(selectedUser.createdAt).toLocaleString()}\n`;
+        message += `• **Issued by:** ${selectedUser.issuedBy}\n`;
+        message += `• **Use count:** ${selectedUser.useCount}\n`;
+        if (selectedUser.language) {
+          message += `• **Language:** ${selectedUser.language}\n`;
+        }
+        message += `• **Google Keys:** ${formatApiKey(selectedUser.googleSearchKeys[0])}, ${formatApiKey(selectedUser.googleSearchKeys[1])}\n`;
+        message += `• **Gemini Keys:** ${formatApiKey(selectedUser.geminiKeys[0])}, ${formatApiKey(selectedUser.geminiKeys[1])}\n\n`;
+        
+        message += `📝 **What would you like to modify?**\n\n`;
+        message += `1️⃣ **Change User Code** - Modify the access code\n`;
+        message += `2️⃣ **Update API Keys** - Change Google/Gemini keys\n`;
+        message += `3️⃣ **Change Language** - Update language preference\n`;
+        message += `4️⃣ **Reset Use Count** - Reset daily usage count\n`;
+        message += `5️⃣ **Add Daily Limit** - Increase daily scraping limit\n\n`;
+        
+        message += `💬 **Reply with the number** of what you want to modify.\n`;
+        message += `🔙 **To go back:** Send "0"`;
+        
+        // Set admin session to modification type selection
+        adminSession.currentMenu = 'modify_user_type';
+        adminSession.modifyUserData.selectedUser = selectedUser;
+        adminSessions.set(jid, adminSession);
+        saveAdminSessions();
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      } else {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Invalid choice!** Please select a number between 1 and ${adminSession.modifyUserData.users.length}, or send "0" to go back.`
+        });
+        return;
+      }
+    }
+    
+    // Handle modification type selection (PRIORITY 2)
+    if (adminSession.currentMenu === 'modify_user_type') {
+      if (text === '0') {
+        // Go back to user selection
+        adminSession.currentMenu = 'modify_user_select';
+        adminSession.modifyUserData.selectedUser = null;
+        adminSessions.set(jid, adminSession);
+        saveAdminSessions();
+        
+        // Show user list again
+        let message = `✏️ **Modify User - Select User**\n\n📋 **Available users to modify:**\n\n`;
+        
+        adminSession.modifyUserData.users.forEach((user, index) => {
+          message += `${index + 1}. **${user.code}**\n`;
+          message += `   📅 Created: ${new Date(user.createdAt).toLocaleString()}\n`;
+          message += `   👤 Issued by: ${user.issuedBy}\n`;
+          message += `   📊 Use count: ${user.useCount}\n`;
+          if (user.language) {
+            message += `   🌐 Language: ${user.language}\n`;
+          }
+          message += `\n`;
+        });
+        
+        message += `💬 **Reply with the number** of the user you want to modify.\n`;
+        message += `💡 **Example:** Send "1" to modify user1\n\n`;
+        message += `🔙 **To go back:** Send "0"`;
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      }
+      
+      const modificationChoice = parseInt(text);
+      const selectedUser = adminSession.modifyUserData.selectedUser;
+      
+      switch (modificationChoice) {
+        case 1: // Change User Code
+          await sock.sendMessage(jid, { 
+            text: `✏️ **Change User Code**\n\n📝 **Current code:** ${selectedUser.code}\n\n💬 **Send the new code** for this user.\n\n💡 **Example:** newuser123\n\n🔙 **To go back:** Send "0"`
+          });
+          
+          adminSession.currentMenu = 'modify_user_code';
+          adminSessions.set(jid, adminSession);
+          saveAdminSessions();
+          return;
+          
+        case 2: // Update API Keys
+          await sock.sendMessage(jid, { 
+            text: `✏️ **Update API Keys**\n\n📝 **Current keys:**\n• Google 1: ${formatApiKey(selectedUser.googleSearchKeys[0])}\n• Google 2: ${formatApiKey(selectedUser.googleSearchKeys[1])}\n• Gemini 1: ${formatApiKey(selectedUser.geminiKeys[0])}\n• Gemini 2: ${formatApiKey(selectedUser.geminiKeys[1])}\n\n💬 **Send the new keys** in this format:\n<google_key1> <google_key2> <gemini_key1> <gemini_key2>\n\n💡 **Example:** newkey1 newkey2 gemkey1 gemkey2\n\n🔙 **To go back:** Send "0"`
+          });
+          
+          adminSession.currentMenu = 'modify_user_keys';
+          adminSessions.set(jid, adminSession);
+          saveAdminSessions();
+          return;
+          
+        case 3: // Change Language
+          await sock.sendMessage(jid, { 
+            text: `✏️ **Change Language**\n\n📝 **Current language:** ${selectedUser.language || 'en'}\n\n💬 **Available languages:**\n1️⃣ **en** - English\n2️⃣ **fr** - French\n3️⃣ **ar** - Arabic\n\n💬 **Send the language code** (en, fr, or ar)\n\n💡 **Example:** fr\n\n🔙 **To go back:** Send "0"`
+          });
+          
+          adminSession.currentMenu = 'modify_user_language';
+          adminSessions.set(jid, adminSession);
+          saveAdminSessions();
+          return;
+          
+        case 4: // Reset Daily Scraping Count
+          await sock.sendMessage(jid, { 
+            text: `✏️ **Reset Daily Scraping Count**\n\n📝 **Current daily count:** ${selectedUser.dailyScraping?.count || 0}/4\n\n⚠️ **This will reset the daily scraping count to 0.**\n\n💬 **Type 'CONFIRM'** to reset the daily count.\n\n🔙 **To go back:** Send "0"`
+          });
+          
+          adminSession.currentMenu = 'modify_user_reset_count';
+          adminSessions.set(jid, adminSession);
+          saveAdminSessions();
+          return;
+          
+        case 5: // Add Daily Limit
+          await sock.sendMessage(jid, { 
+            text: `✏️ **Add Daily Limit**\n\n📝 **Current daily limit:** ${selectedUser.dailyScrapingLimit || 4}\n\n💬 **Send the number** of additional daily scraping attempts to add.\n\n💡 **Example:** 2 (adds 2 more attempts)\n\n🔙 **To go back:** Send "0"`
+          });
+          
+          adminSession.currentMenu = 'modify_user_add_limit';
+          adminSessions.set(jid, adminSession);
+          saveAdminSessions();
+          return;
+          
+        default:
+          await sock.sendMessage(jid, { 
+            text: `❌ **Invalid choice!** Please select a number between 1-5, or send "0" to go back.`
+          });
+          return;
+      }
+    }
+    
+    // Handle specific modification types (PRIORITY 3)
+    if (adminSession.currentMenu === 'modify_user_code') {
+      if (text === '0') {
+        // Go back to modification type selection
+        adminSession.currentMenu = 'modify_user_type';
+        adminSessions.set(jid, adminSession);
+        saveAdminSessions();
+        
+        const selectedUser = adminSession.modifyUserData.selectedUser;
+        let message = `✏️ **Modify User: ${selectedUser.code}**\n\n📋 **Current user information:**\n`;
+        message += `• **Code:** ${selectedUser.code}\n`;
+        message += `• **Created:** ${new Date(selectedUser.createdAt).toLocaleString()}\n`;
+        message += `• **Issued by:** ${selectedUser.issuedBy}\n`;
+        message += `• **Use count:** ${selectedUser.useCount}\n`;
+        if (selectedUser.language) {
+          message += `• **Language:** ${selectedUser.language}\n`;
+        }
+        message += `• **Google Keys:** ${formatApiKey(selectedUser.googleSearchKeys[0])}, ${formatApiKey(selectedUser.googleSearchKeys[1])}\n`;
+        message += `• **Gemini Keys:** ${formatApiKey(selectedUser.geminiKeys[0])}, ${formatApiKey(selectedUser.geminiKeys[1])}\n\n`;
+        
+        message += `📝 **What would you like to modify?**\n\n`;
+        message += `1️⃣ **Change User Code** - Modify the access code\n`;
+        message += `2️⃣ **Update API Keys** - Change Google/Gemini keys\n`;
+        message += `3️⃣ **Change Language** - Update language preference\n`;
+        message += `4️⃣ **Reset Use Count** - Reset daily usage count\n`;
+        message += `5️⃣ **Add Daily Limit** - Increase daily scraping limit\n\n`;
+        
+        message += `💬 **Reply with the number** of what you want to modify.\n`;
+        message += `🔙 **To go back:** Send "0"`;
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      }
+      
+      // Handle code change
+      const newCode = text.trim();
+      if (newCode.length < 3) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Invalid code!** Code must be at least 3 characters long.\n\n💬 **Try again** or send "0" to go back.`
+        });
+        return;
+      }
+      
+      try {
+        const result = adminManager.modifyUserCode(adminSession.adminCode, adminSession.modifyUserData.selectedUser.code, newCode);
+        if (result.success) {
+          await sock.sendMessage(jid, { 
+            text: `✅ **User Code Modified Successfully!**\n\n📝 **Old code:** ${adminSession.modifyUserData.selectedUser.code}\n📝 **New code:** ${newCode}\n\n💡 **The user can now use the new code to access the system.**`
+          });
+        } else {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Error:** ${result.error}`
+          });
+        }
+      } catch (error) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error:** Failed to modify user code`
+        });
+      }
+      
+      // Return to main menu
+      adminSession.currentMenu = 'main_admin_menu';
+      adminSession.modifyUserData = null;
+      adminSessions.set(jid, adminSession);
+      saveAdminSessions();
+      
+      // Show main menu
+      const permissions = adminSession.permissions;
+      let message = `🔐 **Admin Menu**\n\n`;
+      message += `👑 **Your Role:** ${adminSession.role}\n`;
+      message += `🔑 **Your Permissions:** ${permissions.join(', ')}\n\n`;
+      
+      message += `📋 **Choose an option by number:**\n\n`;
+      
+      let menuOptionNumber = 1;
+      
+      if (permissions.includes('view_sessions') || permissions.includes('view_all_sessions')) {
+        message += `${menuOptionNumber}️⃣ **👥 LIST USERS** - View all users and their status\n`;
+        menuOptionNumber++;
+      }
+      
+      if (permissions.includes('manage_users')) {
+        message += `${menuOptionNumber}️⃣ **➕ ADD USER** - Create new user account\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **🗑️ REMOVE USER** - Delete user account\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **✏️ MODIFY USER** - Change user details\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **📊 MANAGE LIMITS** - Handle daily scraping limits\n`;
+        menuOptionNumber++;
+      }
+      
+      if (permissions.includes('manage_admins')) {
+        message += `${menuOptionNumber}️⃣ **👑 MANAGE ADMINS** - Admin user management\n`;
+        menuOptionNumber++;
+      }
+      
+      if (permissions.includes('system_control')) {
+        message += `${menuOptionNumber}️⃣ **📈 SYSTEM STATUS** - View system statistics\n`;
+        menuOptionNumber++;
+      }
+      
+      message += `${menuOptionNumber}️⃣ **❓ HELP** - Show detailed admin help\n`;
+      menuOptionNumber++;
+      message += `${menuOptionNumber}️⃣ **🔓 LOGOUT** - Exit admin session\n\n`;
+      
+      message += `💬 **Reply with the number** corresponding to your choice.\n`;
+      message += `💡 **Example:** Send "2" to list users`;
+      
+      await sock.sendMessage(jid, { text: message });
+      return;
+    }
+    
+    // Handle reset daily scraping count (PRIORITY 3)
+    if (adminSession.currentMenu === 'modify_user_reset_count') {
+      if (text === '0') {
+        // Go back to modification type selection
+        adminSession.currentMenu = 'modify_user_type';
+        adminSessions.set(jid, adminSession);
+        saveAdminSessions();
+        
+        const selectedUser = adminSession.modifyUserData.selectedUser;
+        let message = `✏️ **Modify User: ${selectedUser.code}**\n\n📋 **Current user information:**\n`;
+        message += `• **Code:** ${selectedUser.code}\n`;
+        message += `• **Created:** ${new Date(selectedUser.createdAt).toLocaleString()}\n`;
+        message += `• **Issued by:** ${selectedUser.issuedBy}\n`;
+        message += `• **Use count:** ${selectedUser.useCount}\n`;
+        if (selectedUser.language) {
+          message += `• **Language:** ${selectedUser.language}\n`;
+        }
+        message += `• **Google Keys:** ${formatApiKey(selectedUser.googleSearchKeys[0])}, ${formatApiKey(selectedUser.googleSearchKeys[1])}\n`;
+        message += `• **Gemini Keys:** ${formatApiKey(selectedUser.geminiKeys[0])}, ${formatApiKey(selectedUser.geminiKeys[1])}\n\n`;
+        
+        message += `📝 **What would you like to modify?**\n\n`;
+        message += `1️⃣ **Change User Code** - Modify the access code\n`;
+        message += `2️⃣ **Update API Keys** - Change Google/Gemini keys\n`;
+        message += `3️⃣ **Change Language** - Update language preference\n`;
+        message += `4️⃣ **Reset Use Count** - Reset daily usage count\n`;
+        message += `5️⃣ **Add Daily Limit** - Increase daily scraping limit\n\n`;
+        
+        message += `💬 **Reply with the number** of what you want to modify.\n`;
+        message += `🔙 **To go back:** Send "0"`;
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      }
+      
+      if (text === 'CONFIRM') {
+        try {
+          const selectedUser = adminSession.modifyUserData.selectedUser;
+          const result = adminManager.resetUserDailyLimit(adminSession.adminCode, selectedUser.code);
+          
+          if (result.success) {
+            await sock.sendMessage(jid, { 
+              text: `✅ **Daily Scraping Count Reset Successfully!**\n\n📝 **User:** ${selectedUser.code}\n📝 **Previous daily count:** ${selectedUser.dailyScraping?.count || 0}/4\n📝 **New daily count:** 0/4\n\n💡 **The user can now perform 4 more scraping jobs today.**`
+            });
+          } else {
+            await sock.sendMessage(jid, { 
+              text: `❌ **Error:** ${result.error}`
+            });
+          }
+        } catch (error) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Error:** Failed to reset daily scraping count`
+          });
+        }
+        
+        // Return to main menu
+        adminSession.currentMenu = 'main_admin_menu';
+        adminSession.modifyUserData = null;
+        adminSessions.set(jid, adminSession);
+        saveAdminSessions();
+        
+        // Show main menu
+        const permissions = adminSession.permissions;
+        let message = `🔐 **Admin Menu**\n\n`;
+        message += `👑 **Your Role:** ${adminSession.role}\n`;
+        message += `🔑 **Your Permissions:** ${permissions.join(', ')}\n\n`;
+        
+        message += `📋 **Choose an option by number:**\n\n`;
+        
+        let menuOptionNumber = 1;
+        
+        if (permissions.includes('view_sessions') || permissions.includes('view_all_sessions')) {
+          message += `${menuOptionNumber}️⃣ **👥 LIST USERS** - View all users and their status\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('manage_users')) {
+          message += `${menuOptionNumber}️⃣ **➕ ADD USER** - Create new user account\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **🗑️ REMOVE USER** - Delete user account\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **✏️ MODIFY USER** - Change user details\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **📊 MANAGE LIMITS** - Handle daily scraping limits\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('manage_admins')) {
+          message += `${menuOptionNumber}️⃣ **👑 MANAGE ADMINS** - Admin user management\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('system_control')) {
+          message += `${menuOptionNumber}️⃣ **📈 SYSTEM STATUS** - View system statistics\n`;
+          menuOptionNumber++;
+        }
+        
+        message += `${menuOptionNumber}️⃣ **❓ HELP** - Show detailed admin help\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **🔓 LOGOUT** - Exit admin session\n\n`;
+        
+        message += `💬 **Reply with the number** corresponding to your choice.\n`;
+        message += `💡 **Example:** Send "2" to list users`;
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      }
+      
+      await sock.sendMessage(jid, { 
+        text: `❌ **Invalid input!** Please type 'CONFIRM' to reset the daily scraping count, or send "0" to go back.`
+      });
+      return;
+    }
+    
+    // Handle add daily limit (PRIORITY 3)
+    if (adminSession.currentMenu === 'modify_user_add_limit') {
+      if (text === '0') {
+        // Go back to modification type selection
+        adminSession.currentMenu = 'modify_user_type';
+        adminSessions.set(jid, adminSession);
+        saveAdminSessions();
+        
+        const selectedUser = adminSession.modifyUserData.selectedUser;
+        let message = `✏️ **Modify User: ${selectedUser.code}**\n\n📋 **Current user information:**\n`;
+        message += `• **Code:** ${selectedUser.code}\n`;
+        message += `• **Created:** ${new Date(selectedUser.createdAt).toLocaleString()}\n`;
+        message += `• **Issued by:** ${selectedUser.issuedBy}\n`;
+        message += `• **Use count:** ${selectedUser.useCount}\n`;
+        if (selectedUser.language) {
+          message += `• **Language:** ${selectedUser.language}\n`;
+        }
+        message += `• **Google Keys:** ${formatApiKey(selectedUser.googleSearchKeys[0])}, ${formatApiKey(selectedUser.googleSearchKeys[1])}\n`;
+        message += `• **Gemini Keys:** ${formatApiKey(selectedUser.geminiKeys[0])}, ${formatApiKey(selectedUser.geminiKeys[1])}\n\n`;
+        
+        message += `📝 **What would you like to modify?**\n\n`;
+        message += `1️⃣ **Change User Code** - Modify the access code\n`;
+        message += `2️⃣ **Update API Keys** - Change Google/Gemini keys\n`;
+        message += `3️⃣ **Change Language** - Update language preference\n`;
+        message += `4️⃣ **Reset Use Count** - Reset daily usage count\n`;
+        message += `5️⃣ **Add Daily Limit** - Increase daily scraping limit\n\n`;
+        
+        message += `💬 **Reply with the number** of what you want to modify.\n`;
+        message += `🔙 **To go back:** Send "0"`;
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      }
+      
+      const amount = parseInt(text);
+      if (isNaN(amount) || amount < 1) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Invalid amount!** Please send a number greater than 0, or send "0" to go back.`
+        });
+        return;
+      }
+      
+      try {
+        const selectedUser = adminSession.modifyUserData.selectedUser;
+        const result = adminManager.addDailyScrapingLimit(adminSession.adminCode, selectedUser.code, amount);
+        
+        if (result.success) {
+          await sock.sendMessage(jid, { 
+            text: `✅ **Daily Limit Added Successfully!**\n\n📝 **User:** ${selectedUser.code}\n📝 **Previous daily count:** ${selectedUser.dailyScraping?.count || 0}/4\n📝 **Amount added:** +${amount}\n📝 **New daily count:** ${Math.min(4, (selectedUser.dailyScraping?.count || 0) + amount)}/4\n\n💡 **The user can now perform more scraping jobs today.**`
+          });
+        } else {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Error:** ${result.error}`
+          });
+        }
+      } catch (error) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error:** Failed to add daily limit`
+        });
+      }
+      
+      // Return to main menu
+      adminSession.currentMenu = 'main_admin_menu';
+      adminSession.modifyUserData = null;
+      adminSessions.set(jid, adminSession);
+      saveAdminSessions();
+      
+      // Show main menu
+      const permissions = adminSession.permissions;
+      let message = `🔐 **Admin Menu**\n\n`;
+      message += `👑 **Your Role:** ${adminSession.role}\n`;
+      message += `🔑 **Your Permissions:** ${permissions.join(', ')}\n\n`;
+      
+      message += `📋 **Choose an option by number:**\n\n`;
+      
+      let menuOptionNumber = 1;
+      
+      if (permissions.includes('view_sessions') || permissions.includes('view_all_sessions')) {
+        message += `${menuOptionNumber}️⃣ **👥 LIST USERS** - View all users and their status\n`;
+        menuOptionNumber++;
+      }
+      
+      if (permissions.includes('manage_users')) {
+        message += `${menuOptionNumber}️⃣ **➕ ADD USER** - Create new user account\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **🗑️ REMOVE USER** - Delete user account\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **✏️ MODIFY USER** - Change user details\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **📊 MANAGE LIMITS** - Handle daily scraping limits\n`;
+        menuOptionNumber++;
+      }
+      
+      if (permissions.includes('manage_admins')) {
+        message += `${menuOptionNumber}️⃣ **👑 MANAGE ADMINS** - Admin user management\n`;
+        menuOptionNumber++;
+      }
+      
+      if (permissions.includes('system_control')) {
+        message += `${menuOptionNumber}️⃣ **📈 SYSTEM STATUS** - View system statistics\n`;
+        menuOptionNumber++;
+      }
+      
+      message += `${menuOptionNumber}️⃣ **❓ HELP** - Show detailed admin help\n`;
+      menuOptionNumber++;
+      message += `${menuOptionNumber}️⃣ **🔓 LOGOUT** - Exit admin session\n\n`;
+      
+      message += `💬 **Reply with the number** corresponding to your choice.\n`;
+      message += `💡 **Example:** Send "2" to list users`;
+      
+      await sock.sendMessage(jid, { text: message });
+      return;
+    }
+    
+    // Handle numbered admin menu choices (for the full menu system) - PRIORITY 4
+    if (adminSession.currentMenu === 'main_admin_menu' && !isNaN(parseInt(text))) {
+      const choice = parseInt(text);
+      const permissions = adminSession.permissions;
+      
+      if (choice < 1 || choice > adminSession.menuOptions) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Invalid choice!** Please select a number between 1 and ${adminSession.menuOptions}.\n\n💡 **Use ADMIN MENU** to see the options again.`
+        });
+        return;
+      }
+
+      let optionNumber = 1;
+      
+      // SHOW ADMIN MENU (Option 1)
+      if (choice === optionNumber) {
+        const permissions = adminSession.permissions;
+        let message = `🔐 **Admin Menu**\n\n`;
+        message += `👑 **Your Role:** ${adminSession.role}\n`;
+        message += `🔑 **Your Permissions:** ${permissions.join(', ')}\n\n`;
+        
+        message += `📋 **Choose an option by number:**\n\n`;
+        
+        let menuOptionNumber = 1;
+        
+        if (permissions.includes('view_sessions') || permissions.includes('view_all_sessions')) {
+          message += `${menuOptionNumber}️⃣ **👥 LIST USERS** - View all users and their status\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('manage_users')) {
+          message += `${menuOptionNumber}️⃣ **➕ ADD USER** - Create new user account\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **🗑️ REMOVE USER** - Delete user account\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **✏️ MODIFY USER** - Change user details\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **📊 MANAGE LIMITS** - Handle daily scraping limits\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('manage_admins')) {
+          message += `${menuOptionNumber}️⃣ **👑 MANAGE ADMINS** - Admin user management\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('system_control')) {
+          message += `${menuOptionNumber}️⃣ **📈 SYSTEM STATUS** - View system statistics\n`;
+          menuOptionNumber++;
+        }
+        
+        message += `${menuOptionNumber}️⃣ **❓ HELP** - Show detailed admin help\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **🔓 LOGOUT** - Exit admin session\n\n`;
+        
+        message += `💬 **Reply with the number** corresponding to your choice.\n`;
+        message += `💡 **Example:** Send "2" to list users`;
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      }
+      optionNumber++;
+      
+      // LIST USERS (Option 2)
+      if (permissions.includes('view_sessions') || permissions.includes('view_all_sessions')) {
+        if (choice === 2) {
+          try {
+            const result = adminManager.listUsers(adminSession.adminCode);
+            console.log(chalk.blue(`🔍 ADMIN USERS result:`, JSON.stringify(result, null, 2)));
+            
+            if (result.success) {
+              let message = `👥 **User Codes List**\n\n`;
+              if (result.users.length === 0) {
+                message += `No user codes found.`;
+              } else {
+                result.users.forEach((user, index) => {
+                  message += `${index + 1}. **${user.code}**\n`;
+                  message += `   📅 Created: ${new Date(user.createdAt).toLocaleString()}\n`;
+                  message += `   👤 Issued by: ${user.issuedBy}\n`;
+                  message += `   🔑 **Google Search API Keys:**\n`;
+                  message += `      • Key 1: ${formatApiKey(user.googleSearchKeys[0])}\n`;
+                  message += `      • Key 2: ${formatApiKey(user.googleSearchKeys[1])}\n`;
+                  message += `   🤖 **Gemini API Keys:**\n`;
+                  message += `      • Key 1: ${formatApiKey(user.geminiKeys[0])}\n`;
+                  message += `      • Key 2: ${formatApiKey(user.geminiKeys[1])}\n`;
+                  message += `   📊 Use count: ${user.useCount}\n`;
+                  if (user.lastUsed) {
+                    message += `   ⏰ Last used: ${new Date(user.lastUsed).toLocaleString()}\n`;
+                  }
+                  if (user.expiresAt) {
+                    message += `   ⏳ Expires: ${new Date(user.expiresAt).toLocaleString()}\n`;
+                  }
+                  message += '\n';
+                });
+              }
+              message += `**Total User Codes:** ${result.users.length}\n\n`;
+              message += `💡 **Use ADMIN MENU** to return to the main menu.`;
+              await sock.sendMessage(jid, { text: message });
+            } else {
+              await sock.sendMessage(jid, { text: `❌ **Error:** ${result.error}` });
+            }
+          } catch (error) {
+            console.error(chalk.red(`❌ Error in ADMIN USERS command:`, error.message));
+            await sock.sendMessage(jid, { text: `❌ **Internal Error:** ${error.message}` });
+          }
+          return;
+        }
+        optionNumber++;
+      }
+      
+      // ADD USER (Option 3)
+      if (permissions.includes('manage_users')) {
+        if (choice === 3) {
+          await sock.sendMessage(jid, { 
+            text: `➕ **Add New User**\n\n📝 **Usage:** ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>\n\n💡 **Example:** ADMIN ADD USER abc123 google_key1 google_key2 gemini_key1 gemini_key2\n\n⚠️ **Please provide:**\n• User code\n• 2 Google Search API keys\n• 2 Gemini API keys\n\n🔄 **Send the command above to add a user.**`
+          });
+          return;
+        }
+        optionNumber++;
+        
+        // MODIFY USER (Option 4)
+        if (choice === 4) {
+          try {
+            // Get list of users
+            const result = adminManager.listUsers(adminSession.adminCode);
+            if (result.success && result.users.length > 0) {
+              let message = `✏️ **Modify User - Select User**\n\n📋 **Available users to modify:**\n\n`;
+              
+              result.users.forEach((user, index) => {
+                message += `${index + 1}. **${user.code}**\n`;
+                message += `   📅 Created: ${new Date(user.createdAt).toLocaleString()}\n`;
+                message += `   👤 Issued by: ${user.issuedBy}\n`;
+                message += `   📊 Use count: ${user.useCount}\n`;
+                if (user.language) {
+                  message += `   🌐 Language: ${user.language}\n`;
+                }
+                message += `\n`;
+              });
+              
+              message += `💬 **Reply with the number** of the user you want to modify.\n`;
+              message += `💡 **Example:** Send "1" to modify user1\n\n`;
+              message += `🔙 **To go back:** Send "0"`;
+              
+              // Set admin session to modification mode
+              adminSession.currentMenu = 'modify_user_select';
+              adminSession.modifyUserData = { users: result.users };
+              adminSessions.set(jid, adminSession);
+              saveAdminSessions();
+              
+              await sock.sendMessage(jid, { text: message });
+            } else {
+              await sock.sendMessage(jid, { 
+                text: `❌ **No users found**\n\n💡 Use **ADMIN ADD USER** to create users first.`
+              });
+            }
+          } catch (error) {
+            console.error(chalk.red(`❌ Error in MODIFY USER:`, error.message));
+            await sock.sendMessage(jid, { text: `❌ **Error:** Failed to load users` });
+          }
+          return;
+        }
+        optionNumber++;
+        
+        // REMOVE USER (Option 5)
+        if (choice === 5) {
+          await sock.sendMessage(jid, { 
+            text: `🗑️ **Remove User**\n\n📝 **Usage:** ADMIN REMOVE USER <code>\n\n💡 **Example:** ADMIN REMOVE USER abc123\n\n⚠️ **This will permanently delete the user account!**\n\n🔄 **Send the command above to remove a user.**`
+          });
+          return;
+        }
+        optionNumber++;
+        
+        // MANAGE LIMITS (Option 6)
+        if (choice === 6) {
+          let message = `📊 **Manage Daily Limits**\n\n📋 **Available limit management options:**\n\n`;
+          message += `• **ADMIN ADD LIMIT <code> <amount>** - Add more daily scraping attempts\n`;
+          message += `• **ADMIN RESET LIMIT <code>** - Reset user's daily scraping count to 0\n`;
+          message += `• **ADMIN LIMIT STATUS <code>** - Check user's current daily limit status\n\n`;
+          message += `💡 **Examples:**\n`;
+          message += `• ADMIN ADD LIMIT abc123 2 (adds 2 more attempts)\n`;
+          message += `• ADMIN RESET LIMIT abc123 (resets to 0)\n`;
+          message += `• ADMIN LIMIT STATUS abc123 (shows current status)\n\n`;
+          message += `🔄 **Send any of the commands above to manage limits.**`;
+          
+          await sock.sendMessage(jid, { text: message });
+          return;
+        }
+        optionNumber++;
+      }
+      
+      // MANAGE ADMINS (Option 7)
+      if (permissions.includes('manage_admins')) {
+        if (choice === 7) {
+          let message = `👑 **Manage Admins**\n\n📋 **Available admin management options:**\n\n`;
+          message += `• **ADMIN ADMINS** - List all admin codes\n`;
+          message += `• **ADMIN ADD ADMIN <code> <role>** - Add new admin\n`;
+          message += `• **ADMIN REMOVE ADMIN <code>** - Remove admin code\n\n`;
+          message += `💡 **Available roles:** super_admin, admin, moderator\n`;
+          message += `💡 **Examples:**\n`;
+          message += `• ADMIN ADMINS (list all)\n`;
+          message += `• ADMIN ADD ADMIN mod123 moderator\n`;
+          message += `• ADMIN REMOVE ADMIN mod123\n\n`;
+          message += `🔄 **Send any of the commands above to manage admins.**`;
+          
+          await sock.sendMessage(jid, { text: message });
+          return;
+        }
+        optionNumber++;
+      }
+      
+      // SYSTEM STATUS (Option 8)
+      if (permissions.includes('system_control')) {
+        if (choice === 8) {
+          console.log(chalk.blue(`🔍 Processing ADMIN STATUS command for ${adminSession.adminCode}`));
+          try {
+            const result = adminManager.getSystemStatus(adminSession.adminCode);
+            console.log(chalk.blue(`🔍 ADMIN STATUS result:`, JSON.stringify(result, null, 2)));
+            
+            if (result.success) {
+              const status = result.status;
+              let message = `📊 **System Status**\n\n`;
+              message += `👥 **Users:** ${status.totalUsers} total, ${status.authenticatedUsers} active, ${status.blockedUsers} blocked\n`;
+              message += `🔑 **Codes:** ${status.totalCodes} user codes\n`;
+              message += `👑 **Admins:** ${status.totalAdmins} admin codes\n\n`;
+              message += `⚙️ **System Settings:**\n`;
+              message += `• Max failed auth attempts: ${status.systemSettings.max_failed_auth_attempts}\n`;
+              message += `• Auto unblock hours: ${status.systemSettings.auto_unblock_hours}\n`;
+              message += `• Session timeout hours: ${status.systemSettings.session_timeout_hours}\n`;
+              message += `• Max users per admin: ${status.systemSettings.max_users_per_admin}\n\n`;
+              message += `💡 **Use ADMIN MENU** to return to the main menu.`;
+              
+              await sock.sendMessage(jid, { text: message });
+            } else {
+              await sock.sendMessage(jid, { text: `❌ **Error:** ${result.error}` });
+            }
+          } catch (error) {
+            console.error(chalk.red(`❌ Error in ADMIN STATUS command:`, error.message));
+            await sock.sendMessage(jid, { text: `❌ **Internal Error:** ${error.message}` });
+          }
+          return;
+        }
+        optionNumber++;
+      }
+      
+      // HELP (Option 9)
+      if (choice === 9) {
+        await sock.sendMessage(jid, { 
+          text: `❓ **Admin Help**\n\n💡 **Use ADMIN HELP** to see all available commands.\n\n💡 **Use ADMIN MENU** to return to the numbered menu.\n\n💡 **Use ADMIN LOGOUT** to exit admin session.`
+        });
+        return;
+      }
+      optionNumber++;
+      
+      // LOGOUT (Option 10)
+      if (choice === 10) {
+        try {
+          const adminCode = adminSession.adminCode;
+          const phoneNumber = jid.split('@')[0];
+          
+          // Clear the admin session
+          adminSessions.delete(jid);
+          saveAdminSessions();
+          
+          await sock.sendMessage(jid, { 
+            text: `🔓 **Admin Logout Successful!**\n\n✅ You have been logged out of your admin session.\n\n💡 **To log back in:**\n• Send ADMIN: <admin_code> to start a new admin session\n• Example: ADMIN: admin123\n\n💡 **To become user:**\n• Send CODE: <user_code> to start a user session\n• Example: CODE: user1`
+          });
+          
+          console.log(chalk.yellow(`🔓 Admin ${phoneNumber} logged out (was using code: ${adminCode})`));
+        } catch (error) {
+          console.error(chalk.red(`❌ Error in admin logout:`, error.message));
+          await sock.sendMessage(jid, { 
+            text: `❌ **Error during logout:** ${error.message}` 
+          });
+        }
+        return;
+      }
+    }
+    
+    // INTERACTIVE MODIFY USER FLOW
+    if (adminSession.currentMenu === 'modify_user_select') {
+      if (text === '0') {
+        // Go back to main menu
+        adminSession.currentMenu = 'main_admin_menu';
+        adminSession.modifyUserData = null;
+        adminSessions.set(jid, adminSession);
+        saveAdminSessions();
+        
+        // Show main menu again
+        const permissions = adminSession.permissions;
+        let message = `🔐 **Admin Menu**\n\n`;
+        message += `👑 **Your Role:** ${adminSession.role}\n`;
+        message += `🔑 **Your Permissions:** ${permissions.join(', ')}\n\n`;
+        
+        message += `📋 **Choose an option by number:**\n\n`;
+        
+        let menuOptionNumber = 1;
+        
+        if (permissions.includes('view_sessions') || permissions.includes('view_all_sessions')) {
+          message += `${menuOptionNumber}️⃣ **👥 LIST USERS** - View all users and their status\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('manage_users')) {
+          message += `${menuOptionNumber}️⃣ **➕ ADD USER** - Create new user account\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **🗑️ REMOVE USER** - Delete user account\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **✏️ MODIFY USER** - Change user details\n`;
+          menuOptionNumber++;
+          message += `${menuOptionNumber}️⃣ **📊 MANAGE LIMITS** - Handle daily scraping limits\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('manage_admins')) {
+          message += `${menuOptionNumber}️⃣ **👑 MANAGE ADMINS** - Admin user management\n`;
+          menuOptionNumber++;
+        }
+        
+        if (permissions.includes('system_control')) {
+          message += `${menuOptionNumber}️⃣ **📈 SYSTEM STATUS** - View system statistics\n`;
+          menuOptionNumber++;
+        }
+        
+        message += `${menuOptionNumber}️⃣ **❓ HELP** - Show detailed admin help\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **🔓 LOGOUT** - Exit admin session\n\n`;
+        
+        message += `💬 **Reply with the number** corresponding to your choice.\n`;
+        message += `💡 **Example:** Send "2" to list users`;
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      }
+      
+      // Handle user selection
+      const userChoice = parseInt(text);
+      if (!isNaN(userChoice) && userChoice >= 1 && userChoice <= adminSession.modifyUserData.users.length) {
+        const selectedUser = adminSession.modifyUserData.users[userChoice - 1];
+        
+        let message = `✏️ **Modify User: ${selectedUser.code}**\n\n`;
+        message += `📋 **Current user information:**\n`;
+        message += `• **Code:** ${selectedUser.code}\n`;
+        message += `• **Created:** ${new Date(selectedUser.createdAt).toLocaleString()}\n`;
+        message += `• **Issued by:** ${selectedUser.issuedBy}\n`;
+        message += `• **Use count:** ${selectedUser.useCount}\n`;
+        if (selectedUser.language) {
+          message += `• **Language:** ${selectedUser.language}\n`;
+        }
+        message += `• **Google Keys:** ${formatApiKey(selectedUser.googleSearchKeys[0])}, ${formatApiKey(selectedUser.googleSearchKeys[1])}\n`;
+        message += `• **Gemini Keys:** ${formatApiKey(selectedUser.geminiKeys[0])}, ${formatApiKey(selectedUser.geminiKeys[1])}\n\n`;
+        
+        message += `📝 **What would you like to modify?**\n\n`;
+        message += `1️⃣ **Change User Code** - Modify the access code\n`;
+        message += `2️⃣ **Update API Keys** - Change Google/Gemini keys\n`;
+        message += `3️⃣ **Change Language** - Update language preference\n`;
+        message += `4️⃣ **Reset Use Count** - Reset daily usage count\n`;
+        message += `5️⃣ **Add Daily Limit** - Increase daily scraping limit\n\n`;
+        
+        message += `💬 **Reply with the number** of what you want to modify.\n`;
+        message += `🔙 **To go back:** Send "0"`;
+        
+        // Set admin session to modification type selection
+        adminSession.currentMenu = 'modify_user_type';
+        adminSession.modifyUserData.selectedUser = selectedUser;
+        adminSessions.set(jid, adminSession);
+        saveAdminSessions();
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      } else {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Invalid choice!** Please select a number between 1 and ${adminSession.modifyUserData.users.length}, or send "0" to go back.`
+        });
+        return;
+      }
+    }
+    
+    // Handle modification type selection
+    if (adminSession.currentMenu === 'modify_user_type') {
+      if (text === '0') {
+        // Go back to user selection
+        adminSession.currentMenu = 'modify_user_select';
+        adminSession.modifyUserData.selectedUser = null;
+        adminSessions.set(jid, adminSession);
+        saveAdminSessions();
+        
+        // Show user list again
+        let message = `✏️ **Modify User - Select User**\n\n📋 **Available users to modify:**\n\n`;
+        
+        adminSession.modifyUserData.users.forEach((user, index) => {
+          message += `${index + 1}. **${user.code}**\n`;
+          message += `   📅 Created: ${new Date(user.createdAt).toLocaleString()}\n`;
+          message += `   👤 Issued by: ${user.issuedBy}\n`;
+          message += `   📊 Use count: ${user.useCount}\n`;
+          if (user.language) {
+            message += `   🌐 Language: ${user.language}\n`;
+          }
+          message += `\n`;
+        });
+        
+        message += `💬 **Reply with the number** of the user you want to modify.\n`;
+        message += `💡 **Example:** Send "1" to modify user1\n\n`;
+        message += `🔙 **To go back:** Send "0"`;
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      }
+      
+      const modificationChoice = parseInt(text);
+      const selectedUser = adminSession.modifyUserData.selectedUser;
+      
+      switch (modificationChoice) {
+        case 1: // Change User Code
+          await sock.sendMessage(jid, { 
+            text: `✏️ **Change User Code**\n\n📝 **Current code:** ${selectedUser.code}\n\n💬 **Send the new code** for this user.\n\n💡 **Example:** newuser123\n\n🔙 **To go back:** Send "0"`
+          });
+          
+          adminSession.currentMenu = 'modify_user_code';
+          adminSessions.set(jid, adminSession);
+          saveAdminSessions();
+          return;
+          
+        case 2: // Update API Keys
+          await sock.sendMessage(jid, { 
+            text: `✏️ **Update API Keys**\n\n📝 **Current keys:**\n• Google 1: ${formatApiKey(selectedUser.googleSearchKeys[0])}\n• Google 2: ${formatApiKey(selectedUser.googleSearchKeys[1])}\n• Gemini 1: ${formatApiKey(selectedUser.geminiKeys[0])}\n• Gemini 2: ${formatApiKey(selectedUser.geminiKeys[1])}\n\n💬 **Send the new keys** in this format:\n<google_key1> <google_key2> <gemini_key1> <gemini_key2>\n\n💡 **Example:** newkey1 newkey2 gemkey1 gemkey2\n\n🔙 **To go back:** Send "0"`
+          });
+          
+          adminSession.currentMenu = 'modify_user_keys';
+          adminSessions.set(jid, adminSession);
+          saveAdminSessions();
+          return;
+          
+        case 3: // Change Language
+          await sock.sendMessage(jid, { 
+            text: `✏️ **Change Language**\n\n📝 **Current language:** ${selectedUser.language || 'en'}\n\n💬 **Available languages:**\n1️⃣ **en** - English\n2️⃣ **fr** - French\n3️⃣ **ar** - Arabic\n\n💬 **Send the language code** (en, fr, or ar)\n\n💡 **Example:** fr\n\n🔙 **To go back:** Send "0"`
+          });
+          
+          adminSession.currentMenu = 'modify_user_language';
+          adminSessions.set(jid, adminSession);
+          saveAdminSessions();
+          return;
+          
+        case 4: // Reset Daily Scraping Count
+          await sock.sendMessage(jid, { 
+            text: `✏️ **Reset Daily Scraping Count**\n\n📝 **Current daily count:** ${selectedUser.dailyScraping?.count || 0}/4\n\n⚠️ **This will reset the daily scraping count to 0.**\n\n💬 **Type 'CONFIRM'** to reset the daily count.\n\n🔙 **To go back:** Send "0"`
+          });
+          
+          adminSession.currentMenu = 'modify_user_reset_count';
+          adminSessions.set(jid, adminSession);
+          saveAdminSessions();
+          return;
+          
+        case 5: // Add Daily Limit
+          await sock.sendMessage(jid, { 
+            text: `✏️ **Add Daily Limit**\n\n📝 **Current daily limit:** ${selectedUser.dailyScrapingLimit || 4}\n\n💬 **Send the number** of additional daily scraping attempts to add.\n\n💡 **Example:** 2 (adds 2 more attempts)\n\n🔙 **To go back:** Send "0"`
+          });
+          
+          adminSession.currentMenu = 'modify_user_add_limit';
+          adminSessions.set(jid, adminSession);
+          saveAdminSessions();
+          return;
+          
+        default:
+          await sock.sendMessage(jid, { 
+            text: `❌ **Invalid choice!** Please select a number between 1-5, or send "0" to go back.`
+          });
+          return;
+      }
+    }
+    
+    // Handle specific modification types
+    if (adminSession.currentMenu === 'modify_user_code') {
+      if (text === '0') {
+        // Go back to modification type selection
+        adminSession.currentMenu = 'modify_user_type';
+        adminSessions.set(jid, adminSession);
+        saveAdminSessions();
+        
+        const selectedUser = adminSession.modifyUserData.selectedUser;
+        let message = `✏️ **Modify User: ${selectedUser.code}**\n\n📋 **Current user information:**\n`;
+        message += `• **Code:** ${selectedUser.code}\n`;
+        message += `• **Created:** ${new Date(selectedUser.createdAt).toLocaleString()}\n`;
+        message += `• **Issued by:** ${selectedUser.issuedBy}\n`;
+        message += `• **Use count:** ${selectedUser.useCount}\n`;
+        if (selectedUser.language) {
+          message += `• **Language:** ${selectedUser.language}\n`;
+        }
+        message += `• **Google Keys:** ${formatApiKey(selectedUser.googleSearchKeys[0])}, ${formatApiKey(selectedUser.googleSearchKeys[1])}\n`;
+        message += `• **Gemini Keys:** ${formatApiKey(selectedUser.geminiKeys[0])}, ${formatApiKey(selectedUser.geminiKeys[1])}\n\n`;
+        
+        message += `📝 **What would you like to modify?**\n\n`;
+        message += `1️⃣ **Change User Code** - Modify the access code\n`;
+        message += `2️⃣ **Update API Keys** - Change Google/Gemini keys\n`;
+        message += `3️⃣ **Change Language** - Update language preference\n`;
+        message += `4️⃣ **Reset Use Count** - Reset daily usage count\n`;
+        message += `5️⃣ **Add Daily Limit** - Increase daily scraping limit\n\n`;
+        
+        message += `💬 **Reply with the number** of what you want to modify.\n`;
+        message += `🔙 **To go back:** Send "0"`;
+        
+        await sock.sendMessage(jid, { text: message });
+        return;
+      }
+      
+      // Handle code change
+      const newCode = text.trim();
+      if (newCode.length < 3) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Invalid code!** Code must be at least 3 characters long.\n\n💬 **Try again** or send "0" to go back.`
+        });
+        return;
+      }
+      
+      try {
+        const result = adminManager.modifyUserCode(adminSession.adminCode, adminSession.modifyUserData.selectedUser.code, newCode);
+        if (result.success) {
+          await sock.sendMessage(jid, { 
+            text: `✅ **User Code Modified Successfully!**\n\n📝 **Old code:** ${adminSession.modifyUserData.selectedUser.code}\n📝 **New code:** ${newCode}\n\n💡 **The user can now use the new code to access the system.**`
+          });
+        } else {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Error:** ${result.error}`
+          });
+        }
+      } catch (error) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error:** Failed to modify user code`
+        });
+      }
+      
+      // Return to main menu
+      adminSession.currentMenu = 'main_admin_menu';
+      adminSession.modifyUserData = null;
+      adminSessions.set(jid, adminSession);
+      saveAdminSessions();
+      
+      // Show main menu
+      const permissions = adminSession.permissions;
+      let message = `🔐 **Admin Menu**\n\n`;
+      message += `👑 **Your Role:** ${adminSession.role}\n`;
+      message += `🔑 **Your Permissions:** ${permissions.join(', ')}\n\n`;
+      
+      message += `📋 **Choose an option by number:**\n\n`;
+      
+      let menuOptionNumber = 1;
+      
+      if (permissions.includes('view_sessions') || permissions.includes('view_all_sessions')) {
+        message += `${menuOptionNumber}️⃣ **👥 LIST USERS** - View all users and their status\n`;
+        menuOptionNumber++;
+      }
+      
+      if (permissions.includes('manage_users')) {
+        message += `${menuOptionNumber}️⃣ **➕ ADD USER** - Create new user account\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **🗑️ REMOVE USER** - Delete user account\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **✏️ MODIFY USER** - Change user details\n`;
+        menuOptionNumber++;
+        message += `${menuOptionNumber}️⃣ **📊 MANAGE LIMITS** - Handle daily scraping limits\n`;
+        menuOptionNumber++;
+      }
+      
+      if (permissions.includes('manage_admins')) {
+        message += `${menuOptionNumber}️⃣ **👑 MANAGE ADMINS** - Admin user management\n`;
+        menuOptionNumber++;
+      }
+      
+      if (permissions.includes('system_control')) {
+        message += `${menuOptionNumber}️⃣ **📈 SYSTEM STATUS** - View system statistics\n`;
+        menuOptionNumber++;
+      }
+      
+      message += `${menuOptionNumber}️⃣ **❓ HELP** - Show detailed admin help\n`;
+      menuOptionNumber++;
+      message += `${menuOptionNumber}️⃣ **🔓 LOGOUT** - Exit admin session\n\n`;
+      
+      message += `💬 **Reply with the number** corresponding to your choice.\n`;
+      message += `💡 **Example:** Send "2" to list users`;
+      
+      await sock.sendMessage(jid, { text: message });
+      return;
+    }
+    
     // Admin command: List users
     if (text.toUpperCase() === 'ADMIN USERS') {
       try {
