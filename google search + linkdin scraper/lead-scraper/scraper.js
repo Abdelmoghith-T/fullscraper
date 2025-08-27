@@ -171,10 +171,10 @@ async function performAutoSave() {
     if (currentDataType === 'linkedin' || (currentResults.length > 0 && currentResults[0].name && currentResults[0].profileUrl)) {
       // Auto-save LinkedIn results (deduplicated)
       const { exportLinkedInResults } = await import('./helpers/exportToCsv.js');
-      // Use session ID for unique auto-save filename if running in unified mode
-      const sessionSuffix = process.env.SESSION_ID ? `_session_${process.env.SESSION_ID}` : '';
+      // Use LinkedIn session code for unique auto-save filename
+      const sessionSuffix = process.env.LINKEDIN_SESSION_CODE ? `_SESSION_${process.env.LINKEDIN_SESSION_CODE}` : '';
       const filename = `${currentNiche.replace(/[^a-zA-Z0-9]/g, '_')}_linkedin_results_autosave${sessionSuffix}.xlsx`;
-      await exportLinkedInResults(currentResults, 'xlsx', filename);
+      await exportLinkedInResults(currentResults, 'xlsx', filename, currentNiche);
       console.log(chalk.green(`✅ Auto-saved LinkedIn results to: ${filename}`));
     } else {
       // Auto-save Google Search results (without AI analysis for speed)
@@ -265,7 +265,7 @@ async function handleGlobalInterruption() {
           // Save LinkedIn partial results
           console.log(chalk.blue(`💾 Saving ${currentResults.length} LinkedIn profiles...`));
           const { exportLinkedInResults } = await import('./helpers/exportToCsv.js');
-          const filename = await exportLinkedInResults(currentResults, 'xlsx');
+          const filename = await exportLinkedInResults(currentResults, 'xlsx', null, currentNiche);
           console.log(chalk.green(`✅ LinkedIn partial results saved to: ${filename}`));
         } else {
           // Save Google Search partial results
@@ -987,8 +987,21 @@ async function main() {
   
   // Inject Gemini API key from environment if not set in config
   if (process.env.GEMINI_API_KEY && (!config.gemini.apiKey || config.gemini.apiKey === 'YOUR_GEMINI_API_KEY_HERE')) {
-    config.gemini.apiKey = process.env.GEMINI_API_KEY;
-    console.log(chalk.green('✅ Injected Gemini API key from environment variables'));
+    const geminiKey = process.env.GEMINI_API_KEY;
+    // ✅ FIXED: Only accept valid Gemini API keys, reject placeholders
+    if (geminiKey && 
+        !geminiKey.includes('YOUR_') && 
+        !geminiKey.includes('PLACEHOLDER') &&
+        !geminiKey.includes('HERE') &&
+        geminiKey !== 'test' &&
+        geminiKey !== 'g1' &&
+        geminiKey !== 'g2' &&
+        geminiKey.length > 20) {
+      config.gemini.apiKey = geminiKey;
+      console.log(chalk.green('✅ Injected valid Gemini API key from environment variables'));
+    } else {
+      console.log(chalk.red('❌ No valid Gemini API key found in environment variables'));
+    }
   }
   
   // Inject Google Search API keys from environment if not set in config
@@ -997,14 +1010,24 @@ async function main() {
     let i = 1;
     while (process.env[`GOOGLE_API_KEY_${i}`]) {
       const key = process.env[`GOOGLE_API_KEY_${i}`];
-      if (key && key !== 'YOUR_API_KEY_HERE' && key.length > 20) {
+      // ✅ FIXED: Only accept valid API keys, reject placeholders
+      if (key && 
+          !key.includes('YOUR_') && 
+          !key.includes('PLACEHOLDER') &&
+          !key.includes('HERE') &&
+          key !== 'test' &&
+          key !== 'api1' &&
+          key !== 'api2' &&
+          key.length > 20) {
         envKeys.push(key);
       }
       i++;
     }
     if (envKeys.length > 0) {
       config.googleSearch.apiKeys = envKeys;
-      console.log(chalk.green(`✅ Injected ${envKeys.length} Google Search API keys from environment variables`));
+      console.log(chalk.green(`✅ Injected ${envKeys.length} valid Google Search API keys from environment variables`));
+    } else {
+      console.log(chalk.red(`❌ No valid Google Search API keys found in environment variables`));
     }
   }
   
@@ -1085,6 +1108,31 @@ async function main() {
       allResults = await processLinkedInSearch(searchQueries, niche, contentValidator);
     } else if (dataSource === 'google_search') {
       allResults = await processGoogleSearch(searchQueries, niche, contentValidator, dataType);
+      
+      // ✅ NEW: Option to disable AI filtering for Google Search to preserve more results
+      const disableAIFiltering = process.env.DISABLE_AI_FILTERING === 'true' || 
+                                 process.env.DISABLE_AI_FILTERING === '1';
+      
+      if (disableAIFiltering) {
+        console.log(chalk.yellow('⚠️  AI filtering disabled for Google Search - preserving all validated results'));
+        console.log(chalk.blue(`📊 Total results before AI filtering: ${allResults.length}`));
+        
+        // Skip AI analysis and use all results
+        const finalResults = allResults;
+        const uniqueEmails = new Set(finalResults.filter(r => r.email).map(r => r.email));
+        const uniquePhones = new Set(finalResults.filter(r => r.phone).map(r => r.phone));
+        
+        console.log(chalk.green(`✅ Final results without AI filtering: ${finalResults.length} entries`));
+        console.log(chalk.gray(`   • Unique emails: ${uniqueEmails.size}`));
+        console.log(chalk.gray(`   • Unique phones: ${uniquePhones.size}`));
+        
+        // Save results without AI filtering
+        const filename = `${niche.replace(/[^a-zA-Z0-9]/g, '_')}_results_no_ai_filtering.txt`;
+        await exportResults(finalResults, 'txt', filename, niche);
+        console.log(chalk.green(`✅ Results saved to: ${filename}`));
+        
+        return;
+      }
     } else if (dataSource === 'google_maps') {
       allResults = await processGoogleMapsSearch(niche, contentValidator);
     } else if (dataSource === 'all_sources') {

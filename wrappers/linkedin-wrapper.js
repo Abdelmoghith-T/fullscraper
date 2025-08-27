@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import path from 'path';
 import { ScraperInterface } from '../core/scraper-interface.js';
 
 /**
@@ -11,6 +12,20 @@ export class LinkedInScraper extends ScraperInterface {
     // Generate unique session ID for this scraping session
     this.sessionId = Date.now();
     this.sessionTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    // Generate a unique 6-character code for this session
+    this.sessionCode = this.generateSessionCode();
+  }
+
+  /**
+   * Generate a unique 6-character session code
+   */
+  generateSessionCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 6; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
   }
 
   /**
@@ -56,11 +71,12 @@ export class LinkedInScraper extends ScraperInterface {
       console.log(chalk.blue('🔗 Searching LinkedIn profiles and company pages...'));
       
       // Use the same child process approach as Google Search wrapper
-      // Pass API keys to the scraper
+      // Pass API keys and session code to the scraper
       return await this.runOriginalLinkedInScraper({ 
         niche, 
         ...options,
-        apiKeys: options.apiKeys
+        apiKeys: options.apiKeys,
+        sessionCode: this.sessionCode
       });
       
     } catch (error) {
@@ -119,6 +135,14 @@ export class LinkedInScraper extends ScraperInterface {
         console.log(`   🤖 Injected Gemini API key into child process`);
       } else {
         console.log(chalk.red(`   ❌ No Gemini API keys found in apiKeys:`, apiKeys));
+      }
+      
+      // Inject session code for unique file naming
+      if (options.sessionCode) {
+        childEnv.LINKEDIN_SESSION_CODE = options.sessionCode;
+        console.log(`   🔑 Injected LinkedIn session code: ${options.sessionCode}`);
+      } else {
+        console.log(chalk.red(`   ❌ No session code found in options:`, options));
       }
       
       // Debug: Log the final child environment
@@ -410,10 +434,11 @@ export class LinkedInScraper extends ScraperInterface {
   async parseLinkedInResults(niche = '') {
     const fs = await import('fs');
     const path = await import('path');
+    const xlsx = await import('xlsx');
     
     try {
-      // Look for results files in the LinkedIn directory
-      const resultsDir = './google search + linkdin scraper/lead-scraper';
+      // Look for results files in the main results directory
+      const resultsDir = path.join(process.cwd(), 'results');
       const files = fs.readdirSync(resultsDir);
       
       // Find the most recent LinkedIn results file for this specific niche
@@ -425,15 +450,16 @@ export class LinkedInScraper extends ScraperInterface {
         niche.toLowerCase().replace(/\s+/g, '_')
       ];
       
-             // Look for current session files (autosave or partial results)
-      const sessionAutosavePattern = `_linkedin_results_autosave_session_${this.sessionId}.xlsx`;
-      const sessionPartialPattern = `_linkedin_results_partial_session_${this.sessionId}.xlsx`;
+             // Look for current session files using the unique session code
+      const sessionCodePattern = `_SESSION_${this.sessionCode}`;
       const sessionFiles = files.filter(f => 
-        f.includes(sessionAutosavePattern) || f.includes(sessionPartialPattern)
+        f.includes('_linkedin_results_') && 
+        f.includes(sessionCodePattern) &&
+        f.endsWith('.xlsx')
       );
       
-      // Also look for final results files (not just autosave)
-      const finalResultsPattern = `_linkedin_results_${this.sessionId}.xlsx`;
+      // Also look for final results files with session code
+      const finalResultsPattern = `_linkedin_results_SESSION_${this.sessionCode}`;
       const finalResultsFiles = files.filter(f => f.includes(finalResultsPattern));
       
       let resultFiles;
@@ -479,25 +505,68 @@ export class LinkedInScraper extends ScraperInterface {
       console.log(chalk.green(`✅ Found LinkedIn results file: ${mostRecent.name}`));
       console.log(chalk.blue(`📊 File size: ${mostRecent.size} bytes`));
       
-      // Estimate profile count from file size (rough approximation)
-      const estimatedProfiles = Math.max(1, Math.floor(mostRecent.size / 1200)); // ~1.2KB per profile average
+      // Read the actual Excel file to get real data
+      const excelFilePath = path.join(resultsDir, mostRecent.name);
+      const workbook = xlsx.readFile(excelFilePath);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
       
-      console.log(chalk.green(`📊 Estimated ${estimatedProfiles} LinkedIn profiles saved`));
-      console.log(chalk.cyan(`📁 File location: google search + linkdin scraper/lead-scraper/${mostRecent.name}`));
-      console.log(chalk.blue(`💡 LinkedIn results are saved in XLSX format for manual access`));
+      // Convert Excel data to JSON
+      const rawData = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
       
-      // Return estimated count as placeholder profiles for summary
-      const placeholderResults = [];
-      for (let i = 0; i < estimatedProfiles; i++) {
-        placeholderResults.push({
-          name: `LinkedIn Profile ${i + 1}`,
-          source: 'LinkedIn',
-          profileUrl: 'See XLSX file for details',
-          savedInFile: mostRecent.name
+      // Skip header row and process data
+      const headers = rawData[0] || [];
+      const dataRows = rawData.slice(1);
+      
+      console.log(chalk.green(`📊 Found ${dataRows.length} LinkedIn profiles in Excel file`));
+      console.log(chalk.cyan(`📁 File location: ${resultsDir}/${mostRecent.name}`));
+      console.log(chalk.blue(`💡 Successfully parsed Excel data with headers: ${headers.join(', ')}`));
+      
+      // Convert Excel rows to proper LinkedIn profile objects
+      const linkedInProfiles = dataRows.map((row, index) => {
+        const profile = {};
+        
+        // Map Excel columns to profile properties
+        headers.forEach((header, colIndex) => {
+          const value = row[colIndex] || '';
+          switch (header.toLowerCase()) {
+            case 'name':
+              profile.name = value;
+              break;
+            case 'profileurl':
+              profile.profileUrl = value;
+              break;
+            case 'bio':
+              profile.bio = value;
+              break;
+            case 'source':
+              profile.source = value || 'LinkedIn';
+              break;
+            case 'iscompanypage':
+              profile.isCompanyPage = value === 'true' || value === true;
+              break;
+            case 'query':
+              profile.query = value;
+              break;
+            case 'type':
+              profile.type = value || 'Individual';
+              break;
+            default:
+              profile[header] = value;
+          }
         });
-      }
+        
+        // Ensure required fields exist
+        if (!profile.name) profile.name = `LinkedIn Profile ${index + 1}`;
+        if (!profile.source) profile.source = 'LinkedIn';
+        if (!profile.profileUrl) profile.profileUrl = 'Profile URL not available';
+        
+        return profile;
+      });
       
-      return placeholderResults;
+      console.log(chalk.green(`✅ Successfully parsed ${linkedInProfiles.length} LinkedIn profiles from Excel file`));
+      
+      return linkedInProfiles;
              
     } catch (error) {
       console.log(chalk.yellow('⚠️  Could not parse LinkedIn results:', error.message));

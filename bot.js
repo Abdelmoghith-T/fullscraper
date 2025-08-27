@@ -87,7 +87,7 @@ healthServer.listen(PORT, () => {
  * Progress Simulator - Creates realistic loading bar experience for WhatsApp
  */
 class ProgressSimulator {
-  constructor() {
+  constructor(language = 'en') {
     this.currentProgress = 0;
     this.isComplete = false;
     this.isStarted = false;
@@ -98,6 +98,7 @@ class ProgressSimulator {
     this.onProgress = null;
     this.jid = null;
     this.sock = null;
+    this.language = language;
   }
 
   /**
@@ -130,14 +131,15 @@ class ProgressSimulator {
     this.currentProgress = 100;
     this.isComplete = true;
     
-    if (this.onProgress) {
-      this.onProgress({
-        processed: 100,
-        total: 100,
-        phase: this.phase,
-        message: 'Progress: 100% — Scraping complete!'
-      });
-    }
+    // Don't send completion message - let the bot handle it
+    // if (this.onProgress) {
+    //   this.onProgress({
+    //     processed: 100,
+    //     total: 100,
+    //     phase: this.phase,
+    //     message: 'Progress: 100% — Scraping complete!'
+    //   });
+    // }
   }
 
   /**
@@ -249,13 +251,16 @@ class ProgressSimulator {
    * Generate realistic progress messages
    */
   generateProgressMessage(progress) {
+    // Import getMessage function for localization
+    const { getMessage } = require('./languages.js');
+    
     const messages = [
-      `Progress: ${progress.toFixed(1)}% - Analyzing search results...`,
-      `Progress: ${progress.toFixed(1)}% - Processing business data...`,
-      `Progress: ${progress.toFixed(1)}% - Extracting contact information...`,
-      `Progress: ${progress.toFixed(1)}% - Validating business profiles...`,
-      `Progress: ${progress.toFixed(1)}% - Compiling results...`,
-      `Progress: ${progress.toFixed(1)}% - Finalizing data...`
+      getMessage(this.language, 'progress_analyzing', { progress: progress.toFixed(1) }),
+      getMessage(this.language, 'progress_processing', { progress: progress.toFixed(1) }),
+      getMessage(this.language, 'progress_extracting', { progress: progress.toFixed(1) }),
+      getMessage(this.language, 'progress_validating', { progress: progress.toFixed(1) }),
+      getMessage(this.language, 'progress_compiling', { progress: progress.toFixed(1) }),
+      getMessage(this.language, 'progress_finalizing', { progress: progress.toFixed(1) })
     ];
     
     // Rotate through messages based on progress
@@ -594,7 +599,7 @@ async function checkAndSendPendingResults() {
         console.log(chalk.blue(`📄 Found pending results file: ${pendingResult.filePath}`));
         
         // Send the results
-        await sendResultsToUser(sock, jid, pendingResult.filePath, pendingResult.meta);
+        await sendResultsToUser(sock, jid, pendingResult.filePath, pendingResult.meta, session.language);
         
         // Remove from pending
         pendingResults.delete(jid);
@@ -731,7 +736,7 @@ async function sendFile(sock, jid, filePath, caption = '') {
 }
 
 // Dedicated function to send results to user with proper format handling
-async function sendResultsToUser(sock, jid, filePath, meta) {
+async function sendResultsToUser(sock, jid, filePath, meta, userLanguage = 'en') {
   try {
     if (!fs.existsSync(filePath)) {
       throw new Error(`Results file not found: ${filePath}`);
@@ -740,19 +745,20 @@ async function sendResultsToUser(sock, jid, filePath, meta) {
     const fileName = path.basename(filePath);
     const fileExtension = path.extname(filePath).toLowerCase();
     
-    // Create appropriate caption based on source and format
-    let caption = `📄 **Results File: ${fileName}**\n\n`;
-    caption += `📊 **Summary:** ${meta.totalResults || 'Unknown'} results\n`;
-    caption += `🎯 **Source:** ${meta.source || 'Unknown'}\n`;
-    caption += `📋 **Format:** ${meta.format || fileExtension.toUpperCase()}\n`;
+    // Create appropriate caption based on source and format in user's language
+    const { getMessage } = await import('./languages.js');
+    let caption = `📄 **${getMessage(userLanguage, 'file_ready', { filename: fileName })}**\n\n`;
+    caption += `📊 **${getMessage(userLanguage, 'summary')}:** ${meta.totalResults || 'Unknown'} ${getMessage(userLanguage, 'results')}\n`;
+    caption += `🎯 **${getMessage(userLanguage, 'source')}:** ${meta.source || 'Unknown'}\n`;
+    caption += `📋 **${getMessage(userLanguage, 'format')}:** ${meta.format || fileExtension.toUpperCase()}\n`;
     
     // Add source-specific information
     if (meta.source === 'GOOGLE') {
-      caption += `🔍 **Type:** Google Search Results\n`;
+      caption += `🔍 **${getMessage(userLanguage, 'type')}:** ${getMessage(userLanguage, 'google_search_results')}\n`;
     } else if (meta.source === 'LINKEDIN') {
-      caption += `💼 **Type:** LinkedIn Profiles\n`;
+      caption += `💼 **${getMessage(userLanguage, 'type')}:** ${getMessage(userLanguage, 'linkedin_profiles')}\n`;
     } else if (meta.source === 'MAPS') {
-      caption += `🗺️ **Type:** Google Maps Businesses\n`;
+      caption += `🗺️ **${getMessage(userLanguage, 'type')}:** ${getMessage(userLanguage, 'google_maps_businesses')}\n`;
     }
     
     console.log(chalk.blue(`📤 Sending results to ${jid}: ${fileName}`));
@@ -3607,17 +3613,8 @@ async function handleMessage(sock, message) {
           text: getMessage(session.language, 'main_menu')
         });
         return;
-      } else if (text === '0') {
-        // User wants to go back to main menu
-        session.currentStep = 'main_menu';
-        saveJson(SESSIONS_FILE, sessions);
-        
-        await sock.sendMessage(jid, { 
-          text: getMessage(session.language || 'en', 'main_menu')
-        });
-        return;
       } else {
-        // Resend welcome message for any other invalid input until language is selected
+        // Resend welcome message for any invalid input until language is selected
         await sock.sendMessage(jid, { 
           text: getMessage('en', 'welcome') // Always use English for welcome message
         });
@@ -3689,31 +3686,64 @@ async function handleMessage(sock, message) {
             return;
             
           case 5: // LOGOUT
-            try {
-              const userCode = session.code;
-              const phoneNumber = jid.split('@')[0];
-              
-              // Clear the user session
-              delete sessions[jid];
-              saveJson(SESSIONS_FILE, sessions);
-              
-              await sock.sendMessage(jid, { 
-                text: `🔓 **User Logout Successful!**\n\n✅ You have been logged out of your user session.\n\n💡 **To log back in:**\n• Send CODE: <user_code> to start a new user session\n• Example: CODE: user1\n\n💡 **To become admin:**\n• Send ADMIN: <admin_code> to start an admin session\n• Example: ADMIN: admin123\n\n💡 **Available accounts:**\n• User codes: ${Object.keys(codesDb).join(', ')}\n• Admin codes: ${Object.keys(adminManager.admins).join(', ')}`
-              });
-              
-              console.log(chalk.yellow(`🔓 User ${phoneNumber} logged out (was using code: ${userCode})`));
-            } catch (error) {
-              console.error(chalk.red(`❌ Error in user logout:`, error.message));
-              await sock.sendMessage(jid, { 
-                text: `❌ **Error during logout:** ${error.message}` 
-              });
-            }
+            // Ask for logout confirmation
+            session.currentStep = 'logout_confirmation';
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+              text: getMessage(session.language, 'logout_confirmation')
+            });
             return;
         }
       } else {
         // Invalid selection - show main menu again
         await sock.sendMessage(jid, { 
           text: getMessage(session.language, 'main_menu')
+        });
+        return;
+      }
+    }
+    
+    // Handle logout confirmation state
+    if (session.currentStep === 'logout_confirmation') {
+      if (text.trim() === '5') {
+        // User confirmed logout
+        try {
+          const userCode = session.code || 'unknown';
+          const phoneNumber = jid.split('@')[0];
+          
+          // Clear the user session
+          delete sessions[jid];
+          saveJson(SESSIONS_FILE, sessions);
+          
+          // Send logout success message
+          await sock.sendMessage(jid, { 
+            text: getMessage(session.language, 'logout_successful')
+          });
+          
+          console.log(chalk.yellow(`🔓 User ${phoneNumber} logged out (was using code: ${userCode})`));
+        } catch (error) {
+          console.error(chalk.red(`❌ Error in user logout:`, error.message));
+          await sock.sendMessage(jid, { 
+            text: getMessage(session.language, 'logout_error')
+          });
+        }
+        return;
+      } else if (text.trim() === '0') {
+        // User cancelled logout - return to main menu
+        session.currentStep = 'main_menu';
+        sessions[jid] = session;
+        saveJson(SESSIONS_FILE, sessions);
+        
+        await sock.sendMessage(jid, { 
+          text: getMessage(session.language, 'main_menu')
+        });
+        return;
+      } else {
+        // Invalid input - show logout confirmation again
+        await sock.sendMessage(jid, { 
+          text: getMessage(session.language, 'logout_confirmation')
         });
         return;
       }
@@ -3779,6 +3809,12 @@ async function handleMessage(sock, message) {
       // Assign API keys to session
       session.code = code;
       session.apiKeys = codesDb[code].apiKeys;
+      
+      // Load user's language preference from their profile
+      if (codesDb[code].language) {
+        session.language = codesDb[code].language;
+      }
+      
       sessions[jid] = session;
       saveJson(SESSIONS_FILE, sessions);
 
@@ -3990,17 +4026,7 @@ async function handleMessage(sock, message) {
     // Authentication is already checked at the beginning of the function
     // All messages reaching this point are from authenticated users
 
-    // Handle language reset option (works for authenticated users)
-    if (text === '0' && session.currentStep !== 'awaiting_language') {
-      session.currentStep = 'awaiting_language';
-      session.language = 'en'; // Reset to default
-      saveJson(SESSIONS_FILE, sessions);
-      
-      await sock.sendMessage(jid, { 
-        text: getMessage('en', 'welcome') // Always use English for welcome
-      });
-      return;
-    }
+
 
     // Handle messages based on current conversation step
     if (session.currentStep === 'awaiting_niche') {
@@ -4009,9 +4035,10 @@ async function handleMessage(sock, message) {
             session.currentStep = 'main_menu';
             session.pendingNiche = null;
             session.previousMessage = null;
+            sessions[jid] = session; // Update the sessions object
             saveJson(SESSIONS_FILE, sessions);
-            
-            await sock.sendMessage(jid, { 
+
+            await sock.sendMessage(jid, {
                 text: getMessage(session.language, 'main_menu')
             });
             return;
@@ -4049,11 +4076,16 @@ async function handleMessage(sock, message) {
             });
             return;
         } else if (inputNumber === 0) {
-            session.currentStep = 'awaiting_niche';
+            // User wants to go back to main menu
+            session.currentStep = 'main_menu';
             session.pendingNiche = null;
             session.previousMessage = null;
-            await sock.sendMessage(jid, { text: getMessage(session.language, 'go_back') });
+            sessions[jid] = session; // Update the sessions object
             saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'main_menu')
+            });
             return;
         } else if (inputNumber >= 1 && inputNumber <= sourceOptions.length) {
             session.prefs.source = sourceOptions[inputNumber - 1];
@@ -4121,12 +4153,16 @@ async function handleMessage(sock, message) {
             });
             return;
         } else if (inputNumber === 0) {
-            session.currentStep = 'awaiting_source';
-            session.previousMessage = getMessage(session.language, 'select_source', {
-              niche: session.pendingNiche
-            });
-            await sock.sendMessage(jid, { text: session.previousMessage });
+            // User wants to go back to main menu
+            session.currentStep = 'main_menu';
+            session.pendingNiche = null;
+            session.previousMessage = null;
+            sessions[jid] = session; // Update the sessions object
             saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'main_menu')
+            });
             return;
         } else if (inputNumber >= 1 && inputNumber <= validTypes.length) {
             session.prefs.dataType = validTypes[inputNumber - 1];
@@ -4171,6 +4207,18 @@ async function handleMessage(sock, message) {
             saveJson(SESSIONS_FILE, sessions);
             await sock.sendMessage(jid, { 
                 text: getMessage(session.language, 'restart')
+            });
+            return;
+        } else if (text === '0') {
+            // User wants to go back to main menu
+            session.currentStep = 'main_menu';
+            session.pendingNiche = null;
+            session.previousMessage = null;
+            sessions[jid] = session; // Update the sessions object
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'main_menu')
             });
             return;
         } else if (text.toUpperCase() === 'START') {
@@ -4247,7 +4295,7 @@ async function handleMessage(sock, message) {
             currentSession.meta.lastNiche = niche;
             
             // Initialize progress simulator for this job
-            const progressSimulator = new ProgressSimulator();
+            const progressSimulator = new ProgressSimulator(currentSession.language);
             activeJobs.set(jid, {
                 abort: abortController,
                 status: 'initializing',
@@ -4332,11 +4380,12 @@ async function handleMessage(sock, message) {
                                     // Complete the progress simulator
                                     jobStatus.progressSimulator.complete();
                                     
-                                    try {
-                                        await sock.sendMessage(jid, { text: getMessage(session.language, 'progress_complete') });
-                                    } catch (error) {
-                                        console.error('Failed to send completion message:', error.message);
-                                    }
+                                    // Don't send completion message here - let the main completion handler do it
+                                    // try {
+                                    //     await sock.sendMessage(jid, { text: getMessage(session.language, 'progress_complete') });
+                                    // } catch (error) {
+                                    //     console.error('Failed to send completion message:', error.message);
+                                    // }
                                 }
                             }
                         },
@@ -4398,30 +4447,33 @@ async function handleMessage(sock, message) {
                 
 
 
-                // Introduce a small delay to allow the 100% progress message to be sent first
-                await new Promise(resolve => setTimeout(resolve, 500));
+                                // Stop progress simulator to prevent duplicate completion messages
+                const activeJob = activeJobs.get(jid);
+                if (activeJob && activeJob.progressSimulator) {
+                    activeJob.progressSimulator.stop();
+                }
 
                 // Job completed successfully - perform cleanup and reset session state
                 activeJobs.delete(jid);
                 session.status = 'idle';
                 session.currentStep = 'main_menu'; // Return to main menu after job completion
                 session.meta.totalJobs++;
-
-
                 
                 sessions[jid] = session;
                 saveJson(SESSIONS_FILE, sessions);
 
+                console.log(chalk.blue(`[DEBUG] Scraper result: ${JSON.stringify(result)}`));
+                console.log(chalk.blue(`[DEBUG] Result filePath exists: ${!!result.filePath}`));
+                console.log(chalk.blue(`[DEBUG] Result structure:`, {
+                    hasFilePath: !!result.filePath,
+                    hasMeta: !!result.meta,
+                    hasResults: !!result.results,
+                    filePath: result.filePath,
+                    metaKeys: result.meta ? Object.keys(result.meta) : 'NO_META'
+                }));
 
-
-                console.log(chalk.blue(`[DEBUG] Scraper result: ${JSON.stringify(result)}`)); // Added debug log
-                console.log(chalk.blue(`[DEBUG] Result filePath exists: ${!!result.filePath}`)); // Added debug log
-
-                // Send results summary
-                const summary = formatResultSummary(result.results, result.meta);
-                await sendChunkedMessage(sock, jid, summary);
-
-                // Send the file using the dedicated function
+                // Send the file first using the dedicated function
+                let fileSent = false;
                 if (result.filePath) {
                     try {
                         // Convert to absolute path if it's relative
@@ -4432,41 +4484,25 @@ async function handleMessage(sock, message) {
                         console.log(chalk.blue(`📎 Sending results file: ${absoluteFilePath}`));
                         
                         // Use the dedicated function for reliable file sending
-                        const fileSent = await sendResultsToUser(sock, jid, absoluteFilePath, result.meta);
+                        fileSent = await sendResultsToUser(sock, jid, absoluteFilePath, result.meta, session.language);
                         
                         if (fileSent) {
                             console.log(chalk.green(`✅ Results file sent successfully to ${jid}`));
-                            // Send follow-up message to start a new search
-                            await sock.sendMessage(jid, { 
-                                text: getMessage(session.language, 'job_complete', {
-                                  total: result.meta.totalResults || 0,
-                                  emails: result.meta.emails || 0,
-                                  phones: result.meta.phones || 0,
-                                  websites: result.meta.websites || 0
-                                })
-                            });
-                            
-                            // Show main menu after job completion
-                            await sock.sendMessage(jid, { 
-                                text: getMessage(session.language, 'main_menu')
-                            });
                         } else {
                             console.log(chalk.red(`❌ Results file not sent to ${jid} (sendFile returned false).`));
                         }
                         
-                        // File sent successfully - no need to store as pending
-                        
                     } catch (error) {
                         console.log(chalk.red(`❌ Failed to send results file: ${error.message}`));
                         
-                        // Only store as pending if immediate sending failed and not due to size (sendFile handles size message)
+                        // Store as pending if immediate sending failed and not due to size
                         if (result && result.filePath && result.meta && !error.message.includes('File too large')) {
                             const absoluteFilePath = path.isAbsolute(result.filePath) 
                                 ? result.filePath 
                                 : path.resolve(result.filePath);
                             
                             // Store in pending results for offline delivery
-                            pendingResults.set(jid, {
+                            pendingResults.set(jid, { 
                                 filePath: absoluteFilePath,
                                 meta: result.meta,
                                 timestamp: new Date()
@@ -4477,14 +4513,50 @@ async function handleMessage(sock, message) {
                             
                             console.log(chalk.blue(`📱 Results stored for offline delivery: ${absoluteFilePath}`));
                         }
-                        
-                        await sock.sendMessage(jid, { 
-                            text: `⚠️ **File sending failed.** Results are saved and will be sent when you're back online.`
-                        });
                     }
                 } else {
                     console.log(chalk.red(`❌ No file path provided in result`));
+                    
+                    // Try to find the file in the results directory as fallback
+                    if (result.meta && result.meta.niche && result.meta.source) {
+                        const resultsDir = path.join(process.cwd(), 'results');
+                        const searchPattern = `${result.meta.niche.replace(/[^a-zA-Z0-9]/g, '_')}_${result.meta.source.toLowerCase()}`;
+                        
+                        try {
+                            const files = fs.readdirSync(resultsDir);
+                            const matchingFile = files.find(file => 
+                                file.includes(searchPattern) && 
+                                (file.endsWith('.xlsx') || file.endsWith('.csv') || file.endsWith('.json') || file.endsWith('.txt'))
+                            );
+                            
+                            if (matchingFile) {
+                                const fallbackFilePath = path.join(resultsDir, matchingFile);
+                                console.log(chalk.yellow(`🔄 Found fallback file: ${fallbackFilePath}`));
+                                
+                                // Try to send the fallback file
+                                try {
+                                    fileSent = await sendResultsToUser(sock, jid, fallbackFilePath, result.meta, session.language);
+                                    if (fileSent) {
+                                        console.log(chalk.green(`✅ Fallback file sent successfully: ${matchingFile}`));
+                                    }
+                                } catch (fallbackError) {
+                                    console.log(chalk.red(`❌ Failed to send fallback file: ${fallbackError.message}`));
+                                }
+                            } else {
+                                console.log(chalk.red(`❌ No matching file found in results directory for pattern: ${searchPattern}`));
+                            }
+                        } catch (dirError) {
+                            console.log(chalk.red(`❌ Error reading results directory: ${dirError.message}`));
+                        }
+                    }
                 }
+
+                // File caption already contains all the information, no need for duplicate completion message
+                
+                // Show main menu after job completion
+                await sock.sendMessage(jid, { 
+                    text: getMessage(session.language, 'main_menu')
+                });
 
                 console.log(chalk.green(`✅ Job completed: ${result.meta.totalResults} results`));
 
@@ -4706,7 +4778,7 @@ async function handleMessage(sock, message) {
       if (wantsSend) {
         console.log(chalk.blue(`📱 User requested to send pending results for ${jid}: ${pendingResult.filePath}`));
         try {
-          await sendResultsToUser(sock, jid, pendingResult.filePath, pendingResult.meta);
+          await sendResultsToUser(sock, jid, pendingResult.filePath, pendingResult.meta, session.language);
           pendingResults.delete(jid);
           savePendingResults();
           console.log(chalk.green(`✅ Pending results sent and cleared for ${jid}`));
@@ -4753,9 +4825,24 @@ async function handleMessage(sock, message) {
 
   } catch (error) {
     console.error('❌ Error handling message:', error.message);
-    await sock.sendMessage(jid, { 
-      text: '❌ Internal error occurred. Please try again or contact support.'
-    });
+    
+    // Check if it's a connection error
+    if (error.message.includes('Connection Closed') || error.message.includes('Connection closed')) {
+      console.log(chalk.red('🔌 WhatsApp connection lost during message handling'));
+      console.log(chalk.yellow('💡 Connection will be restored automatically'));
+      
+      // Don't try to send message if connection is down
+      return;
+    }
+    
+    // Try to send error message, but don't crash if it fails
+    try {
+      await sock.sendMessage(jid, { 
+        text: '❌ Internal error occurred. Please try again or contact support.'
+      });
+    } catch (sendError) {
+      console.error('❌ Failed to send error message to user:', sendError.message);
+    }
   }
 }
 
@@ -4870,12 +4957,28 @@ async function startBot() {
 
 
          // Keep connection alive with periodic status checks and refresh admin data
-    const connectionCheckInterval = setInterval(() => {
-      if (sock && sock.user) {
-        // Just log connection status
-        console.log(chalk.gray('📡 Connection status: Active'));
-
-         
+    const connectionCheckInterval = setInterval(async () => {
+      try {
+        if (sock && sock.user) {
+          // Test connection by checking if user object exists (safer than ping)
+          if (sock.user && sock.user.id) {
+            console.log(chalk.gray('📡 Connection status: Active'));
+          } else {
+            console.log(chalk.yellow('⚠️  Connection check: User object not ready'));
+          }
+        } else {
+          console.log(chalk.yellow('⚠️  Connection check: Socket not ready'));
+        }
+      } catch (error) {
+        console.log(chalk.red('❌ Connection check failed:', error.message));
+        
+        // If connection check fails, try to reconnect
+        if (error.message.includes('Connection Closed') || error.message.includes('Connection closed')) {
+          console.log(chalk.yellow('🔄 Attempting to reconnect...'));
+          clearInterval(connectionCheckInterval);
+          setTimeout(startBot, 5000);
+        }
+      }
          // Refresh admin manager data every 5 minutes
          if (Date.now() % 300000 < 60000) { // Every 5 minutes
            adminManager.adminConfig = adminManager.loadAdminConfig();
@@ -4883,8 +4986,7 @@ async function startBot() {
            adminManager.sessions = adminManager.loadSessions();
            console.log(chalk.blue('🔄 Admin manager data refreshed'));
          }
-      }
-    }, 60000); // Every 60 seconds
+       }, 60000); // Every 60 seconds
 
     // Message handler
     sock.ev.on('messages.upsert', async ({ messages }) => {

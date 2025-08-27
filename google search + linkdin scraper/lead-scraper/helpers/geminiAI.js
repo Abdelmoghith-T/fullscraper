@@ -513,6 +513,61 @@ export async function analyzeAndFilterData(results, niche, source) {
       };
     }
 
+    // ✅ FIXED: For Google Search, be less aggressive with filtering
+    // Only remove obviously irrelevant results, keep most business contacts
+    if (source === 'google_search') {
+      console.log(chalk.blue(`   📊 Google Search: Using conservative filtering to preserve business contacts`));
+      
+      // For Google Search, only remove obviously spam/fake results
+      const filteredResults = results.filter(result => {
+        // Keep if it has valid email or phone
+        if (!result.email && !result.phone) return false;
+        
+        // Remove obvious spam patterns
+        if (result.email) {
+          const email = result.email.toLowerCase();
+          if (email.includes('noreply') || 
+              email.includes('no-reply') || 
+              email.includes('donotreply') ||
+              email.includes('example.com') ||
+              email.includes('test.com') ||
+              email.includes('placeholder')) {
+            return false;
+          }
+        }
+        
+        // Remove if URL is obviously irrelevant
+        if (result.url) {
+          const url = result.url.toLowerCase();
+          if (url.includes('google.com') || 
+              url.includes('facebook.com') || 
+              url.includes('youtube.com') ||
+              url.includes('wikipedia.org')) {
+            return false;
+          }
+        }
+        
+        return true; // Keep most results
+      });
+      
+      const removed = results.length - filteredResults.length;
+      
+      console.log(chalk.blue(`   📊 Conservative filtering applied:`));
+      console.log(chalk.gray(`      • Total analyzed: ${results.length}`));
+      console.log(chalk.gray(`      • Removed: ${removed} (obvious spam only)`));
+      console.log(chalk.gray(`      • Kept: ${filteredResults.length} (preserving business contacts)`));
+      
+      return {
+        filteredResults: filteredResults,
+        analysis: {
+          totalAnalyzed: results.length,
+          removed: removed,
+          kept: filteredResults.length,
+          reasons: ['Conservative filtering: removed only obvious spam/fake results']
+        }
+      };
+    }
+
     // Prepare data for analysis
     const dataToAnalyze = results.map((result, index) => {
       if (source === 'linkedin') {
@@ -599,13 +654,14 @@ export async function analyzeAndFilterData(results, niche, source) {
     console.error(chalk.red(`❌ Error in AI data analysis: ${error.message}`));
     console.log(chalk.yellow('⚠️  Returning original results without AI filtering'));
     
+    // Return all results if AI analysis fails
     return {
       filteredResults: results,
       analysis: {
         totalAnalyzed: results.length,
         removed: 0,
         kept: results.length,
-        reasons: ['AI analysis failed - using original data']
+        reasons: ['AI analysis failed, keeping all results']
       }
     };
   }

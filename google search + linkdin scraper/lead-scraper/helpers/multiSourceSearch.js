@@ -7,8 +7,8 @@ import chalk from 'chalk';
 
 // Anti-ban configuration
 const ANTI_BAN_CONFIG = {
-  minDelay: 3000,
-  maxDelay: 7000,
+  minDelay: 500,   // Reduced from 3000ms to 500ms (0.5s)
+  maxDelay: 1500,  // Reduced from 7000ms to 1500ms (1.5s)
   randomDelay: true,
   userAgents: [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -55,8 +55,8 @@ export async function searchLinkedIn(query, niche, onProfileAdded = null) {
     // Enhanced query to find LinkedIn profiles
     const enhancedQuery = `${query} site:linkedin.com/company/ OR site:linkedin.com/in/`;
     console.log(`🔒 Starting safe Google search for: "${enhancedQuery}" (linkedin)`);
-    // Add delay to avoid rate limiting
-    const delay = Math.floor(Math.random() * 4000) + 3000;
+    // Add delay to avoid rate limiting (reduced from 3-7s to 0.5-1.5s)
+    const delay = Math.floor(Math.random() * 1000) + 500; // 500-1500ms (0.5-1.5s)
     console.log(`⏳ Pre-search delay: Waiting ${delay}ms...`);
     await new Promise(resolve => setTimeout(resolve, delay));
 
@@ -79,9 +79,9 @@ export async function searchLinkedIn(query, niche, onProfileAdded = null) {
     for (let i = 0; i < searchResults.length; i++) {
       const result = searchResults[i];
       console.log(`🔍 Processing result ${i + 1}: ${result.url || result.link}`);
-      // Add delay between profile processing
+      // Add delay between profile processing (reduced from 3-7s to 0.5-1.5s)
       if (i > 0) {
-        const profileDelay = Math.floor(Math.random() * 4000) + 3000;
+        const profileDelay = Math.floor(Math.random() * 1000) + 500; // 500-1500ms (0.5-1.5s)
         console.log(`⏳ Between LinkedIn profile processing: Waiting ${profileDelay}ms...`);
         await new Promise(resolve => setTimeout(resolve, profileDelay));
       }

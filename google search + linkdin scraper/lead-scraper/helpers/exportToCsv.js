@@ -1,6 +1,7 @@
 import { config } from '../config.js';
 import chalk from 'chalk';
 import fs from 'fs';
+import path from 'path';
 import XLSX from 'xlsx';
 
 /**
@@ -50,8 +51,9 @@ export async function exportResults(results, format = 'csv', filename = null, ni
  * @param {Array} results - Array of LinkedIn profile objects
  * @param {string} format - Export format ('csv' or 'xlsx')
  * @param {string} filename - Output filename
+ * @param {string} niche - Target niche for filename generation
  */
-export async function exportLinkedInResults(results, format, filename) {
+export async function exportLinkedInResults(results, format, filename, niche = null) {
   try {
     console.log(`📊 LinkedIn Export Summary:`);
     console.log(`   • Total Profiles Found: ${results.length}`);
@@ -64,10 +66,15 @@ export async function exportLinkedInResults(results, format, filename) {
     if (format === 'csv') {
       return await exportLinkedInToCsv(uniqueProfiles, filename);
     } else {
-      // For Excel, we need to pass the niche to generate proper filename
+      // For Excel, use the provided filename if available, otherwise extract niche
+      if (filename && filename.endsWith('.xlsx')) {
+        // Use the provided filename directly, and pass the niche if available
+        return await exportLinkedInToExcel(uniqueProfiles, niche || 'linkedin_profiles', filename);
+      } else {
       // Extract niche from filename or use a default
-      const niche = filename ? filename.replace(/_linkedin_results.*$/, '') : 'linkedin_profiles';
-      return await exportLinkedInToExcel(uniqueProfiles, niche);
+        const extractedNiche = filename ? filename.replace(/_linkedin_results.*$/, '') : (niche || 'linkedin_profiles');
+        return await exportLinkedInToExcel(uniqueProfiles, extractedNiche);
+      }
     }
     
   } catch (error) {
@@ -160,7 +167,7 @@ function calculateProfileCompleteness(profile) {
  */
 async function exportLinkedInToCsv(profiles, filename) {
   try {
-    const fs = await import('fs/promises');
+    const fsPromises = await import('fs/promises');
     
     // Generate filename if not provided
     if (!filename) {
@@ -186,11 +193,11 @@ async function exportLinkedInToCsv(profiles, filename) {
     const csvContent = csvHeader + csvRows.join('\n');
     
     // Write to file
-    await fs.writeFile(filename, csvContent, 'utf8');
+    await fsPromises.writeFile(filename, csvContent, 'utf8');
     
     console.log(chalk.green(`✅ LinkedIn CSV exported: ${filename}`));
     
-    // Verify file was created
+    // Verify file was created using the global fs import
     const stats = fs.statSync(filename);
     console.log(`✅ File verified: ${filename} (${stats.size} bytes)`);
     
@@ -206,11 +213,16 @@ async function exportLinkedInToCsv(profiles, filename) {
  * Export LinkedIn results to Excel
  * @param {Array} results - LinkedIn profile results
  * @param {string} niche - Target niche
+ * @param {string} providedFilename - Optional provided filename
  * @returns {string} File path
  */
-export async function exportLinkedInToExcel(results, niche) {
+export async function exportLinkedInToExcel(results, niche, providedFilename = null) {
   try {
     console.log(`💾 Saving ${results.length} validated results...`);
+    console.log(`🔍 Debug: XLSX version: ${XLSX.version}`);
+    console.log(`🔍 Debug: Results array length: ${results.length}`);
+    console.log(`🔍 Debug: First result sample:`, results[0] ? Object.keys(results[0]) : 'No results');
+    console.log(`🔍 Debug: Niche parameter: "${niche}"`);
     
     // Prepare data for Excel with hyperlinks
     const data = results.map(profile => ({
@@ -220,9 +232,14 @@ export async function exportLinkedInToExcel(results, niche) {
       'Type': profile.isCompanyPage ? 'Company' : 'Individual'
     }));
     
+    console.log(`🔍 Debug: Prepared data length: ${data.length}`);
+    
     // Create workbook and worksheet
     const workbook = XLSX.utils.book_new();
+    console.log(`🔍 Debug: Workbook created successfully`);
+    
     const worksheet = XLSX.utils.json_to_sheet(data);
+    console.log(`🔍 Debug: Worksheet created successfully`);
     
     // Add hyperlinks to profile URLs using proper Excel hyperlink format
     const range = XLSX.utils.decode_range(worksheet['!ref']);
@@ -265,22 +282,268 @@ export async function exportLinkedInToExcel(results, niche) {
     // Add worksheet to workbook
     XLSX.utils.book_append_sheet(workbook, worksheet, 'LinkedIn Profiles');
     
-    // Generate filename
+    // Generate filename with results directory path
     const timestamp = Date.now();
-    const filename = `${niche.replace(/[^a-zA-Z0-9]/g, '_')}_linkedin_results_${timestamp}.xlsx`;
+    
+    // Try multiple possible results directory paths
+    // Since the scraper runs from lead-scraper directory, we need to go up to find the main results directory
+    let resultsDir = null;
+    const possiblePaths = [
+      // From lead-scraper directory, go up to find main results directory
+      path.join(process.cwd(), '..', '..', '..', 'results'),  // fullscraper/results
+      path.join(process.cwd(), '..', '..', 'results'),        // lead-scraper/results (fallback)
+      path.join(process.cwd(), '..', 'results'),              // lead-scraper/results (closer fallback)
+      path.join(process.cwd(), 'results'),                    // lead-scraper/results (current directory)
+      // Try absolute paths to avoid relative path issues
+      path.resolve('./results'),
+      path.resolve('../results'),
+      path.resolve('../../results'),
+      path.resolve('../../../results'),
+      // Fallback to current directory
+      process.cwd()
+    ];
+    
+    console.log(`🔍 Debug: Current working directory: ${process.cwd()}`);
+    console.log(`🔍 Debug: __dirname equivalent: ${import.meta.url}`);
+    
+    // Try to find the main project directory by looking for package.json
+    // We need to go up more levels to find the actual main project directory
+    let mainProjectDir = null;
+    let currentDir = process.cwd();
+    for (let i = 0; i < 8; i++) { // Go up more levels to find main project
+      const packageJsonPath = path.join(currentDir, 'package.json');
+      if (fs.existsSync(packageJsonPath)) {
+        // Check if this is the main project by looking for specific files
+        const hasMainFiles = fs.existsSync(path.join(currentDir, 'bot.js')) && 
+                           fs.existsSync(path.join(currentDir, 'unified-scraper.js'));
+        
+        if (hasMainFiles) {
+          mainProjectDir = currentDir;
+          console.log(`🔍 Debug: Found main project directory: ${mainProjectDir}`);
+          break;
+        }
+      }
+      currentDir = path.join(currentDir, '..');
+    }
+    
+    // If we found the main project directory, add its results path
+    if (mainProjectDir) {
+      const mainResultsPath = path.join(mainProjectDir, 'results');
+      possiblePaths.unshift(mainResultsPath);
+      console.log(`🔍 Debug: Added main project results path: ${mainResultsPath}`);
+    }
+    
+    for (const testPath of possiblePaths) {
+      try {
+        console.log(`🔍 Debug: Testing path: ${testPath}`);
+        if (fs.existsSync(testPath)) {
+          resultsDir = testPath;
+          console.log(`🔍 Debug: Found existing results directory: ${resultsDir}`);
+          break;
+        } else if (fs.existsSync(path.dirname(testPath))) {
+          resultsDir = testPath;
+          console.log(`🔍 Debug: Found parent directory, will create results: ${resultsDir}`);
+          break;
+        } else {
+          console.log(`🔍 Debug: Path not accessible: ${testPath}`);
+        }
+      } catch (pathError) {
+        console.log(`⚠️  Path check failed for ${testPath}: ${pathError.message}`);
+        continue;
+      }
+    }
+    
+    if (!resultsDir) {
+      // Create a simple path in current directory to avoid spaces
+      resultsDir = path.join(process.cwd(), 'results');
+      console.log(`🔍 Debug: Using simple results directory: ${resultsDir}`);
+    }
+    
+    // Ensure the results directory exists
+    try {
+      if (!fs.existsSync(resultsDir)) {
+        fs.mkdirSync(resultsDir, { recursive: true });
+        console.log(`✅ Created results directory: ${resultsDir}`);
+      }
+      console.log(`🔍 Debug: Final results directory: ${resultsDir}`);
+      console.log(`🔍 Debug: Directory exists: ${fs.existsSync(resultsDir)}`);
+      console.log(`🔍 Debug: Directory writable: ${fs.accessSync ? 'checking...' : 'unknown'}`);
+    } catch (dirError) {
+      console.error(`❌ Failed to create/access results directory: ${dirError.message}`);
+      // Fallback to current directory
+      resultsDir = process.cwd();
+      console.log(`🔍 Debug: Fallback to current directory: ${resultsDir}`);
+    }
+    
+    // Ensure results directory exists
+    if (!fs.existsSync(resultsDir)) {
+      fs.mkdirSync(resultsDir, { recursive: true });
+      console.log(`✅ Results directory created: ${resultsDir}`);
+    }
+    
+    // Use provided filename if available, otherwise generate one from niche
+    let finalFilename;
+    if (providedFilename) {
+      // Use the provided filename directly
+      finalFilename = path.join(resultsDir, providedFilename);
+      console.log(`🔍 Debug: Using provided filename: ${providedFilename}`);
+    } else {
+      // Generate filename from niche
+      const cleanNiche = niche
+        .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters but keep spaces
+        .replace(/\s+/g, '_') // Replace spaces with underscores
+        .substring(0, 50); // Limit length to avoid path issues
+      
+      // Check if we have a session code from the LinkedIn wrapper
+      const sessionCode = process.env.LINKEDIN_SESSION_CODE;
+      if (sessionCode) {
+        finalFilename = path.join(resultsDir, `${cleanNiche}_linkedin_results_SESSION_${sessionCode}.xlsx`);
+        console.log(`🔍 Debug: Generated filename with session code: ${cleanNiche}_SESSION_${sessionCode}`);
+      } else {
+        finalFilename = path.join(resultsDir, `${cleanNiche}_linkedin_results_${timestamp}.xlsx`);
+        console.log(`🔍 Debug: Generated filename from niche: ${cleanNiche}`);
+      }
+    }
+    
+    const filename = finalFilename;
     
     console.log(`📁 Saving to: ${filename}`);
+    console.log(`🔍 Debug: resultsDir exists: ${fs.existsSync(resultsDir)}`);
+    console.log(`🔍 Debug: resultsDir path: ${resultsDir}`);
+    console.log(`🔍 Debug: Niche parameter: "${niche}"`);
+    console.log(`🔍 Debug: Provided filename: "${providedFilename}"`);
+    console.log(`🔍 Debug: Full filename: ${filename}`);
     
-    // Save file
-    XLSX.writeFile(workbook, filename);
+    // Ensure the directory exists again before saving
+    if (!fs.existsSync(resultsDir)) {
+      console.log(`📁 Creating results directory: ${resultsDir}`);
+      fs.mkdirSync(resultsDir, { recursive: true });
+    }
     
+    // Save file with error handling
+    try {
+      console.log(`🔍 Debug: About to call XLSX.writeFile...`);
+      console.log(`🔍 Debug: Workbook has ${workbook.SheetNames.length} sheets`);
+      console.log(`🔍 Debug: Worksheet ref: ${worksheet['!ref']}`);
+      
+      // Try to save to a simple filename first to test XLSX
+      const testFilename = path.join(resultsDir, `test_linkedin_${timestamp}.xlsx`);
+      console.log(`🔍 Debug: Testing with simple filename: ${testFilename}`);
+      
+      // Try multiple methods to save the file
+      let fileSaved = false;
+      
+      // Method 1: Try writeFile
+      try {
+        XLSX.writeFile(workbook, testFilename);
+        console.log(`✅ Test file created successfully with writeFile: ${testFilename}`);
+        fileSaved = true;
+      } catch (writeFileError) {
+        console.log(`⚠️  writeFile failed: ${writeFileError.message}`);
+      }
+      
+      // Method 2: Try writeFileSync
+      if (!fileSaved) {
+        try {
+          XLSX.writeFileSync(workbook, testFilename);
+          console.log(`✅ Test file created successfully with writeFileSync: ${testFilename}`);
+          fileSaved = true;
+        } catch (writeFileSyncError) {
+          console.log(`⚠️  writeFileSync failed: ${writeFileSyncError.message}`);
+        }
+      }
+      
+      // Method 3: Try buffer approach
+      if (!fileSaved) {
+        try {
+          const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+          fs.writeFileSync(testFilename, buffer);
+          console.log(`✅ Test file created successfully with buffer method: ${testFilename}`);
+          fileSaved = true;
+        } catch (bufferError) {
+          console.log(`⚠️  Buffer method failed: ${bufferError.message}`);
+        }
+      }
+      
+      if (!fileSaved) {
+        // Last resort: try to save to a very simple path
+        try {
+          const simplePath = path.join(process.cwd(), 'linkedin_results.xlsx');
+          console.log(`🔍 Debug: Last resort - trying simple path: ${simplePath}`);
+          XLSX.writeFile(workbook, simplePath);
+          console.log(`✅ LinkedIn Excel exported to simple path: ${simplePath}`);
+          fileSaved = true;
+          // Update filename to the simple path
+          filename = simplePath;
+        } catch (lastResortError) {
+          console.error(`❌ Last resort save failed: ${lastResortError.message}`);
+          
+          // Try one more time with an even simpler approach
+          try {
+            const ultraSimplePath = 'linkedin_results.xlsx';
+            console.log(`🔍 Debug: Ultra last resort - trying: ${ultraSimplePath}`);
+            XLSX.writeFile(workbook, ultraSimplePath);
+            console.log(`✅ LinkedIn Excel exported to ultra simple path: ${ultraSimplePath}`);
+            fileSaved = true;
+            filename = ultraSimplePath;
+          } catch (ultraError) {
+            console.error(`❌ Ultra last resort save failed: ${ultraError.message}`);
+            throw new Error('All file saving methods failed');
+          }
+        }
+      }
+      
+      // Now try the actual filename with the same method that worked
+      if (fileSaved && filename !== path.join(process.cwd(), 'linkedin_results.xlsx')) {
+        try {
+          XLSX.writeFile(workbook, filename);
     console.log(`✅ LinkedIn Excel exported: ${filename}`);
+        } catch (writeFileError) {
+          console.log(`⚠️  writeFile failed for main file, trying buffer method: ${writeFileError.message}`);
+          try {
+            const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+            fs.writeFileSync(filename, buffer);
+            console.log(`✅ LinkedIn Excel exported with buffer method: ${filename}`);
+          } catch (bufferError) {
+            console.log(`⚠️  Buffer method failed for main file, trying simple filename: ${bufferError.message}`);
+            // Last resort: save with a simple name in current directory
+            const simpleMainPath = path.join(process.cwd(), `linkedin_${timestamp}.xlsx`);
+            XLSX.writeFile(workbook, simpleMainPath);
+            console.log(`✅ LinkedIn Excel exported with simple filename: ${simpleMainPath}`);
+            filename = simpleMainPath; // Update filename to the one that worked
+          }
+        }
+      }
     
     // Verify file was created
+      if (fs.existsSync(filename)) {
     const stats = fs.statSync(filename);
     console.log(`✅ File verified: ${filename} (${stats.size} bytes)`);
+      } else {
+        console.log(`❌ File was not created: ${filename}`);
+      }
+      
+      // Clean up test file
+      if (fs.existsSync(testFilename)) {
+        fs.unlinkSync(testFilename);
+        console.log(`🧹 Test file cleaned up`);
+      }
     
     return filename;
+    } catch (writeError) {
+      console.error(`❌ XLSX.writeFile failed: ${writeError.message}`);
+      console.error(`❌ Write error stack: ${writeError.stack}`);
+      
+      // Try to get more details about the error
+      if (writeError.code) {
+        console.error(`❌ Error code: ${writeError.code}`);
+      }
+      if (writeError.errno) {
+        console.error(`❌ Error number: ${writeError.errno}`);
+      }
+      
+      throw writeError;
+    }
     
   } catch (error) {
     console.error(`❌ Error exporting LinkedIn to Excel: ${error.message}`);

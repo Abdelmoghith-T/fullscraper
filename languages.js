@@ -63,6 +63,12 @@ export const languages = {
     // Progress Messages
     progress_update: "⏱️ **Progress Update:** {message}",
     progress_complete: "Progress: 100% — Scraping complete!",
+    progress_analyzing: "🚀 *Progress: {progress}% - Analyzing search results...*",
+    progress_processing: "🚀 *Progress: {progress}% - Processing business data...*",
+    progress_extracting: "⚡ *Progress: {progress}% - Extracting contact information...*",
+    progress_validating: "📊 *Progress: {progress}% - Validating business profiles...*",
+    progress_compiling: "🎯 *Progress: {progress}% - Compiling results...*",
+    progress_finalizing: "✨ *Progress: {progress}% - Finalizing data...*",
     
     // Errors
     error_generic: "❌ An error occurred. Please try again.",
@@ -70,7 +76,24 @@ export const languages = {
     invalid_selection: "⚠️ Invalid selection. Please choose a number between 1 and {max} or 0 to go back.",
     
     // File Messages
-    file_ready: "📎 **File ready for download:**\n{filename}"
+    file_ready: "📎 **File ready for download:**\n{filename}",
+    
+    // Additional translations for completion messages
+    summary: "Summary",
+    results: "results",
+    source: "Source",
+    format: "Format",
+    type: "Type",
+    google_search_results: "Google Search Results",
+    linkedin_profiles: "LinkedIn Profiles",
+    google_maps_businesses: "Google Maps Businesses",
+    file_not_sent: "File not sent",
+    results_saved_later: "Results saved for later delivery",
+    
+    // Logout Messages
+    logout_confirmation: "🔓 **Confirm Logout**\n\n⚠️ Are you sure you want to logout?\n\nThis will end your current session and you'll need to authenticate again.\n\n💬 **Reply with:**\n• **5** to confirm logout\n• **0** to cancel and return to main menu",
+    logout_successful: "🔓 **User Logout Successful!**\n\n✅ You have been logged out of your user session.\n\n💡 **To log back in:**\n• Send CODE: <user_code> to start a new user session\n• Example: CODE: user1\n\n💡 **To become admin:**\n• Send ADMIN: <admin_code> to start an admin session\n• Example: ADMIN: admin123",
+    logout_error: "❌ **Error during logout**\n\nAn error occurred while logging out. Please try again or contact support."
   },
   
   fr: {
@@ -132,6 +155,12 @@ export const languages = {
     // Progress Messages
     progress_update: "⏱️ **Mise à Jour de Progression:** {message}",
     progress_complete: "Progression: 100% — Scraping terminé!",
+    progress_analyzing: "🚀 *Progression: {progress}% - Analyse des résultats de recherche...*",
+    progress_processing: "🚀 *Progression: {progress}% - Traitement des données d'entreprise...*",
+    progress_extracting: "⚡ *Progression: {progress}% - Extraction des informations de contact...*",
+    progress_validating: "📊 *Progression: {progress}% - Validation des profils d'entreprise...*",
+    progress_compiling: "🎯 *Progression: {progress}% - Compilation des résultats...*",
+    progress_finalizing: "✨ *Progression: {progress}% - Finalisation des données...*",
     
     // Errors
     error_generic: "❌ Une erreur s'est produite. Veuillez réessayer.",
@@ -139,7 +168,24 @@ export const languages = {
     invalid_selection: "⚠️ Sélection invalide. Veuillez choisir un numéro entre 1 et {max} ou 0 pour revenir en arrière.",
     
     // File Messages
-    file_ready: "📎 **Fichier prêt pour téléchargement:**\n{filename}"
+    file_ready: "📎 **Fichier prêt pour téléchargement:**\n{filename}",
+    
+    // Additional translations for completion messages
+    summary: "Résumé",
+    results: "résultats",
+    source: "Source",
+    format: "Format",
+    type: "Type",
+    google_search_results: "Résultats de recherche Google",
+    linkedin_profiles: "Profils LinkedIn",
+    google_maps_businesses: "Entreprises Google Maps",
+    file_not_sent: "Fichier non envoyé",
+    results_saved_later: "Résultats sauvegardés pour envoi ultérieur",
+    
+    // Logout Messages
+    logout_confirmation: "🔓 **Confirmer la Déconnexion**\n\n⚠️ Êtes-vous sûr de vouloir vous déconnecter?\n\nCela mettra fin à votre session actuelle et vous devrez vous authentifier à nouveau.\n\n💬 **Répondez avec:**\n• **5** pour confirmer la déconnexion\n• **0** pour annuler et retourner au menu principal",
+    logout_successful: "🔓 **Déconnexion Utilisateur Réussie!**\n\n✅ Vous avez été déconnecté de votre session utilisateur.\n\n💡 **Pour vous reconnecter:**\n• Envoyez CODE: <votre_code> pour commencer une nouvelle session utilisateur\n• Exemple: CODE: user1\n\n💡 **Pour devenir admin:**\n• Envoyez ADMIN: <code_admin> pour commencer une session admin\n• Exemple: ADMIN: admin123",
+    logout_error: "❌ **Erreur lors de la déconnexion**\n\nUne erreur s'est produite lors de la déconnexion. Veuillez réessayer ou contacter le support."
   },
   
   ar: {
@@ -201,6 +247,12 @@ export const languages = {
     // Progress Messages
     progress_update: "⏱️ **تحديث التقدم:** {message}",
     progress_complete: "التقدم: 100% — اكتمل الاستخراج!",
+    progress_analyzing: "🚀 *التقدم: {progress}% - تحليل نتائج البحث...*",
+    progress_processing: "🚀 *التقدم: {progress}% - معالجة بيانات الأعمال...*",
+    progress_extracting: "⚡ *التقدم: {progress}% - استخراج معلومات الاتصال...*",
+    progress_validating: "📊 *التقدم: {progress}% - التحقق من صحة ملفات الأعمال...*",
+    progress_compiling: "🎯 *التقدم: {progress}% - تجميع النتائج...*",
+    progress_finalizing: "✨ *التقدم: {progress}% - إنهاء البيانات...*",
     
     // Errors
     error_generic: "❌ حدث خطأ. يرجى المحاولة مرة أخرى.",
@@ -208,7 +260,24 @@ export const languages = {
     invalid_selection: "⚠️ اختيار غير صحيح. يرجى اختيار رقم بين 1 و {max} أو 0 للرجوع.",
     
     // File Messages
-    file_ready: "📎 **الملف جاهز للتحميل:**\n{filename}"
+    file_ready: "📎 **الملف جاهز للتحميل:**\n{filename}",
+    
+    // Additional translations for completion messages
+    summary: "الملخص",
+    results: "نتائج",
+    source: "المصدر",
+    format: "التنسيق",
+    type: "النوع",
+    google_search_results: "نتائج بحث Google",
+    linkedin_profiles: "الملفات الشخصية على LinkedIn",
+    google_maps_businesses: "أعمال خرائط Google",
+    file_not_sent: "لم يتم إرسال الملف",
+    results_saved_later: "تم حفظ النتائج للإرسال لاحقاً",
+    
+    // Logout Messages
+    logout_confirmation: "🔓 **تأكيد تسجيل الخروج**\n\n⚠️ هل أنت متأكد من أنك تريد تسجيل الخروج؟\n\nسيؤدي هذا إلى إنهاء جلستك الحالية وستحتاج إلى المصادقة مرة أخرى.\n\n💬 **أرسل:**\n• **5** لتأكيد تسجيل الخروج\n• **0** للإلغاء والعودة إلى القائمة الرئيسية",
+    logout_successful: "🔓 **تم تسجيل الخروج بنجاح!**\n\n✅ تم تسجيل خروجك من جلسة المستخدم.\n\n💡 **للإعادة تسجيل الدخول:**\n• أرسل CODE: <رمز_المستخدم> لبدء جلسة مستخدم جديدة\n• مثال: CODE: user1\n\n💡 **لتصبح مدير:**\n• أرسل ADMIN: <رمز_المدير> لبدء جلسة مدير\n• مثال: ADMIN: admin123",
+    logout_error: "❌ **خطأ أثناء تسجيل الخروج**\n\nحدث خطأ أثناء تسجيل الخروج. يرجى المحاولة مرة أخرى أو الاتصال بالدعم."
   }
 };
 

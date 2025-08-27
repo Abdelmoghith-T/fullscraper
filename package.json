@@ -25,6 +25,8 @@
     "test:daily-limit-enforcement": "node test-daily-limit-enforcement.js",
     "test:data-type-fix": "node test-data-type-fix.js",
     "test:format-removal": "node test-format-removal.js",
+    "test:linkedin-fix": "node test-linkedin-fix.js",
+    "test:session-code": "node test-session-code.js",
     "demo:progress": "node test/demo-progress.js",
     "lint": "eslint .",
     "clean": "rm -rf results/*.xlsx results/*.csv results/*.json",
@@ -78,7 +80,7 @@
     "lowdb": "^3.0.0",
     "ora": "^7.0.1",
     "qrcode-terminal": "^0.12.0",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "eslint": "^8.0.0"

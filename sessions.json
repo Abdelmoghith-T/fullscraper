@@ -1,16 +1,17 @@
 {
   "212691708186@s.whatsapp.net": {
     "prefs": {
-      "source": "ALL",
+      "source": "LINKEDIN",
       "format": "XLSX",
-      "limit": 300
+      "limit": 300,
+      "dataType": "COMPLETE"
     },
     "status": "idle",
-    "currentStep": "awaiting_language",
-    "previousMessage": null,
-    "language": "en",
+    "currentStep": "main_menu",
+    "previousMessage": "💾 **تم تعيين تنسيق الإخراج على: XLSX**\n\n🚀 **جاهز لبدء الاستخراج!**\n\n0️⃣ **رجوع** - العودة لاختيار التنسيق\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل:** START",
+    "language": "ar",
     "meta": {
-      "createdAt": "2025-08-27T13:12:01.377Z",
+      "createdAt": "2025-08-27T23:40:58.179Z",
       "totalJobs": 0,
       "lastNiche": null
     },
@@ -21,20 +22,21 @@
       "blockedAt": null
     },
     "dailyScraping": {
-      "date": "Wed Aug 27 2025",
+      "date": "Thu Aug 28 2025",
       "count": 0,
-      "lastReset": "2025-08-27T13:12:01.377Z"
+      "lastReset": "2025-08-27T23:40:58.179Z"
     },
     "code": "user1",
     "apiKeys": {
       "googleSearchKeys": [
-        "AIzaSyAyj4AstBsA8z3_kOIXOIaYv6Bv57krIUs",
-        "AIzaSyDr3PnZTocarHxtJbRrSwW-SAmraq5nXn4"
+        "AIzaSyBROTG4GbDRwmiI_RJenS2nZ6MA4z949Gg",
+        "AIzaSyBROTG4GbDRwmiI_RJenS2nZ6MA4z949Gg"
       ],
       "geminiKeys": [
-        "AIzaSyDxAGzysjaW5yK_kJulYzv-pHaqn1P0H4E",
+        "AIzaSyA9cJBSvbby_RryiL3tgwVT60JudOCtseM",
         "AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo"
       ]
-    }
+    },
+    "pendingNiche": "Dentist in fes"
   }
 }

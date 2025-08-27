@@ -34,19 +34,20 @@ export async function searchGoogle(query, maxResults = 10, startIndexOverride = 
   console.log(chalk.yellow(`   process.env.GOOGLE_API_KEY_1: ${process.env.GOOGLE_API_KEY_1 ? 'SET' : 'NOT SET'}`));
   console.log(chalk.yellow(`   process.env.GOOGLE_API_KEY_2: ${process.env.GOOGLE_API_KEY_2 ? 'SET' : 'NOT SET'}`));
   
-  const maxRetries = config.googleSearch.apiKeys.length;
+  // ✅ FIXED: Use actual number of available API keys, not hardcoded 5
+  const maxRetries = Math.max(config.googleSearch.apiKeys.length, 1);
   const resultsPerPage = 10; // Google API max per page
   const totalPages = Math.ceil(maxResults / resultsPerPage);
   let allResults = [];
   
-  // ✅ ENHANCED: Track which keys have been exhausted
+  // ✅ FIXED: Track which keys have been exhausted
   const exhaustedKeys = new Set();
   
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const apiKey = getCurrentApiKey();
       
-      // ✅ ENHANCED: Check if current key is already exhausted
+      // ✅ FIXED: Check if current key is already exhausted
       if (exhaustedKeys.has(apiKey)) {
         console.log(`⚠️  API key ${config.googleSearch.currentKeyIndex + 1} already exhausted, rotating...`);
         rotateApiKey();
@@ -107,32 +108,104 @@ export async function searchGoogle(query, maxResults = 10, startIndexOverride = 
       }
       return allResults.slice(0, maxResults);
     } catch (error) {
-      // Check if it's a quota exceeded error (403) or rate limit (429)
-      if (error.response && (error.response.status === 403 || error.response.status === 429)) {
+      // ✅ FIXED: Better error handling and API key exhaustion logic
+      if (error.response) {
+        const status = error.response.status;
         const errorMessage = error.response.data?.error?.message || '';
-        const isQuotaError = errorMessage.includes('quota') || errorMessage.includes('Quota') || 
-                           errorMessage.includes('rate') || errorMessage.includes('Rate') ||
-                           error.response.status === 429;
         
-        if (isQuotaError) {
-          console.log(`⚠️  API quota/rate limit exceeded for key ${config.googleSearch.currentKeyIndex + 1}, marking as exhausted...`);
+        console.log(chalk.yellow(`🔍 DEBUG: Error response - Status: ${status}, Message: ${errorMessage}`));
+        
+        // Handle HTTP 429 - need to check if it's rate limiting or quota exceeded
+        if (status === 429) {
+          // Check the error message to distinguish between rate limiting and quota exceeded
+          if (errorMessage.includes('quota') || errorMessage.includes('Quota') || errorMessage.includes('per day')) {
+            // This is actually daily quota exceeded, not rate limiting
+            console.log(`⚠️  Daily quota exceeded (429) for key ${config.googleSearch.currentKeyIndex + 1}, marking as exhausted...`);
+            console.log(chalk.gray(`   Google returns 429 for quota exceeded in some cases`));
+            
+            // Mark current key as exhausted
+            const currentKey = getCurrentApiKey();
+            exhaustedKeys.add(currentKey);
+            
+            // Check if all keys are exhausted
+            if (exhaustedKeys.size >= config.googleSearch.apiKeys.length) {
+              console.log(chalk.red(`❌ All ${config.googleSearch.apiKeys.length} user API keys have exceeded daily quota!`));
+              console.log(chalk.yellow(`💡 User must wait until tomorrow or add more API keys.`));
+              console.log(chalk.red(`🛑 Stopping scraping operation - no more keys available.`));
+              
+              throw new Error(`ALL_USER_API_KEYS_QUOTA_EXCEEDED: Daily quota exceeded for all ${config.googleSearch.apiKeys.length} user API keys. Please try again tomorrow or add more API keys.`);
+            }
+            
+            rotateApiKey();
+            continue; // Try with next key
+          } else {
+            // This is genuine rate limiting
+            console.log(`⏱️  Rate limit exceeded (429) for key ${config.googleSearch.currentKeyIndex + 1}`);
+            console.log(chalk.gray(`   This is NOT a quota issue - just too many requests too quickly`));
+            console.log(chalk.gray(`   Waiting 5 seconds and retrying with same key...`));
+            
+            // Wait 5 seconds and retry with the same key (rate limiting is temporary)
+            await new Promise(resolve => setTimeout(resolve, 5000));
+            continue; // Retry with same key
+          }
+        }
+        
+        // Handle daily quota exceeded (403) - this is a permanent quota issue
+        if (status === 403) {
+          const isQuotaError = errorMessage.includes('quota') || errorMessage.includes('Quota');
           
-          // ✅ ENHANCED: Mark current key as exhausted
+          if (isQuotaError) {
+            console.log(`⚠️  Daily quota exceeded (403) for key ${config.googleSearch.currentKeyIndex + 1}, marking as exhausted...`);
+            
+            // Mark current key as exhausted
+            const currentKey = getCurrentApiKey();
+            exhaustedKeys.add(currentKey);
+            
+            // ✅ FIXED: Only stop if ALL available keys are exhausted
+            if (exhaustedKeys.size >= config.googleSearch.apiKeys.length) {
+              console.log(chalk.red(`❌ All ${config.googleSearch.apiKeys.length} user API keys have exceeded daily quota!`));
+              console.log(chalk.yellow(`💡 User must wait until tomorrow or add more API keys.`));
+              console.log(chalk.red(`🛑 Stopping scraping operation - no more keys available.`));
+              
+              throw new Error(`ALL_USER_API_KEYS_QUOTA_EXCEEDED: Daily quota exceeded for all ${config.googleSearch.apiKeys.length} user API keys. Please try again tomorrow or add more API keys.`);
+            }
+            
+            rotateApiKey();
+            continue; // Try with next key
+          } else {
+            // 403 but not quota-related - might be API key restriction
+            console.log(`🔑 API key restriction (403) for key ${config.googleSearch.currentKeyIndex + 1}, rotating...`);
+            rotateApiKey();
+            continue;
+          }
+        }
+        
+        // Handle other HTTP errors
+        if (status === 400) {
+          console.log(`⚠️  Bad request (400) for key ${config.googleSearch.currentKeyIndex + 1}, rotating...`);
+          console.log(chalk.gray(`   This is NOT a quota issue - it's a request parameter problem`));
+          
+          // Don't mark as exhausted for 400 errors - they're not quota related
+          rotateApiKey();
+          continue;
+        }
+        
+        // Handle 401 (unauthorized) - key might be invalid
+        if (status === 401) {
+          console.log(`🔑 API key ${config.googleSearch.currentKeyIndex + 1} unauthorized (401), rotating...`);
+          console.log(chalk.gray(`   This might be an invalid or restricted API key`));
+          
+          // Mark as exhausted since it's likely invalid
           const currentKey = getCurrentApiKey();
           exhaustedKeys.add(currentKey);
           
-          // If this is the last key, show quota exceeded message and STOP
           if (exhaustedKeys.size >= config.googleSearch.apiKeys.length) {
-            console.log(chalk.red(`❌ ALL user API keys have exceeded daily quota!`));
-            console.log(chalk.yellow(`💡 User must wait until tomorrow or add more API keys.`));
-            console.log(chalk.red(`🛑 Stopping scraping operation - no more keys available.`));
-            
-            // ✅ NEW: Throw error to stop scraping instead of returning partial results
-            throw new Error('ALL_USER_API_KEYS_QUOTA_EXCEEDED: Daily quota exceeded for all user API keys. Please try again tomorrow or add more API keys.');
+            console.log(chalk.red(`❌ All ${config.googleSearch.apiKeys.length} user API keys are invalid or unauthorized!`));
+            throw new Error(`ALL_USER_API_KEYS_INVALID: All ${config.googleSearch.apiKeys.length} user API keys are invalid or unauthorized. Please check your API key configuration.`);
           }
           
           rotateApiKey();
-          continue; // Try with next key
+          continue;
         }
       }
       
@@ -148,9 +221,9 @@ export async function searchGoogle(query, maxResults = 10, startIndexOverride = 
     }
   }
   
-  // ✅ ENHANCED: If we get here, all keys are exhausted
-  console.error(`❌ All user API keys exhausted for query "${query}"`);
-  throw new Error('ALL_USER_API_KEYS_EXHAUSTED: All user API keys have been exhausted. Please try again tomorrow or add more API keys.');
+  // ✅ FIXED: If we get here, all keys are exhausted
+  console.error(`❌ All ${config.googleSearch.apiKeys.length} user API keys exhausted for query "${query}"`);
+  throw new Error(`ALL_USER_API_KEYS_EXHAUSTED: All ${config.googleSearch.apiKeys.length} user API keys have been exhausted. Please try again tomorrow or add more API keys.`);
 }
 
 /**

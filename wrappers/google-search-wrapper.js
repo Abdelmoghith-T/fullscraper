@@ -119,20 +119,51 @@ export class GoogleSearchScraper extends ScraperInterface {
       
       // Inject Google Search API keys if available
       if (apiKeys.googleSearchKeys && apiKeys.googleSearchKeys.length > 0) {
-        apiKeys.googleSearchKeys.forEach((key, index) => {
-          if (index < 5) { // Limit to 5 keys max
-            childEnv[`GOOGLE_API_KEY_${index + 1}`] = key;
-          }
-        });
-        console.log(`   🔑 Injected ${apiKeys.googleSearchKeys.length} Google Search API keys into child process`);
+        // ✅ FIXED: Only inject valid API keys, not placeholders
+        const validKeys = apiKeys.googleSearchKeys.filter(key => 
+          key && 
+          !key.includes('YOUR_') && 
+          !key.includes('PLACEHOLDER') &&
+          !key.includes('HERE') &&
+          key !== 'test' &&
+          key !== 'api1' &&
+          key !== 'api2' &&
+          key.length > 20
+        );
+        
+        if (validKeys.length > 0) {
+          validKeys.forEach((key, index) => {
+            if (index < 5) { // Limit to 5 keys max
+              childEnv[`GOOGLE_API_KEY_${index + 1}`] = key;
+            }
+          });
+          console.log(`   🔑 Injected ${validKeys.length} valid Google Search API keys into child process`);
+        } else {
+          console.log(chalk.red(`   ❌ No valid Google Search API keys found in apiKeys`));
+        }
       } else {
         console.log(chalk.red(`   ❌ No Google Search API keys found in apiKeys:`, apiKeys));
       }
       
       // Inject Gemini API key if available
       if (apiKeys.geminiKeys && apiKeys.geminiKeys.length > 0) {
-        childEnv.GEMINI_API_KEY = apiKeys.geminiKeys[0];
-        console.log(`   🤖 Injected Gemini API key into child process`);
+        const validGeminiKey = apiKeys.geminiKeys.find(key => 
+          key && 
+          !key.includes('YOUR_') && 
+          !key.includes('PLACEHOLDER') &&
+          !key.includes('HERE') &&
+          key !== 'test' &&
+          key !== 'g1' &&
+          key !== 'g2' &&
+          key.length > 20
+        );
+        
+        if (validGeminiKey) {
+          childEnv.GEMINI_API_KEY = validGeminiKey;
+          console.log(`   🤖 Injected valid Gemini API key into child process`);
+        } else {
+          console.log(chalk.red(`   ❌ No valid Gemini API keys found in apiKeys`));
+        }
       } else {
         console.log(chalk.red(`   ❌ No Gemini API keys found in apiKeys:`, apiKeys));
       }

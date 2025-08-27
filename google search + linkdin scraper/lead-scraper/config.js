@@ -46,17 +46,15 @@ function getApiKeys(envVars) {
     const key = envVars[`GOOGLE_API_KEY_${i}`];
     if (!key) break; // Stop when no more keys found
     
+    // ✅ FIXED: Only accept valid API keys, reject all placeholders
     if (key && 
-        key !== 'YOUR_SECOND_API_KEY_HERE' && 
-        key !== 'YOUR_THIRD_API_KEY_HERE' && 
-        key !== 'YOUR_FOURTH_API_KEY_HERE' && 
-        key !== 'YOUR_FIFTH_API_KEY_HERE' &&
-        key !== 'YOUR_SIXTH_API_KEY_HERE' &&
-        key !== 'YOUR_SEVENTH_API_KEY_HERE' &&
-        key !== 'YOUR_EIGHTH_API_KEY_HERE' &&
-        key !== 'YOUR_NINTH_API_KEY_HERE' &&
-        key !== 'YOUR_TENTH_API_KEY_HERE' &&
-        key.length > 20) { // Basic validation - API keys are usually long
+        !key.includes('YOUR_') && 
+        !key.includes('PLACEHOLDER') &&
+        !key.includes('HERE') &&
+        key.length > 20 && 
+        key !== 'test' &&
+        key !== 'api1' &&
+        key !== 'api2') {
       keys.push(key);
     }
     i++;
@@ -74,6 +72,7 @@ function getApiKeys(envVars) {
     if (key && 
         !key.includes('YOUR_') && 
         !key.includes('PLACEHOLDER') &&
+        !key.includes('HERE') &&
         key.length > 20) {
       keys.push(key);
     }
@@ -238,7 +237,15 @@ export async function initializeConfig() {
   }
   
   // Set Gemini API key for AI query generation
-  if (envVars.GEMINI_API_KEY && envVars.GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE') {
+  if (envVars.GEMINI_API_KEY && 
+      envVars.GEMINI_API_KEY !== 'YOUR_GEMINI_API_KEY_HERE' &&
+      !envVars.GEMINI_API_KEY.includes('YOUR_') &&
+      !envVars.GEMINI_API_KEY.includes('PLACEHOLDER') &&
+      !envVars.GEMINI_API_KEY.includes('HERE') &&
+      envVars.GEMINI_API_KEY !== 'test' &&
+      envVars.GEMINI_API_KEY !== 'g1' &&
+      envVars.GEMINI_API_KEY !== 'g2' &&
+      envVars.GEMINI_API_KEY.length > 20) {
     config.gemini.apiKey = envVars.GEMINI_API_KEY;
     console.log(`🤖 Gemini AI API key loaded`);
   } else {

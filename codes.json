@@ -2,11 +2,11 @@
   "user1": {
     "apiKeys": {
       "googleSearchKeys": [
-        "AIzaSyAyj4AstBsA8z3_kOIXOIaYv6Bv57krIUs",
-        "AIzaSyDr3PnZTocarHxtJbRrSwW-SAmraq5nXn4"
+        "AIzaSyBROTG4GbDRwmiI_RJenS2nZ6MA4z949Gg",
+        "AIzaSyBROTG4GbDRwmiI_RJenS2nZ6MA4z949Gg"
       ],
       "geminiKeys": [
-        "AIzaSyDxAGzysjaW5yK_kJulYzv-pHaqn1P0H4E",
+        "AIzaSyA9cJBSvbby_RryiL3tgwVT60JudOCtseM",
         "AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo"
       ]
     },
@@ -14,19 +14,19 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin",
-      "lastUsed": "2025-08-27T13:12:08.606Z",
-      "useCount": 37,
+      "lastUsed": "2025-08-27T23:41:02.851Z",
+      "useCount": 51,
       "modifiedBy": "admin123",
-      "modifiedAt": "2025-08-26T18:37:58.137Z",
+      "modifiedAt": "2025-08-27T17:42:57.885Z",
       "dailyLimitReset": {
         "previousCount": 4,
-        "resetAt": "2025-08-26T18:37:58.137Z"
+        "resetAt": "2025-08-27T17:42:57.885Z"
       }
     },
     "dailyScraping": {
-      "date": "Wed Aug 27 2025",
+      "date": "Thu Aug 28 2025",
       "count": 1,
-      "lastReset": "2025-08-27T12:30:51.276Z"
+      "lastReset": "2025-08-27T23:01:24.858Z"
     },
     "language": "ar"
   },
