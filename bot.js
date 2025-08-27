@@ -3607,8 +3607,17 @@ async function handleMessage(sock, message) {
           text: getMessage(session.language, 'main_menu')
         });
         return;
+      } else if (text === '0') {
+        // User wants to go back to main menu
+        session.currentStep = 'main_menu';
+        saveJson(SESSIONS_FILE, sessions);
+        
+        await sock.sendMessage(jid, { 
+          text: getMessage(session.language || 'en', 'main_menu')
+        });
+        return;
       } else {
-        // Resend welcome message for any invalid input until language is selected
+        // Resend welcome message for any other invalid input until language is selected
         await sock.sendMessage(jid, { 
           text: getMessage('en', 'welcome') // Always use English for welcome message
         });
@@ -3995,7 +4004,18 @@ async function handleMessage(sock, message) {
 
     // Handle messages based on current conversation step
     if (session.currentStep === 'awaiting_niche') {
-        if (isNaN(inputNumber)) { // Treat non-numeric input as niche
+        if (text === '0') {
+            // User wants to go back to main menu
+            session.currentStep = 'main_menu';
+            session.pendingNiche = null;
+            session.previousMessage = null;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'main_menu')
+            });
+            return;
+        } else if (isNaN(inputNumber)) { // Treat non-numeric input as niche
             session.pendingNiche = text;
             session.currentStep = 'awaiting_source';
             session.previousMessage = getMessage(session.language, 'select_source', {

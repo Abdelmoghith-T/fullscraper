@@ -1,18 +1,17 @@
 {
   "212691708186@s.whatsapp.net": {
     "prefs": {
-      "source": "MAPS",
+      "source": "ALL",
       "format": "XLSX",
-      "limit": 300,
-      "dataType": "COMPLETE"
+      "limit": 300
     },
     "status": "idle",
-    "currentStep": "awaiting_niche",
-    "previousMessage": "💾 **Output format set to: XLSX**\n\n🚀 **Ready to start scraping!**\n\n0️⃣ **BACK** - Go back to format selection\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Send:** START",
+    "currentStep": "awaiting_language",
+    "previousMessage": null,
     "language": "en",
     "meta": {
-      "createdAt": "2025-08-27T12:30:31.891Z",
-      "totalJobs": 1,
+      "createdAt": "2025-08-27T13:12:01.377Z",
+      "totalJobs": 0,
       "lastNiche": null
     },
     "security": {
@@ -24,7 +23,7 @@
     "dailyScraping": {
       "date": "Wed Aug 27 2025",
       "count": 0,
-      "lastReset": "2025-08-27T12:30:31.891Z"
+      "lastReset": "2025-08-27T13:12:01.377Z"
     },
     "code": "user1",
     "apiKeys": {
@@ -36,7 +35,6 @@
         "AIzaSyDxAGzysjaW5yK_kJulYzv-pHaqn1P0H4E",
         "AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo"
       ]
-    },
-    "pendingNiche": "Dentist in fes"
+    }
   }
 }
