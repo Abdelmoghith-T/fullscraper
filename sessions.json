@@ -7,11 +7,11 @@
       "dataType": "COMPLETE"
     },
     "status": "idle",
-    "currentStep": "awaiting_auth",
-    "previousMessage": "🎯 **Select Data Source for \"Dentist in fes\":**\n\n1️⃣ **GOOGLE** - Business websites & contact pages\n2️⃣ **LINKEDIN** - Professional profiles & companies\n3️⃣ **MAPS** - Business directory & local listings\n4️⃣ **ALL** - Combined multi-source scraping\n\n0️⃣ **BACK** - Go back to niche input\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
+    "currentStep": "awaiting_niche",
+    "previousMessage": "💾 **Output format set to: XLSX**\n\n🚀 **Ready to start scraping!**\n\n0️⃣ **BACK** - Go back to format selection\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Send:** START",
     "language": "en",
     "meta": {
-      "createdAt": "2025-08-26T14:54:53.536Z",
+      "createdAt": "2025-08-27T12:30:31.891Z",
       "totalJobs": 1,
       "lastNiche": null
     },
@@ -22,9 +22,9 @@
       "blockedAt": null
     },
     "dailyScraping": {
-      "date": "Tue Aug 26 2025",
+      "date": "Wed Aug 27 2025",
       "count": 0,
-      "lastReset": "2025-08-26T14:54:53.536Z"
+      "lastReset": "2025-08-27T12:30:31.891Z"
     },
     "code": "user1",
     "apiKeys": {

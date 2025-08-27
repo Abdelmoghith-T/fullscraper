@@ -3593,17 +3593,118 @@ async function handleMessage(sock, message) {
       
       if (langNumber >= 1 && langNumber <= 3) {
         session.language = langMap[langNumber];
-        session.currentStep = 'awaiting_auth';
+        
+        // Save language to user's profile in codes.json
+        if (session.code && codesDb[session.code]) {
+          codesDb[session.code].language = session.language;
+          saveJson(CODES_FILE, codesDb);
+        }
+        
+        session.currentStep = 'main_menu';
         saveJson(SESSIONS_FILE, sessions);
         
         await sock.sendMessage(jid, { 
-          text: getMessage(session.language, 'auth_required')
+          text: getMessage(session.language, 'main_menu')
         });
         return;
       } else {
         // Resend welcome message for any invalid input until language is selected
         await sock.sendMessage(jid, { 
           text: getMessage('en', 'welcome') // Always use English for welcome message
+        });
+        return;
+      }
+    }
+
+    // Handle main menu selections
+    if (session.currentStep === 'main_menu' && session.apiKeys) {
+      const menuChoice = parseInt(text);
+      
+      if (menuChoice >= 1 && menuChoice <= 5) {
+        switch (menuChoice) {
+          case 1: // START SCRAPER
+            session.currentStep = 'awaiting_niche';
+            saveJson(SESSIONS_FILE, sessions);
+            await sock.sendMessage(jid, { 
+              text: getMessage(session.language, 'enter_niche')
+            });
+            return;
+            
+          case 2: // VIEW HISTORY
+            // TODO: Implement history viewing
+            await sock.sendMessage(jid, { 
+              text: getMessage(session.language, 'no_history')
+            });
+            // Show main menu again
+            await sock.sendMessage(jid, { 
+              text: getMessage(session.language, 'main_menu')
+            });
+            return;
+            
+          case 3: // STATUS
+            try {
+              const limitInfo = checkDailyScrapingLimit(jid, sessions);
+              const statusMessage = getDailyScrapingStatusMessage(limitInfo, session.language);
+              
+              let message = `📊 **Your Scraping Status**\n\n`;
+              message += statusMessage;
+              message += `\n\n🎯 **Current Settings:**\n`;
+              message += `• Source: ${session.prefs?.source || 'ALL'}\n`;
+              message += `• Format: ${session.prefs?.format || 'XLSX'}\n`;
+              message += `• Limit: ${session.prefs?.limit || 300} results\n`;
+              message += `• Language: ${session.language.toUpperCase()}\n\n`;
+              message += `📈 **Account Stats:**\n`;
+              message += `• Total Jobs: ${session.meta?.totalJobs || 0}\n`;
+              message += `• Last Niche: ${session.meta?.lastNiche || 'None'}\n`;
+              message += `• Session Created: ${new Date(session.meta?.createdAt || Date.now()).toLocaleString()}`;
+              
+              await sock.sendMessage(jid, { text: message });
+            } catch (error) {
+              console.error(chalk.red(`❌ Error in STATUS command:`, error.message));
+              await sock.sendMessage(jid, { 
+                text: `❌ **Error checking status:** ${error.message}` 
+              });
+            }
+            // Show main menu again
+            await sock.sendMessage(jid, { 
+              text: getMessage(session.language, 'main_menu')
+            });
+            return;
+            
+          case 4: // CHANGE LANGUAGE
+            session.currentStep = 'awaiting_language';
+            saveJson(SESSIONS_FILE, sessions);
+            await sock.sendMessage(jid, { 
+              text: getMessage('en', 'welcome')
+            });
+            return;
+            
+          case 5: // LOGOUT
+            try {
+              const userCode = session.code;
+              const phoneNumber = jid.split('@')[0];
+              
+              // Clear the user session
+              delete sessions[jid];
+              saveJson(SESSIONS_FILE, sessions);
+              
+              await sock.sendMessage(jid, { 
+                text: `🔓 **User Logout Successful!**\n\n✅ You have been logged out of your user session.\n\n💡 **To log back in:**\n• Send CODE: <user_code> to start a new user session\n• Example: CODE: user1\n\n💡 **To become admin:**\n• Send ADMIN: <admin_code> to start an admin session\n• Example: ADMIN: admin123\n\n💡 **Available accounts:**\n• User codes: ${Object.keys(codesDb).join(', ')}\n• Admin codes: ${Object.keys(adminManager.admins).join(', ')}`
+              });
+              
+              console.log(chalk.yellow(`🔓 User ${phoneNumber} logged out (was using code: ${userCode})`));
+            } catch (error) {
+              console.error(chalk.red(`❌ Error in user logout:`, error.message));
+              await sock.sendMessage(jid, { 
+                text: `❌ **Error during logout:** ${error.message}` 
+              });
+            }
+            return;
+        }
+      } else {
+        // Invalid selection - show main menu again
+        await sock.sendMessage(jid, { 
+          text: getMessage(session.language, 'main_menu')
         });
         return;
       }
@@ -3673,82 +3774,31 @@ async function handleMessage(sock, message) {
       saveJson(SESSIONS_FILE, sessions);
 
 
-      // Send welcome message first (since this is their first interaction after authentication)
-      await sock.sendMessage(jid, { 
-        text: getMessage('en', 'welcome') // Always use English for welcome
-      });
-      
-      // Then send access granted message
-      await sock.sendMessage(jid, { 
-        text: getMessage(session.language, 'access_granted', {
-          source: session.prefs.source,
-          format: session.prefs.format,
-          limit: session.prefs.limit
-        })
-      });
-      
-      // Send logout information
-      await sock.sendMessage(jid, { 
-        text: `💡 **Tip:** You can logout anytime by sending **LOGOUT** to switch accounts or become admin.`
-      });
-      
-      session.currentStep = 'awaiting_niche';
-      session.previousMessage = null;
-      saveJson(SESSIONS_FILE, sessions);
-      return;
-    }
-
-    // User command: Check status (including daily limits)
-    if (text.toUpperCase() === 'STATUS' && session.apiKeys) {
-      try {
-        const limitInfo = checkDailyScrapingLimit(jid, sessions);
-        const statusMessage = getDailyScrapingStatusMessage(limitInfo, session.language);
-        
-        let message = `📊 **Your Scraping Status**\n\n`;
-        message += statusMessage;
-        message += `\n\n🎯 **Current Settings:**\n`;
-        message += `• Source: ${session.prefs.source}\n`;
-        message += `• Format: ${session.prefs.format}\n`;
-        message += `• Limit: ${session.prefs.limit} results\n`;
-        message += `• Language: ${session.language.toUpperCase()}\n\n`;
-        message += `📈 **Account Stats:**\n`;
-        message += `• Total Jobs: ${session.meta.totalJobs || 0}\n`;
-        message += `• Last Niche: ${session.meta.lastNiche || 'None'}\n`;
-        message += `• Session Created: ${new Date(session.meta.createdAt).toLocaleString()}`;
-        
-        await sock.sendMessage(jid, { text: message });
-      } catch (error) {
-        console.error(chalk.red(`❌ Error in STATUS command:`, error.message));
-        await sock.sendMessage(jid, { 
-          text: `❌ **Error checking status:** ${error.message}` 
-        });
-      }
-      return;
-    }
-
-    // User command: Logout from user session
-    if (text.toUpperCase() === 'LOGOUT' && session.apiKeys) {
-      try {
-        const userCode = session.code;
-        const phoneNumber = jid.split('@')[0];
-        
-        // Clear the user session
-        delete sessions[jid];
+      // Check if user already has a language preference
+      if (!session.language) {
+        // First time user - show language selection
+        session.currentStep = 'awaiting_language';
         saveJson(SESSIONS_FILE, sessions);
         
         await sock.sendMessage(jid, { 
-          text: `🔓 **User Logout Successful!**\n\n✅ You have been logged out of your user session.\n\n💡 **To log back in:**\n• Send CODE: <user_code> to start a new user session\n• Example: CODE: user1\n\n💡 **To become admin:**\n• Send ADMIN: <admin_code> to start an admin session\n• Example: ADMIN: admin123\n\n💡 **Available accounts:**\n• User codes: ${Object.keys(codesDb).join(', ')}\n• Admin codes: ${Object.keys(adminManager.admins).join(', ')}`
+          text: getMessage('en', 'welcome') // Always use English for welcome
         });
+        return;
+      } else {
+        // Returning user - show main menu in their language
+        session.currentStep = 'main_menu';
+        saveJson(SESSIONS_FILE, sessions);
         
-        console.log(chalk.yellow(`🔓 User ${phoneNumber} logged out (was using code: ${userCode})`));
-      } catch (error) {
-        console.error(chalk.red(`❌ Error in user logout:`, error.message));
         await sock.sendMessage(jid, { 
-          text: `❌ **Error during logout:** ${error.message}` 
+          text: getMessage(session.language, 'main_menu')
         });
-      }
         return;
       }
+    }
+
+
+
+
       
     // Admin command: UNBLOCK (only works for users with valid codes)
     if (text.toUpperCase().startsWith('ADMIN: UNBLOCK') && session.apiKeys) {
@@ -4334,7 +4384,7 @@ async function handleMessage(sock, message) {
                 // Job completed successfully - perform cleanup and reset session state
                 activeJobs.delete(jid);
                 session.status = 'idle';
-                session.currentStep = 'awaiting_niche'; // Reset step after job completion
+                session.currentStep = 'main_menu'; // Return to main menu after job completion
                 session.meta.totalJobs++;
 
 
@@ -4374,6 +4424,11 @@ async function handleMessage(sock, message) {
                                   phones: result.meta.phones || 0,
                                   websites: result.meta.websites || 0
                                 })
+                            });
+                            
+                            // Show main menu after job completion
+                            await sock.sendMessage(jid, { 
+                                text: getMessage(session.language, 'main_menu')
                             });
                         } else {
                             console.log(chalk.red(`❌ Results file not sent to ${jid} (sendFile returned false).`));
@@ -4428,7 +4483,7 @@ async function handleMessage(sock, message) {
                 // Clean up
                 activeJobs.delete(jid);
                 session.status = 'idle';
-                session.currentStep = 'awaiting_niche'; // Reset step on error
+                session.currentStep = 'main_menu'; // Return to main menu on error
                 sessions[jid] = session;
                 saveJson(SESSIONS_FILE, sessions);
 
@@ -4540,6 +4595,11 @@ async function handleMessage(sock, message) {
 
                 // Send error message to user
                 await sock.sendMessage(jid, { text: errorMessage });
+                
+                // Show main menu after error
+                await sock.sendMessage(jid, { 
+                    text: getMessage(session.language, 'main_menu')
+                });
             }
             
             return;
@@ -4549,10 +4609,15 @@ async function handleMessage(sock, message) {
                 activeJob.abort.abort();
                 activeJobs.delete(jid); // Ensure job is cleared
                 session.status = 'idle';
-                session.currentStep = 'awaiting_niche';
+                session.currentStep = 'main_menu';
                 sessions[jid] = session;
                 saveJson(SESSIONS_FILE, sessions);
                 await sock.sendMessage(jid, { text: '🛑 **Job cancelled successfully.** You can send a new search query when ready.' });
+                
+                // Show main menu after job cancellation
+                await sock.sendMessage(jid, { 
+                    text: getMessage(session.language, 'main_menu')
+                });
             } else {
                 await sock.sendMessage(jid, { text: '📊 No active job to cancel.' });
             }
@@ -4598,167 +4663,18 @@ async function handleMessage(sock, message) {
             await sock.sendMessage(jid, { 
                 text: '🔄 **Session state reset.** You can now send a new search query to begin scraping.'
             });
+            
+            // Show main menu after reset
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'main_menu')
+            });
         }
         return;
     }
 
-    // Existing general commands (STATUS, STOP, RESET, HELP, LIMIT) - re-evaluate their placement
-    // These commands should ideally work regardless of step, but interact differently.
-    // The step-specific handling above should take precedence.
-    
-    if (/^STATUS$/i.test(text)) {
 
-      // Only allow STATUS command for authenticated users
-      if (!session.apiKeys) {
-        console.log(chalk.yellow(`🔒 Unauthorized STATUS command from ${jid.split('@')[0]} - Ignoring silently`));
-        return;
-      }
-      
-      const activeJob = activeJobs.get(jid);
-      
-      if (activeJob) {
-        await sock.sendMessage(jid, { 
-          text: `📊 **Current Status:** ${activeJob.status || 'Processing...'}\n\n` +
-                `🎯 Source: ${session.prefs.source}\n` +
-                `📄 Format: ${session.prefs.format}\n` +
-                `📏 Limit: ${session.prefs.limit}\n\n` +
-                `💡 Send STOP to cancel the current job.`
-        });
-      } else {
-        await sock.sendMessage(jid, { 
-          text: `📊 **Status:** Idle\n\n` +
-                `🎯 Source: ${session.prefs.source}\n` +
-                `📄 Format: ${session.prefs.format}\n` +
-                `📏 Limit: ${session.prefs.limit}\n\n` +
-                `💡 Send a search query to start scraping.`
-        });
-      }
-      session.currentStep = 'awaiting_niche'; // Reset after status check
-      session.previousMessage = null;
-      session.currentLoadingPercentage = 0; // Reset after status check
-      session.lastLoadingUpdateTimestamp = 0; // Reset after status check
-      saveJson(SESSIONS_FILE, sessions);
-      return;
-    }
 
-    if (/^STOP$/i.test(text)) {
 
-      // Only allow STOP command for authenticated users
-      if (!session.apiKeys) {
-        console.log(chalk.yellow(`🔒 Unauthorized STOP command from ${jid.split('@')[0]} - Ignoring silently`));
-        return;
-      }
-      
-      const activeJob = activeJobs.get(jid);
-      
-      if (activeJob && activeJob.abort) {
-        activeJob.abort.abort();
-        activeJobs.delete(jid);
-        
-        session.status = 'idle';
-        session.currentStep = 'awaiting_niche'; // Reset step on stop
-        session.currentLoadingPercentage = 0; // Reset on stop
-        session.lastLoadingUpdateTimestamp = 0; // Reset on stop
-        sessions[jid] = session;
-        saveJson(SESSIONS_FILE, sessions);
-
-        await sock.sendMessage(jid, { 
-          text: '🛑 **Job cancelled successfully.** You can send a new search query when ready.'
-        });
-      } else {
-        // FIX: If no active job but session is stuck, reset the session state
-        if (session.currentStep === 'scraping_in_progress') {
-          console.log(chalk.yellow(`🔧 STOP command fixing stuck session state for ${jid}: resetting from 'scraping_in_progress' to 'awaiting_niche'`));
-          resetSessionState(jid, sessions);
-          
-          await sock.sendMessage(jid, { 
-            text: '🔄 **Session state reset.** You can now send a new search query to begin scraping.'
-          });
-        } else {
-          await sock.sendMessage(jid, { 
-            text: '📊 No active job to cancel. You can send a search query to start scraping.'
-          });
-        }
-      }
-      return;
-    }
-
-    if (/^RESET$/i.test(text)) {
-
-      // Only allow RESET command for authenticated users
-      if (!session.apiKeys) {
-        console.log(chalk.yellow(`🔒 Unauthorized RESET command from ${jid.split('@')[0]} - Ignoring silently`));
-        return;
-      }
-      
-      session.prefs = {
-        source: 'ALL',
-        format: 'XLSX',
-        limit: 300
-      };
-      session.currentStep = 'awaiting_niche'; // Reset step on reset
-      session.pendingNiche = null;
-      session.currentLoadingPercentage = 0; // Reset on reset
-      session.lastLoadingUpdateTimestamp = 0; // Reset on reset
-      sessions[jid] = session;
-      saveJson(SESSIONS_FILE, sessions);
-
-      await sock.sendMessage(jid, { 
-        text: `♻️ **Preferences reset to defaults:**\n\n` +
-              `🎯 Source: ALL\n` +
-              `📄 Format: XLSX\n` +
-              `📏 Limit: 300\n\n` +
-              `Please send a new search query to begin.`
-      });
-      return;
-    }
-
-    if (/^LIMIT:?\s+/i.test(text)) {
-
-      // Only allow LIMIT command for authenticated users
-      if (!session.apiKeys) {
-        console.log(chalk.yellow(`🔒 Unauthorized LIMIT command from ${jid.split('@')[0]} - Ignoring silently`));
-        return;
-      }
-      
-      const limitStr = text.replace(/^LIMIT:?\s+/i, '').trim();
-      const limit = parseInt(limitStr, 10);
-      
-      if (!Number.isFinite(limit) || limit < 1 || limit > 500) {
-        await sock.sendMessage(jid, { 
-          text: '⚠️ Invalid limit. Please enter a number between 1 and 500.'
-        });
-        return;
-      }
-
-      session.prefs.limit = limit;
-      session.currentStep = 'awaiting_niche'; // Reset step after limit change
-      session.pendingNiche = null;
-      session.currentLoadingPercentage = 0; // Reset after limit change
-      session.lastLoadingUpdateTimestamp = 0; // Reset after limit change
-      sessions[jid] = session;
-      saveJson(SESSIONS_FILE, sessions);
-
-      await sock.sendMessage(jid, { 
-        text: `📏 Results limit set to: **${limit}**`
-      });
-      return;
-    }
-
-    if (/^HELP$/i.test(text)) {
-
-      // Only allow HELP command for authenticated users
-      if (!session.apiKeys) {
-        console.log(chalk.yellow(`🔒 Unauthorized HELP command from ${jid.split('@')[0]} - Ignoring silently`));
-        return;
-      }
-      
-      await sendChunkedMessage(sock, jid, getMessage(session.language, 'help'));
-      session.currentStep = 'awaiting_niche'; // Reset step after help
-      session.previousMessage = null;
-      saveJson(SESSIONS_FILE, sessions);
-      return;
-    }
 
 
         // Check if there are pending results for this user (only if authenticated)
@@ -4790,7 +4706,7 @@ async function handleMessage(sock, message) {
       } else {
         // Only inform if not already in a specific state and not a common command
         if (!['awaiting_niche', 'awaiting_source', 'awaiting_type', 'ready_to_start', 'scraping_in_progress'].includes(session.currentStep) &&
-            !['STATUS', 'STOP', 'RESET', 'LIMIT', 'HELP'].some(cmd => text.toUpperCase().startsWith(cmd))) {
+            !['START'].some(cmd => text.toUpperCase().startsWith(cmd))) {
             await sock.sendMessage(jid, { 
                 text: `📎 **You have pending results.** Reply \`SEND\` to receive them, or \`SKIP\` to discard. Continuing with your new message...`
             });

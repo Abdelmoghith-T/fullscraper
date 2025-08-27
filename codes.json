@@ -14,8 +14,8 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin",
-      "lastUsed": "2025-08-26T18:38:56.942Z",
-      "useCount": 35,
+      "lastUsed": "2025-08-27T12:30:45.132Z",
+      "useCount": 36,
       "modifiedBy": "admin123",
       "modifiedAt": "2025-08-26T18:37:58.137Z",
       "dailyLimitReset": {
@@ -24,9 +24,9 @@
       }
     },
     "dailyScraping": {
-      "date": "Tue Aug 26 2025",
+      "date": "Wed Aug 27 2025",
       "count": 1,
-      "lastReset": "2025-08-26T18:37:58.137Z"
+      "lastReset": "2025-08-27T12:30:51.276Z"
     },
     "language": "ar"
   },
