@@ -10,9 +10,7 @@ pids
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
+
 
 # nyc test coverage
 .nyc_output
@@ -56,11 +54,6 @@ typings/
 # Yarn Integrity file
 .yarn-integrity
 
-# dotenv environment variables file
-.env
-.env.test
-.env.production
-.env.local
 
 # parcel-bundler cache
 .cache
@@ -81,17 +74,8 @@ public
 .out
 .storybook-out
 
-# Temporary folders
-tmp/
-temp/
 
-# WhatsApp Bot Specific
-auth_info/
-sessions.json
-admin_sessions.json
-*.session
-*.key
-*.crt
+
 
 # Results and data
 results/
@@ -104,9 +88,7 @@ results/
 !languages.js
 !railway.json
 
-# Admin and configuration
-admin_config.json
-!admin_sessions.json
+
 
 # Logs
 logs/
@@ -128,6 +110,3 @@ Thumbs.db
 *.swo
 *~
 
-# Railway specific
-.railway/
-railway.toml
