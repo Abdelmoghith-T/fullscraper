@@ -2,11 +2,11 @@
   "user1": {
     "apiKeys": {
       "googleSearchKeys": [
-        "AIzaSyBROTG4GbDRwmiI_RJenS2nZ6MA4z949Gg",
-        "AIzaSyBROTG4GbDRwmiI_RJenS2nZ6MA4z949Gg"
+        "AIzaSyCc3DAVg8_JMWMoXLZ8b_hXtSoGf82h-qo",
+        "AIzaSyDB34zBGAHN4S-RxBKqlAX7UxuyIMWE-iM"
       ],
       "geminiKeys": [
-        "AIzaSyA9cJBSvbby_RryiL3tgwVT60JudOCtseM",
+        "AIzaSyC_eJXktvlv1L2JjzluacY0ywU_TmApkKc",
         "AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo"
       ]
     },
@@ -14,8 +14,8 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin",
-      "lastUsed": "2025-08-27T23:41:02.851Z",
-      "useCount": 51,
+      "lastUsed": "2025-08-28T00:38:18.293Z",
+      "useCount": 55,
       "modifiedBy": "admin123",
       "modifiedAt": "2025-08-27T17:42:57.885Z",
       "dailyLimitReset": {
@@ -25,7 +25,7 @@
     },
     "dailyScraping": {
       "date": "Thu Aug 28 2025",
-      "count": 1,
+      "count": 4,
       "lastReset": "2025-08-27T23:01:24.858Z"
     },
     "language": "ar"
@@ -65,8 +65,8 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-08-26T02:13:02.757Z",
-      "useCount": 11,
+      "lastUsed": "2025-08-28T01:16:57.228Z",
+      "useCount": 12,
       "modifiedBy": "CLI",
       "modifiedAt": "2025-08-26T14:51:46.342Z",
       "previousLanguage": "en",
@@ -81,6 +81,6 @@
       "count": 4,
       "lastReset": "2025-08-26T02:13:30.058Z"
     },
-    "language": "fr"
+    "language": "en"
   }
 }
