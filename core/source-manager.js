@@ -19,7 +19,7 @@ export class SourceManager {
    * Main execution method - routes to appropriate scraper
    */
   async run(niche, source, dataType, format, options = {}) {
-    const { onResult, onBatch, onProgress, apiKeys } = options;
+    const { onResult, onBatch, onProgress, apiKeys, trialMode = false, trialLimit = 20 } = options;
     this.isProcessing = true;
     this.currentSource = source;
     
@@ -51,7 +51,9 @@ export class SourceManager {
             dataType, 
             format,
             maxResults: this.getMaxResults(source),
-            apiKeys: apiKeys || {} // Pass API keys to the scraper
+            apiKeys: apiKeys || {}, // Pass API keys to the scraper
+            trialMode,
+            trialLimit
           });
         
         // Handle empty results gracefully
@@ -95,23 +97,30 @@ export class SourceManager {
           }
         }
         
-        // Call onBatch callback with all results
+        // If trial mode, dedupe and cap to trialLimit before onBatch
+        let finalForBatch = allResults;
+        if (trialMode) {
+          finalForBatch = this.deduplicateGeneric(allResults).slice(0, Math.max(0, trialLimit || 20));
+        }
+        // Call onBatch callback with all results (or trimmed in trial)
         if (onBatch && allResults.length > 0) {
           try {
-            await onBatch([...allResults]);
+            await onBatch([...finalForBatch]);
           } catch (error) {
             console.error('onBatch callback error:', error.message);
           }
         }
         
-        return allResults;
+        return finalForBatch;
       } else {
         // Original behavior without callbacks
-        const results = await scraper.scrape(niche, { 
+        let results = await scraper.scrape(niche, { 
           dataType, 
           format,
           maxResults: this.getMaxResults(source),
-          apiKeys: apiKeys || {} // Pass API keys to the scraper
+          apiKeys: apiKeys || {}, // Pass API keys to the scraper
+          trialMode,
+          trialLimit
         });
         
         // Handle empty results gracefully
@@ -212,6 +221,32 @@ export class SourceManager {
       spinner.fail(`Failed to load ${this.getSourceDisplayName(source)} scraper`);
       throw new Error(`Could not load scraper for ${source}: ${error.message}`);
     }
+  }
+
+  // Generic deduplication routine available to manager
+  deduplicateGeneric(results) {
+    if (!Array.isArray(results)) return [];
+    const seen = new Set();
+    const unique = [];
+    for (const item of results) {
+      if (!item || typeof item !== 'object') continue;
+      const keyParts = [
+        (item.email || '').toString().toLowerCase(),
+        (item.emails || '').toString().toLowerCase(),
+        (item.phone || '').toString(),
+        (item.profileUrl || item.url || '').toString().toLowerCase(),
+        (item.website || '').toString().toLowerCase(),
+        (item.businessName || item.name || '').toString().toLowerCase(),
+        (item.source || '').toString().toLowerCase()
+      ];
+      const key = keyParts.join('|');
+      if (key.trim() === '' || seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      unique.push(item);
+    }
+    return unique;
   }
 
   /**

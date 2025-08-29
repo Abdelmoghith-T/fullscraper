@@ -72,12 +72,26 @@ export class GoogleMapsScraper extends ScraperInterface {
       console.log(chalk.gray(`   This will find many more businesses than a single search`));
       
       // Call the original orchestration function that uses AI to generate queries
-      const results = await this.runOriginalOrchestration(fullNiche, maxResultsPerSubQuery);
+      let results = await this.runOriginalOrchestration(fullNiche, maxResultsPerSubQuery);
       
       console.log(chalk.blue(`✅ Found ${results.length} businesses`));
       
       // Transform results based on requested data type
-      const transformedResults = this.transformResults(results, options.dataType);
+      let transformedResults = this.transformResults(results, options.dataType);
+
+      // Trial-mode enforcement at wrapper-level: dedupe and cap to trialLimit.
+      if (options.trialMode) {
+        const limit = Math.max(0, options.trialLimit || 20);
+        // Basic dedupe by normalized phone + website + name
+        const seen = new Set();
+        transformedResults = transformedResults.filter(r => {
+          const key = `${(r.phone||'').toString()}|${(r.website||'').toLowerCase()}|${(r.businessName||'').toLowerCase()}|${(r.emails||'').toLowerCase()}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).slice(0, limit);
+        console.log(chalk.yellow(`🔒 Trial mode (Google Maps): returning ${transformedResults.length} results`));
+      }
       
       await this.cleanup(transformedResults);
       
@@ -141,7 +155,7 @@ export class GoogleMapsScraper extends ScraperInterface {
           
           // Try to save current partial results
           try {
-            const partialResults = await this.parseOriginalScraperResults().catch(() => []);
+            const partialResults = await this.parseOriginalScraperResults(userQuery).catch(() => []);
             if (partialResults.length > 0) {
               console.log(chalk.blue(`💾 Saving ${partialResults.length} partial Google Maps results...`));
               console.log(chalk.green(`✅ Partial results saved successfully`));
@@ -157,7 +171,7 @@ export class GoogleMapsScraper extends ScraperInterface {
           // Kill the child process
           child.kill('SIGTERM');
           console.log(chalk.gray('\nGoogle Maps scraper terminated by user.'));
-          process.exit(0);
+          // Do NOT exit the parent process; allow close handler to resolve with partial results
         };
 
         // Set up interruption handlers
@@ -167,11 +181,20 @@ export class GoogleMapsScraper extends ScraperInterface {
         let stdout = '';
         let stderr = '';
         
+        let trialInterrupted = false;
         child.stdout.on('data', (data) => {
           const output = data.toString();
           stdout += output;
           // Stream output to console for real-time feedback
           process.stdout.write(output);
+
+          // Trial mode: detect autosave and stop immediately to capture first autosave
+          if (!trialInterrupted && this.options?.trialMode && (output.toLowerCase().includes('auto-saving') || output.toLowerCase().includes('auto-saved'))) {
+            trialInterrupted = true;
+            setTimeout(() => {
+              try { handleInterruption(); } catch (e) {}
+            }, 6000);
+          }
         });
         
         child.stderr.on('data', (data) => {
@@ -185,10 +208,10 @@ export class GoogleMapsScraper extends ScraperInterface {
           process.removeListener('SIGINT', handleInterruption);
           process.removeListener('SIGTERM', handleInterruption);
           
-          if (code === 0) {
+          if (code === 0 || (this.options?.trialMode && trialInterrupted)) {
             console.log(chalk.green('✅ Google Maps scraper completed successfully'));
             // Parse results from the generated file
-            this.parseOriginalScraperResults()
+            this.parseOriginalScraperResults(userQuery)
               .then(resolve)
               .catch(reject);
           } else {
@@ -212,7 +235,7 @@ export class GoogleMapsScraper extends ScraperInterface {
   /**
    * Parse results from the original scraper's output file
    */
-  async parseOriginalScraperResults() {
+  async parseOriginalScraperResults(userQuery) {
     const fs = await import('fs');
     const path = await import('path');
     
@@ -238,6 +261,34 @@ export class GoogleMapsScraper extends ScraperInterface {
        }
       
       if (jsonFiles.length === 0) {
+        // Fallback: look for unified autosave in ../results created by run.js autosave
+        console.log(chalk.yellow('⚠️  No current session results found - checking unified autosave file...'));
+        try {
+          const unifiedDir = path.join('..', 'results');
+          const list = fs.readdirSync(unifiedDir);
+          let nicheKey = '';
+          if (typeof userQuery === 'string' && userQuery.trim()) {
+            const words = userQuery.toLowerCase().split(/\s+/).filter(Boolean);
+            const location = words.length > 0 ? words[words.length - 1] : '';
+            const businessType = words.slice(0, -1).join(' ');
+            nicheKey = `${businessType}_${location}`.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').toLowerCase();
+          }
+          const expectedName = nicheKey ? `${nicheKey}_google_maps_autosave.json` : null;
+          if (expectedName) {
+            const candidate = list.find(f => f.toLowerCase() === expectedName);
+            if (candidate) {
+              const autosavePath = path.join(unifiedDir, candidate);
+              console.log(chalk.cyan(`🎯 Found unified autosave file: ${candidate}`));
+              const resultsContent = fs.readFileSync(autosavePath, 'utf8');
+              const data = JSON.parse(resultsContent);
+              const results = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+              console.log(chalk.blue(`📊 Loaded ${results.length} results from unified autosave`));
+              return results;
+            }
+          }
+        } catch (fallbackErr) {
+          console.log(chalk.yellow(`⚠️  Unified autosave lookup failed: ${fallbackErr.message}`));
+        }
         throw new Error('No results file found from original maps scraper');
       }
       

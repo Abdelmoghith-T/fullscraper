@@ -257,6 +257,18 @@ export class LinkedInScraper extends ScraperInterface {
         ora = module.default;
       });
       
+      let trialInterrupted = false;
+      // Trial watchdog: if autosave never appears, stop after ~150s to recover partials
+      let trialWatchdog = null;
+      if (options.trialMode) {
+        trialWatchdog = setTimeout(() => {
+          if (!isResolved) {
+            console.log(chalk.yellow('⏰ Trial watchdog: stopping LinkedIn after 150s to capture autosave'));
+            try { handleInterruption(); } catch (e) {}
+          }
+        }, 150000);
+      }
+
       child.stdout.on('data', (data) => {
         const output = data.toString();
         stdout += output;
@@ -322,6 +334,12 @@ export class LinkedInScraper extends ScraperInterface {
                 }
               } else if (line.includes('Auto-saved LinkedIn results to:')) {
                 console.log(chalk.green('📋 LinkedIn results auto-saved successfully - interruption will recover data'));
+                // Trial mode: stop shortly after confirmed autosave so XLSX finishes writing
+                if (options.trialMode && !isResolved) {
+                  setTimeout(() => {
+                    try { handleInterruption(); } catch (e) {}
+                  }, 4000);
+                }
               } else if (line.includes('💾 Saving') && line.includes('LinkedIn profiles')) {
                 // Extract count from partial save message  
                 const countMatch = line.match(/Saving (\d+) LinkedIn profiles/);
@@ -362,9 +380,14 @@ export class LinkedInScraper extends ScraperInterface {
           querySpinner = null;
         }
         
+        // Clear watchdog if set
+        if (trialWatchdog) {
+          clearTimeout(trialWatchdog);
+          trialWatchdog = null;
+        }
         cleanup();
         
-        if (code === 0) {
+        if (code === 0 || options.trialMode) {
           console.log(chalk.green('\n✅ LinkedIn scraper completed successfully!'));
           console.log(chalk.blue('📊 Processing results from XLSX file...'));
           
@@ -434,7 +457,8 @@ export class LinkedInScraper extends ScraperInterface {
   async parseLinkedInResults(niche = '') {
     const fs = await import('fs');
     const path = await import('path');
-    const xlsx = await import('xlsx');
+    const xlsxModule = await import('xlsx');
+    const XLSX = xlsxModule && xlsxModule.readFile ? xlsxModule : (xlsxModule.default || xlsxModule);
     
     try {
       // Look for results files in the main results directory
@@ -507,12 +531,12 @@ export class LinkedInScraper extends ScraperInterface {
       
       // Read the actual Excel file to get real data
       const excelFilePath = path.join(resultsDir, mostRecent.name);
-      const workbook = xlsx.readFile(excelFilePath);
+      const workbook = XLSX.readFile(excelFilePath);
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       
       // Convert Excel data to JSON
-      const rawData = xlsx.utils.sheet_to_json(worksheet, { header: 1 });
+      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
       
       // Skip header row and process data
       const headers = rawData[0] || [];
@@ -523,7 +547,7 @@ export class LinkedInScraper extends ScraperInterface {
       console.log(chalk.blue(`💡 Successfully parsed Excel data with headers: ${headers.join(', ')}`));
       
       // Convert Excel rows to proper LinkedIn profile objects
-      const linkedInProfiles = dataRows.map((row, index) => {
+      let linkedInProfiles = dataRows.map((row, index) => {
         const profile = {};
         
         // Map Excel columns to profile properties
@@ -566,6 +590,8 @@ export class LinkedInScraper extends ScraperInterface {
       
       console.log(chalk.green(`✅ Successfully parsed ${linkedInProfiles.length} LinkedIn profiles from Excel file`));
       
+      // Trial-mode limits are applied upstream (source manager / unified orchestrator)
+
       return linkedInProfiles;
              
     } catch (error) {

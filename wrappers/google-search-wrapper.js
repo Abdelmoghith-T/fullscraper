@@ -55,11 +55,34 @@ export class GoogleSearchScraper extends ScraperInterface {
       // Pass API keys to the scraper
       const results = await runScraper({
         ...scraperOptions,
-        apiKeys: options.apiKeys
+        apiKeys: options.apiKeys,
+        trialMode: options.trialMode,
+        trialLimit: options.trialLimit
       });
       
       // Transform results based on requested data type
-      const transformedResults = this.transformResults(results, options.dataType);
+      let transformedResults = this.transformResults(results, options.dataType);
+
+      // Trial-mode enforcement at wrapper-level
+      if (options.trialMode) {
+        const limit = Math.max(0, options.trialLimit || 20);
+        const type = (options.dataType || '').toLowerCase();
+        if (type === 'emails') {
+          const emailsOnly = transformedResults.filter(r => r.email);
+          transformedResults = this.deduplicateGoogleSearchResults(emailsOnly).slice(0, limit);
+        } else if (type === 'phones') {
+          const phonesOnly = transformedResults.filter(r => r.phone);
+          transformedResults = this.deduplicateGoogleSearchResults(phonesOnly).slice(0, limit);
+        } else {
+          // contacts/both -> 10 emails + 10 phones
+          const emailsOnly = transformedResults.filter(r => r.email);
+          const phonesOnly = transformedResults.filter(r => r.phone);
+          const uniqueEmails = this.deduplicateGoogleSearchResults(emailsOnly).slice(0, Math.floor(limit / 2));
+          const uniquePhones = this.deduplicateGoogleSearchResults(phonesOnly).slice(0, Math.ceil(limit / 2));
+          transformedResults = [...uniqueEmails, ...uniquePhones];
+        }
+        console.log(chalk.yellow(`🔒 Trial mode (Google Search): returning ${transformedResults.length} results`));
+      }
       
       await this.cleanup(transformedResults);
       
@@ -287,6 +310,18 @@ export class GoogleSearchScraper extends ScraperInterface {
         ora = module.default;
       });
       
+      let trialInterrupted = false;
+      // Trial watchdog: if no autosave message appears, stop after ~130s
+      let trialWatchdog = null;
+      if (options.trialMode) {
+        trialWatchdog = setTimeout(() => {
+          if (!isResolved) {
+            console.log(chalk.yellow('⏰ Trial watchdog: stopping Google Search after 130s to capture autosave'));
+            try { handleInterruption(); } catch (e) {}
+          }
+        }, 130000);
+      }
+
       child.stdout.on('data', (data) => {
         const output = data.toString();
         stdout += output;
@@ -356,6 +391,13 @@ export class GoogleSearchScraper extends ScraperInterface {
               // Monitor for auto-save messages to know when results are available
               if (line.includes('💾 Auto-saving') || line.includes('Auto-saved')) {
                 console.log(chalk.green('📋 Results are being auto-saved - interruption will recover data'));
+                // Trial mode: stop shortly after first autosave to allow file write to complete
+                if (options.trialMode && !trialInterrupted) {
+                  trialInterrupted = true;
+                  setTimeout(() => {
+                    try { handleInterruption(); } catch (e) {}
+                  }, 6000);
+                }
               } else if (line.includes('💾 Saving partial results') || line.includes('Saving partial results')) {
                 console.log(chalk.blue('💾 Child process is saving partial results...'));
               }
@@ -387,9 +429,14 @@ export class GoogleSearchScraper extends ScraperInterface {
           querySpinner = null;
         }
         
+        // Clear watchdog if set
+        if (trialWatchdog) {
+          clearTimeout(trialWatchdog);
+          trialWatchdog = null;
+        }
         cleanup();
         
-        if (code === 0) {
+        if (code === 0 || (options.trialMode)) {
           console.log(chalk.green('\n✅ Google Search scraper completed successfully!'));
           console.log(chalk.blue('📊 Processing results from TXT file...'));
           

@@ -2,85 +2,35 @@
   "user1": {
     "apiKeys": {
       "googleSearchKeys": [
-        "AIzaSyCc3DAVg8_JMWMoXLZ8b_hXtSoGf82h-qo",
-        "AIzaSyDB34zBGAHN4S-RxBKqlAX7UxuyIMWE-iM"
+        "AIzaSyAx0lo-L-l2I6nto8RxbWC9Kbw7LhF2YSs",
+        "AIzaSyCOKIAaUud2JQWXBLK7gsFPyjLRN1SOlMQ"
       ],
       "geminiKeys": [
-        "AIzaSyC_eJXktvlv1L2JjzluacY0ywU_TmApkKc",
-        "AIzaSyBLq9NEBbVcfRhRn9fTJcE1WtDEv6azKXo"
+        "AIzaSyC3Egy-17Y1HzIiK7E4gMkAGvC7iw1CII8",
+        "AIzaSyAP0P8zu8gCTmtc3-09EcTm68CVUwhmrO8"
       ]
     },
-    "createdAt": "2025-08-18T02:34:23.747Z",
-    "expiresAt": null,
-    "meta": {
-      "issuedBy": "admin",
-      "lastUsed": "2025-08-28T00:38:18.293Z",
-      "useCount": 55,
-      "modifiedBy": "admin123",
-      "modifiedAt": "2025-08-27T17:42:57.885Z",
-      "dailyLimitReset": {
-        "previousCount": 4,
-        "resetAt": "2025-08-27T17:42:57.885Z"
-      }
-    },
-    "dailyScraping": {
-      "date": "Thu Aug 28 2025",
-      "count": 4,
-      "lastReset": "2025-08-27T23:01:24.858Z"
-    },
-    "language": "ar"
-  },
-  "test": {
-    "apiKeys": {
-      "googleSearchKeys": [
-        "test",
-        "test"
-      ],
-      "geminiKeys": [
-        "test",
-        null
-      ]
-    },
-    "createdAt": "2025-08-25T02:36:09.653Z",
+    "createdAt": "2025-08-29T04:40:52.438Z",
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": null,
-      "useCount": 0
-    },
-    "language": "en"
-  },
-  "testuser": {
-    "apiKeys": {
-      "googleSearchKeys": [
-        "api1",
-        "api2"
-      ],
-      "geminiKeys": [
-        "g1",
-        "g2"
-      ]
-    },
-    "createdAt": "2025-08-25T03:14:54.596Z",
-    "expiresAt": null,
-    "meta": {
-      "issuedBy": "admin123",
-      "lastUsed": "2025-08-28T01:16:57.228Z",
-      "useCount": 12,
-      "modifiedBy": "CLI",
-      "modifiedAt": "2025-08-26T14:51:46.342Z",
-      "previousLanguage": "en",
-      "dailyLimitModification": {
-        "previousCount": 0,
-        "additionalLimit": 4,
-        "newCount": 0
-      }
+      "lastUsed": "2025-08-29T04:56:06.305Z",
+      "useCount": 1
     },
     "dailyScraping": {
-      "date": "Tue Aug 26 2025",
-      "count": 4,
-      "lastReset": "2025-08-26T02:13:30.058Z"
+      "date": "Fri Aug 29 2025",
+      "count": 2,
+      "lastReset": "2025-08-29T04:40:52.438Z"
     },
-    "language": "en"
+    "language": "en",
+    "stage": "unpaid",
+    "trial": {
+      "triesUsed": 1,
+      "maxTries": 3
+    },
+    "paid": {
+      "grantedAt": "2025-08-29T04:53:38.925Z",
+      "expiresAt": "2025-08-29T17:26:00.000Z"
+    }
   }
 }

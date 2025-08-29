@@ -251,9 +251,6 @@ class ProgressSimulator {
    * Generate realistic progress messages
    */
   generateProgressMessage(progress) {
-    // Import getMessage function for localization
-    const { getMessage } = require('./languages.js');
-    
     const messages = [
       getMessage(this.language, 'progress_analyzing', { progress: progress.toFixed(1) }),
       getMessage(this.language, 'progress_processing', { progress: progress.toFixed(1) }),
@@ -286,6 +283,140 @@ const pendingResults = new Map(); // jid -> { filePath: string, meta: any, times
 
 // Daily scraping limits
 const DAILY_SCRAPING_LIMIT = 4; // Maximum scrapings per day per user
+
+// Exact-time expiry timers (userCode -> Timeout)
+const expiryTimers = new Map();
+
+/**
+ * Ensure user's paid subscription is still active; downgrade to 'unpaid' if expired
+ * @param {Object} codesDb - In-memory codes database
+ * @param {string} userCode - User code to check
+ * @returns {boolean} true if a downgrade occurred
+ */
+function updateStageIfExpired(codesDb, userCode) {
+  try {
+    if (!userCode || !codesDb || !codesDb[userCode]) return false;
+    const entry = codesDb[userCode];
+    if (entry.stage !== 'paid') return false;
+    const expiresAt = entry.paid && entry.paid.expiresAt;
+    if (!expiresAt) return false;
+    const now = Date.now();
+    const exp = new Date(expiresAt).getTime();
+    if (isNaN(exp)) return false;
+    if (exp <= now) {
+      entry.stage = 'unpaid';
+      codesDb[userCode] = entry;
+      saveJson(CODES_FILE, codesDb);
+      console.log(chalk.yellow(`⏳ Subscription expired for '${userCode}'. Stage set to 'unpaid'.`));
+      return true;
+    }
+    return false;
+  } catch (e) {
+    console.warn(chalk.gray(`⚠️ Unable to update stage for '${userCode}': ${e.message}`));
+    return false;
+  }
+}
+
+/**
+ * Immediately downgrade an expired paid user to 'unpaid' and notify their active sessions.
+ * Safe to call from a timer.
+ */
+async function handleExpiryNow(sock, userCode) {
+  try {
+    const codesDb = loadJson(CODES_FILE, {});
+    const sessionsDb = loadJson(SESSIONS_FILE, {});
+    const entry = codesDb[userCode];
+    if (!entry) return;
+    const expiresAt = entry?.paid?.expiresAt;
+    const expMs = expiresAt ? new Date(expiresAt).getTime() : NaN;
+    if (entry.stage !== 'paid' || isNaN(expMs) || expMs > Date.now()) return;
+
+    // Downgrade
+    entry.stage = 'unpaid';
+    codesDb[userCode] = entry;
+    saveJson(CODES_FILE, codesDb);
+
+    // Notify all sessions using this code
+    for (const [jid, sess] of Object.entries(sessionsDb)) {
+      if (sess?.code === userCode) {
+        const lang = sess.language || 'en';
+        sess.currentStep = 'main_menu';
+        sess.status = 'idle';
+        sessionsDb[jid] = sess;
+        try {
+          await sock.sendMessage(jid, { text: getMessage(lang, 'subscription_expired') });
+          await sock.sendMessage(jid, { text: getMessage(lang, 'main_menu') });
+        } catch (e) {
+          console.log(chalk.yellow(`⚠️ Failed to send expiry notice to ${jid}: ${e.message}`));
+        }
+      }
+    }
+    saveJson(SESSIONS_FILE, sessionsDb);
+    console.log(chalk.blue(`⏳ Expired subscription processed for '${userCode}' → 'unpaid'`));
+  } catch (e) {
+    console.log(chalk.yellow(`⚠️ handleExpiryNow error for '${userCode}': ${e.message}`));
+  }
+}
+
+/**
+ * Sweep all users for expired subscriptions, downgrade, and notify active sessions.
+ * Runs independently of inbound messages.
+ * @param {any} sock - WhatsApp socket instance
+ */
+async function runExpirySweep(sock) {
+  try {
+    const codesDb = loadJson(CODES_FILE, {});
+    const sessionsDb = loadJson(SESSIONS_FILE, {});
+    const now = Date.now();
+    let anyChange = false;
+    for (const [userCode, entry] of Object.entries(codesDb)) {
+      if (!entry || entry.stage !== 'paid') continue;
+      const expiresAt = entry?.paid?.expiresAt;
+      if (!expiresAt) continue;
+      const exp = new Date(expiresAt).getTime();
+      if (isNaN(exp)) continue;
+      // Schedule exact-time expiry timer for paid users
+      if (exp > now) {
+        // Ensure a timer exists for this user
+        if (!expiryTimers.has(userCode)) {
+          const delay = Math.min(exp - now, 2147483647);
+          const t = setTimeout(async () => {
+            expiryTimers.delete(userCode);
+            await handleExpiryNow(sock, userCode);
+          }, delay);
+          expiryTimers.set(userCode, t);
+        }
+      }
+      if (exp <= now) {
+        entry.stage = 'unpaid';
+        codesDb[userCode] = entry;
+        anyChange = true;
+        // Notify all sessions currently authenticated with this code
+        for (const [jid, sess] of Object.entries(sessionsDb)) {
+          if (sess?.code === userCode) {
+            const lang = sess.language || 'en';
+            sess.currentStep = 'main_menu';
+            sess.status = 'idle';
+            sessionsDb[jid] = sess;
+            try {
+              await sock.sendMessage(jid, { text: getMessage(lang, 'subscription_expired') });
+              await sock.sendMessage(jid, { text: getMessage(lang, 'main_menu') });
+            } catch (e) {
+              console.log(chalk.yellow(`⚠️ Failed to send expiry notice to ${jid}: ${e.message}`));
+            }
+          }
+        }
+      }
+    }
+    if (anyChange) {
+      saveJson(CODES_FILE, codesDb);
+      saveJson(SESSIONS_FILE, sessionsDb);
+      console.log(chalk.blue('⏳ Expiry sweep: downgraded expired paid users to unpaid and notified sessions'));
+    }
+  } catch (e) {
+    console.log(chalk.yellow(`⚠️ Expiry sweep error: ${e.message}`));
+  }
+}
 
 /**
  * Helper function to safely reset session state when clearing active jobs
@@ -439,9 +570,15 @@ function incrementDailyScrapingCount(jid, sessions) {
  */
 function getDailyScrapingStatusMessage(limitInfo, language = 'en') {
   if (limitInfo.canScrape) {
-    return `📊 **Daily Scraping Status:** ${limitInfo.remaining}/${DAILY_SCRAPING_LIMIT} remaining\n⏰ **Resets:** Tomorrow at midnight`;
+    return getMessage(language, 'daily_status_ok', {
+      remaining: limitInfo.remaining,
+      limit: DAILY_SCRAPING_LIMIT
+    });
   } else {
-    return `🚫 **Daily Limit Reached**\n\nYou have used all ${DAILY_SCRAPING_LIMIT} daily scrapings.\n⏰ **Come back tomorrow** to continue scraping.\n\n💡 **Next reset:** ${limitInfo.resetTime}`;
+    return getMessage(language, 'daily_status_reached', {
+      limit: DAILY_SCRAPING_LIMIT,
+      resetTime: limitInfo.resetTime || ''
+    });
   }
 }
 
@@ -746,7 +883,6 @@ async function sendResultsToUser(sock, jid, filePath, meta, userLanguage = 'en')
     const fileExtension = path.extname(filePath).toLowerCase();
     
     // Create appropriate caption based on source and format in user's language
-    const { getMessage } = await import('./languages.js');
     let caption = `📄 **${getMessage(userLanguage, 'file_ready', { filename: fileName })}**\n\n`;
     caption += `📊 **${getMessage(userLanguage, 'summary')}:** ${meta.totalResults || 'Unknown'} ${getMessage(userLanguage, 'results')}\n`;
     caption += `🎯 **${getMessage(userLanguage, 'source')}:** ${meta.source || 'Unknown'}\n`;
@@ -922,6 +1058,39 @@ async function handleMessage(sock, message) {
   // Load session data
   let sessions = loadJson(SESSIONS_FILE, {});
   const codesDb = loadJson(CODES_FILE, {});
+  // Auto-downgrade to unpaid if subscription expired
+  try {
+    const currentCode = sessions[jid]?.code;
+    if (currentCode) {
+      const downgraded = updateStageIfExpired(codesDb, currentCode);
+      // Ensure an exact-time timer exists for paid users
+      try {
+        const entry = codesDb[currentCode];
+        if (entry?.stage === 'paid' && entry?.paid?.expiresAt) {
+          const expMs = new Date(entry.paid.expiresAt).getTime();
+          if (!isNaN(expMs) && expMs > Date.now() && !expiryTimers.has(currentCode)) {
+            const delay = Math.min(expMs - Date.now(), 2147483647);
+            const t = setTimeout(async () => {
+              expiryTimers.delete(currentCode);
+              await handleExpiryNow(sock, currentCode);
+            }, delay);
+            expiryTimers.set(currentCode, t);
+          }
+        }
+      } catch (e) {}
+      if (downgraded) {
+        // Notify user immediately and stop further processing
+        const lang = sessions[jid]?.language || 'en';
+        // Reset to main menu
+        sessions[jid].currentStep = 'main_menu';
+        sessions[jid].status = 'idle';
+        saveJson(SESSIONS_FILE, sessions);
+        await sock.sendMessage(jid, { text: getMessage(lang, 'subscription_expired') });
+        await sock.sendMessage(jid, { text: getMessage(lang, 'main_menu') });
+        return;
+      }
+    }
+  } catch (e) {}
   
   // Debug: Log session loading
   console.log(chalk.gray(`📱 Session data loaded for ${jid.split('@')[0]}: ${Object.keys(sessions).length} total sessions`));
@@ -931,9 +1100,8 @@ async function handleMessage(sock, message) {
   if (!sessions[jid]) {
     sessions[jid] = {
       prefs: {
-        source: 'ALL',
-        format: 'XLSX',
-        limit: 300
+        source: 'GOOGLE',
+        format: 'XLSX'
       },
       status: 'idle',
       currentStep: 'awaiting_language', // New: Start with language selection
@@ -3285,6 +3453,34 @@ async function handleMessage(sock, message) {
       return;
     }
 
+    // Admin command: GRANT paid stage to a user code (supports two syntaxes)
+    // Syntax A: ADMIN GRANT <user_code>
+    // Syntax B: ADMIN <user_code> GRANT
+    {
+      const grantMatchA = text.match(/^ADMIN\s+GRANT\s+(\S+)$/i);
+      const grantMatchB = text.match(/^ADMIN\s+(\S+)\s+GRANT$/i);
+      const targetUserCode = grantMatchA ? grantMatchA[1] : (grantMatchB ? grantMatchB[1] : null);
+      if (targetUserCode) {
+        try {
+          const result = adminManager.grantPaidStage(adminSession.adminCode, targetUserCode);
+          if (result.success) {
+            await sock.sendMessage(jid, { 
+              text: `✅ ${result.message}`
+            });
+          } else {
+            await sock.sendMessage(jid, { 
+              text: `❌ **Grant Failed**\n\n${result.error}` 
+            });
+          }
+        } catch (error) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Grant Error:** ${error.message}` 
+          });
+        }
+        return;
+      }
+    }
+
     // Admin command: Reload admin manager completely
     if (text.toUpperCase() === 'ADMIN RELOAD') {
       try {
@@ -3519,7 +3715,7 @@ async function handleMessage(sock, message) {
         'ADMIN USERSESSIONSFILE', 'ADMIN FILES', 'ADMIN DEBUG', 'ADMIN LOG',
         'ADMIN SESSIONSFILE', 'ADMIN RESET', 'ADMIN CONFIGFILE', 'ADMIN CODESFILE',
         'ADMIN CLEAR', 'ADMIN AUTH', 'ADMIN LOGOUT', 'ADMIN ME', 'ADMIN INFO', 'ADMIN TEST',
-        'ADMIN RELOAD', 'ADMIN CONFIG', 'ADMIN CODES', 'ADMIN SESSIONS'
+        'ADMIN RELOAD', 'ADMIN CONFIG', 'ADMIN CODES', 'ADMIN SESSIONS', 'ADMIN GRANT'
       ];
 
       let isValidCommand = false;
@@ -3629,6 +3825,28 @@ async function handleMessage(sock, message) {
       if (menuChoice >= 1 && menuChoice <= 5) {
         switch (menuChoice) {
           case 1: // START SCRAPER
+            // Early trial check: block immediately if trial finished
+            try {
+              const codesNow = loadJson(CODES_FILE, {});
+              const userCodeNow = session.code;
+              const entry = userCodeNow ? (codesNow[userCodeNow] || {}) : {};
+              const stageNow = entry.stage || 'free_trial';
+              // Block unpaid users immediately with expiry message
+              if (stageNow === 'unpaid') {
+                await sock.sendMessage(jid, { text: getMessage(session.language, 'subscription_expired') });
+                await sock.sendMessage(jid, { text: getMessage(session.language, 'main_menu') });
+                return;
+              }
+              const trialNow = entry.trial || { triesUsed: 0, maxTries: 3 };
+              if (stageNow === 'free_trial' && (trialNow.triesUsed || 0) >= (trialNow.maxTries || 3)) {
+                await sock.sendMessage(jid, { text: getMessage(session.language, 'trial_finished') });
+                // Stay in main menu
+                await sock.sendMessage(jid, { text: getMessage(session.language, 'main_menu') });
+                return;
+              }
+            } catch (e) {
+              // If any issue reading codes, fall back to normal flow
+            }
             session.currentStep = 'awaiting_niche';
             saveJson(SESSIONS_FILE, sessions);
             await sock.sendMessage(jid, { 
@@ -3649,22 +3867,48 @@ async function handleMessage(sock, message) {
             
           case 3: // STATUS
             try {
-              const limitInfo = checkDailyScrapingLimit(jid, sessions);
-              const statusMessage = getDailyScrapingStatusMessage(limitInfo, session.language);
-              
-              let message = `📊 **Your Scraping Status**\n\n`;
-              message += statusMessage;
-              message += `\n\n🎯 **Current Settings:**\n`;
-              message += `• Source: ${session.prefs?.source || 'ALL'}\n`;
-              message += `• Format: ${session.prefs?.format || 'XLSX'}\n`;
-              message += `• Limit: ${session.prefs?.limit || 300} results\n`;
-              message += `• Language: ${session.language.toUpperCase()}\n\n`;
-              message += `📈 **Account Stats:**\n`;
-              message += `• Total Jobs: ${session.meta?.totalJobs || 0}\n`;
-              message += `• Last Niche: ${session.meta?.lastNiche || 'None'}\n`;
-              message += `• Session Created: ${new Date(session.meta?.createdAt || Date.now()).toLocaleString()}`;
-              
-              await sock.sendMessage(jid, { text: message });
+              // Trial-first status
+              const codesNow = loadJson(CODES_FILE, {});
+              const codeNow = session.code;
+              const entry = codeNow ? (codesNow[codeNow] || {}) : {};
+              const stage = entry.stage || 'free_trial';
+              if (stage === 'free_trial') {
+                const trial = entry.trial || { triesUsed: 0, maxTries: 3 };
+                const triesUsed = Math.min(trial.triesUsed || 0, trial.maxTries || 3);
+                const maxTries = trial.maxTries || 3;
+                const remaining = Math.max(0, maxTries - triesUsed);
+                if (triesUsed >= maxTries) {
+                  await sock.sendMessage(jid, { text: getMessage(session.language, 'trial_finished') });
+                } else {
+                  let msg = getMessage(session.language, 'trial_status_title');
+                  msg += getMessage(session.language, 'trial_status_body', { triesUsed, maxTries, remaining });
+                  await sock.sendMessage(jid, { text: msg });
+                }
+              } else if (stage === 'unpaid') {
+                await sock.sendMessage(jid, { text: getMessage(session.language, 'subscription_expired') });
+              } else {
+                const limitInfo = checkDailyScrapingLimit(jid, sessions);
+                const statusMessage = getDailyScrapingStatusMessage(limitInfo, session.language);
+                let message = getMessage(session.language, 'status_title');
+                message += statusMessage;
+                // If paid, append subscription expiry info
+                if (stage === 'paid' && entry.paid && entry.paid.expiresAt) {
+                  const expiresDate = new Date(entry.paid.expiresAt);
+                  const now = new Date();
+                  let remainingStr = '';
+                  const ms = expiresDate - now;
+                  if (ms <= 0) {
+                    remainingStr = '0d';
+                  } else {
+                    const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+                    const hours = Math.floor((ms % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                    remainingStr = days > 0 ? `${days}d ${hours}h` : `${hours}h`;
+                  }
+                  const expiresStr = expiresDate.toLocaleString();
+                  message += getMessage(session.language, 'paid_status', { expires: expiresStr, remaining: remainingStr });
+                }
+                await sock.sendMessage(jid, { text: message });
+              }
             } catch (error) {
               console.error(chalk.red(`❌ Error in STATUS command:`, error.message));
               await sock.sendMessage(jid, { 
@@ -3833,6 +4077,23 @@ async function handleMessage(sock, message) {
         // Returning user - show main menu in their language
         session.currentStep = 'main_menu';
         saveJson(SESSIONS_FILE, sessions);
+        
+        // If user is on free trial, send a brief trial welcome/summary before main menu
+        try {
+          const codesNow = loadJson(CODES_FILE, {});
+          const entry = codesNow[code] || {};
+          const stage = entry.stage || 'free_trial';
+          if (stage === 'free_trial') {
+            await sock.sendMessage(jid, { text: getMessage(session.language, 'trial_welcome') });
+          } else if (stage === 'paid') {
+            await sock.sendMessage(jid, { text: getMessage(session.language, 'paid_welcome') });
+          } else if (stage === 'unpaid') {
+            await sock.sendMessage(jid, { text: getMessage(session.language, 'subscription_expired') });
+          } else {
+            // Fallback welcome
+            await sock.sendMessage(jid, { text: getMessage(session.language, 'paid_welcome') });
+          }
+        } catch (e) {}
         
         await sock.sendMessage(jid, { 
           text: getMessage(session.language, 'main_menu')
@@ -4058,14 +4319,14 @@ async function handleMessage(sock, message) {
             return;
         }
     } else if (session.currentStep === 'awaiting_source') {
-        const sourceOptions = ['GOOGLE', 'LINKEDIN', 'MAPS', 'ALL'];
+        const sourceOptions = ['GOOGLE', 'LINKEDIN', 'MAPS'];
         if (text === '00') {
             const activeJob = activeJobs.get(jid);
             if (activeJob && activeJob.abort) {
                 activeJob.abort.abort();
                 activeJobs.delete(jid);
             }
-            session.currentStep = 'awaiting_niche';
+            session.currentStep = 'main_menu';
             session.pendingNiche = null;
             session.previousMessage = null;
             session.status = 'idle';
@@ -4074,17 +4335,19 @@ async function handleMessage(sock, message) {
             await sock.sendMessage(jid, { 
                 text: getMessage(session.language, 'restart')
             });
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'main_menu')
+            });
             return;
         } else if (inputNumber === 0) {
-            // User wants to go back to main menu
-            session.currentStep = 'main_menu';
-            session.pendingNiche = null;
+            // Go back to niche input
+            session.currentStep = 'awaiting_niche';
             session.previousMessage = null;
-            sessions[jid] = session; // Update the sessions object
+            sessions[jid] = session;
             saveJson(SESSIONS_FILE, sessions);
             
             await sock.sendMessage(jid, { 
-                text: getMessage(session.language, 'main_menu')
+                text: getMessage(session.language, 'enter_niche')
             });
             return;
         } else if (inputNumber >= 1 && inputNumber <= sourceOptions.length) {
@@ -4103,17 +4366,9 @@ async function handleMessage(sock, message) {
                 return;
             }
             
-            // For Google and ALL sources, show data type options as before
+            // For Google, show data type options as before
             session.currentStep = 'awaiting_type';
-            let dataTypeChoices;
-            switch (session.prefs.source) {
-                case 'GOOGLE':
-                    dataTypeChoices = getMessage(session.language, 'select_type_google');
-                    break;
-                case 'ALL':
-                    dataTypeChoices = getMessage(session.language, 'select_type_all');
-                    break;
-            }
+            let dataTypeChoices = getMessage(session.language, 'select_type_google');
             session.previousMessage = dataTypeChoices;
             await sock.sendMessage(jid, { text: dataTypeChoices });
             saveJson(SESSIONS_FILE, sessions);
@@ -4142,7 +4397,7 @@ async function handleMessage(sock, message) {
                 activeJob.abort.abort();
                 activeJobs.delete(jid);
             }
-            session.currentStep = 'awaiting_niche';
+            session.currentStep = 'main_menu';
             session.pendingNiche = null;
             session.previousMessage = null;
             session.status = 'idle';
@@ -4151,17 +4406,19 @@ async function handleMessage(sock, message) {
             await sock.sendMessage(jid, { 
                 text: getMessage(session.language, 'restart')
             });
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'main_menu')
+            });
             return;
         } else if (inputNumber === 0) {
-            // User wants to go back to main menu
-            session.currentStep = 'main_menu';
-            session.pendingNiche = null;
-            session.previousMessage = null;
-            sessions[jid] = session; // Update the sessions object
+            // Go back to source selection
+            session.currentStep = 'awaiting_source';
+            session.previousMessage = getMessage(session.language, 'select_source', { niche: session.pendingNiche || '' });
+            sessions[jid] = session;
             saveJson(SESSIONS_FILE, sessions);
             
             await sock.sendMessage(jid, { 
-                text: getMessage(session.language, 'main_menu')
+                text: session.previousMessage
             });
             return;
         } else if (inputNumber >= 1 && inputNumber <= validTypes.length) {
@@ -4199,7 +4456,7 @@ async function handleMessage(sock, message) {
                 }
                 activeJobs.delete(jid); // Ensure job is cleared
             }
-            session.currentStep = 'awaiting_niche';
+            session.currentStep = 'main_menu';
             session.pendingNiche = null;
             session.previousMessage = null;
             session.status = 'idle';
@@ -4208,18 +4465,32 @@ async function handleMessage(sock, message) {
             await sock.sendMessage(jid, { 
                 text: getMessage(session.language, 'restart')
             });
-            return;
-        } else if (text === '0') {
-            // User wants to go back to main menu
-            session.currentStep = 'main_menu';
-            session.pendingNiche = null;
-            session.previousMessage = null;
-            sessions[jid] = session; // Update the sessions object
-            saveJson(SESSIONS_FILE, sessions);
-            
             await sock.sendMessage(jid, { 
                 text: getMessage(session.language, 'main_menu')
             });
+            return;
+        } else if (text === '0') {
+            // Go back to previous step based on source
+            if (session.prefs.source === 'GOOGLE' || session.prefs.source === 'ALL') {
+                // Back to data type selection
+                session.currentStep = 'awaiting_type';
+                const backChoices = session.prefs.source === 'GOOGLE'
+                  ? getMessage(session.language, 'select_type_google')
+                  : getMessage(session.language, 'select_type_all');
+                session.previousMessage = backChoices;
+                sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+                await sock.sendMessage(jid, { text: backChoices });
+            } else {
+                // For LINKEDIN or MAPS, back to source selection
+                session.currentStep = 'awaiting_source';
+                session.previousMessage = getMessage(session.language, 'select_source', { niche: session.pendingNiche || '' });
+                sessions[jid] = session;
+                saveJson(SESSIONS_FILE, sessions);
+
+                await sock.sendMessage(jid, { text: session.previousMessage });
+            }
             return;
         } else if (text.toUpperCase() === 'START') {
             if (!session.pendingNiche || !session.prefs.source || !session.prefs.dataType || !session.prefs.format) {
@@ -4232,6 +4503,31 @@ async function handleMessage(sock, message) {
             // CRITICAL FIX: Reload sessions from disk to get the most up-to-date daily counts
             sessions = loadJson(SESSIONS_FILE, {});
             const currentSession = sessions[jid];
+
+            // Load codes DB to check trial status
+            const codesDbLocal = loadJson(CODES_FILE, {});
+            const userCodeLocal = currentSession.code;
+            const userEntryLocal = userCodeLocal ? (codesDbLocal[userCodeLocal] || {}) : {};
+            const stageLocal = userEntryLocal.stage || 'free_trial';
+            const trialLocal = userEntryLocal.trial || { triesUsed: 0, maxTries: 3 };
+            // Clamp triesUsed to never exceed maxTries
+            if (trialLocal.triesUsed > trialLocal.maxTries) {
+                trialLocal.triesUsed = trialLocal.maxTries;
+                if (userCodeLocal) {
+                    codesDbLocal[userCodeLocal].trial = trialLocal;
+                    saveJson(CODES_FILE, codesDbLocal);
+                }
+            }
+            // Block if trial limit reached
+            if (stageLocal === 'free_trial' && trialLocal.triesUsed >= trialLocal.maxTries) {
+                await sock.sendMessage(jid, { text: getMessage(currentSession.language, 'trial_finished') });
+                currentSession.currentStep = 'main_menu';
+                sessions[jid] = currentSession;
+                saveJson(SESSIONS_FILE, sessions);
+                // Show main menu
+                await sock.sendMessage(jid, { text: getMessage(currentSession.language, 'main_menu') });
+                return;
+            }
             
             // Check daily scraping limit before starting
             const limitInfo = checkDailyScrapingLimit(jid, sessions);
@@ -4259,19 +4555,9 @@ async function handleMessage(sock, message) {
             delete currentSession.pendingNiche;
             currentSession.currentStep = 'scraping_in_progress';
             
-            // Increment daily scraping count BEFORE starting
-            incrementDailyScrapingCount(jid, sessions);
-            
-            // CRITICAL: Verify the count was incremented and save
+            // Save updated session state (count will be incremented on first progress update)
             sessions[jid] = currentSession;
             saveJson(SESSIONS_FILE, sessions);
-            
-            // Double-check: Reload and verify the count was saved
-            const verificationSessions = loadJson(SESSIONS_FILE, {});
-            const verificationSession = verificationSessions[jid];
-            if (verificationSession && verificationSession.dailyScraping) {
-                console.log(chalk.green(`✅ Daily count verification: ${verificationSession.dailyScraping.count}/${DAILY_SCRAPING_LIMIT}`));
-            }
             
             // Start the scraping job
             console.log(chalk.cyan(`🔍 Job started: "${niche}" (${source}/${dataType}/${format}/${limit})`));
@@ -4280,8 +4566,7 @@ async function handleMessage(sock, message) {
                 text: getMessage(currentSession.language, 'job_starting', {
                   niche: niche,
                   source: source,
-                  format: format,
-                  limit: limit
+                  format: format
                 })
             });
             
@@ -4301,7 +4586,8 @@ async function handleMessage(sock, message) {
                 status: 'initializing',
                 startTime: new Date(),
                 results: null,
-                progressSimulator: progressSimulator
+                progressSimulator: progressSimulator,
+                didIncrementDailyCount: false
             });
 
             currentSession.status = 'running';
@@ -4312,6 +4598,11 @@ async function handleMessage(sock, message) {
             let resultCount = 0;
             
             try {
+                // Determine trial mode from codes database
+                const userCode = currentSession.code;
+                const userEntry = (typeof codesDb !== 'undefined' && userCode) ? (codesDb[userCode] || {}) : {};
+                const isTrialMode = (userEntry.stage === 'free_trial');
+
                 const result = await startUnifiedScraper({
                     niche,
                     source: source, // Use original uppercase values
@@ -4319,9 +4610,10 @@ async function handleMessage(sock, message) {
                     format,
                     apiKeys: session.apiKeys,
                     options: {
-                        maxResults: limit,
                         abortSignal: abortController.signal,
                         debug: false,
+                        trialMode: isTrialMode,
+                        trialLimit: 20,
                         
                         onResult: async (item) => {
                             resultCount++;
@@ -4360,6 +4652,38 @@ async function handleMessage(sock, message) {
                                                 const progressMessage = `${progressEmoji} **${progressData.message}**`;
                                                 
                                                 await sock.sendMessage(jid, { text: progressMessage });
+                                                
+                                                // Increment usage ONLY once, on the first progress message
+                                                const currentJob = activeJobs.get(jid);
+                                                if (currentJob && !currentJob.didIncrementDailyCount) {
+                                                    try {
+                                                        if (isTrialMode && userCode && typeof saveJson === 'function') {
+                                                            // Increment free-trial triesUsed in codes.json
+                                                            const codesNow = loadJson(CODES_FILE, {});
+                                                            if (codesNow[userCode]) {
+                                                                const trial = codesNow[userCode].trial || { triesUsed: 0, maxTries: 3 };
+                                                                // Only increment if below maxTries, and clamp
+                                                                const currentTries = Math.min(trial.triesUsed || 0, trial.maxTries || 3);
+                                                                if (currentTries < (trial.maxTries || 3)) {
+                                                                    trial.triesUsed = currentTries + 1;
+                                                                } else {
+                                                                    trial.triesUsed = currentTries; // clamp
+                                                                }
+                                                                codesNow[userCode].trial = trial;
+                                                                saveJson(CODES_FILE, codesNow);
+                                                                console.log(chalk.green(`✅ Trial try incremented for ${jid.split('@')[0]} → ${trial.triesUsed}/${trial.maxTries}`));
+                                                            }
+                                                        } else {
+                                                            // Paid mode: increment daily count
+                                                            incrementDailyScrapingCount(jid, sessions);
+                                                        }
+                                                    } catch (incErr) {
+                                                        console.error('Failed to increment usage counters:', incErr.message);
+                                                    }
+                                                    currentJob.didIncrementDailyCount = true;
+                                                    activeJobs.set(jid, currentJob);
+                                                    console.log(chalk.green(`✅ Usage incremented on first progress update for ${jid.split('@')[0]}`));
+                                                }
                                                 console.log(chalk.blue(`📱 Progress update sent to ${jid}: ${progressData.processed}%`));
                                             } catch (error) {
                                                 console.error('Failed to send progress update:', error.message);
@@ -4579,7 +4903,7 @@ async function handleMessage(sock, message) {
                 sessions[jid] = session;
                 saveJson(SESSIONS_FILE, sessions);
 
-                // ✅ ENHANCED: Handle specific API key and quota errors
+                // ✅ ENHANCED: Handle specific errors with localization
                 let errorMessage = '';
 
                 if (error.message.includes('aborted')) {
@@ -4679,10 +5003,12 @@ async function handleMessage(sock, message) {
                         `• Check if your API keys have exceeded daily quotas\n\n` +
                         `🛑 **Scraping stopped - invalid API configuration.**`;
                         
+                } else if (/invalid niche format/i.test(error.message) && /maps/i.test(error.message)) {
+                    // Friendly localized message for invalid niche for Google Maps
+                    errorMessage = getMessage(session.language, 'error_invalid_niche_maps');
                 } else {
-                    // Generic error handling
-                    errorMessage = `❌ **Error occurred:** ${error.message}\n\n` +
-                        `💡 Please try again with a different niche or contact support if the issue persists.`;
+                    // Localized friendly generic error
+                    errorMessage = getMessage(session.language, 'error_generic_friendly');
                 }
 
                 // Send error message to user
@@ -4949,6 +5275,9 @@ async function startBot() {
         
         // Check for pending results to send when user comes back online
         await checkAndSendPendingResults();
+
+        // Kick off an immediate expiry sweep and schedule exact-time timers (no polling)
+        await runExpirySweep(sock);
       }
     });
 
