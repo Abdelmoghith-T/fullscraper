@@ -3,6 +3,7 @@ import path from 'path';
 import qrcode from 'qrcode-terminal';
 import { fileURLToPath } from 'url';
 import { startUnifiedScraper } from './lib/startUnifiedScraper.js';
+import concurrencyManager from './lib/concurrency-manager.js';
 import { createRequire } from 'module';
 import chalk from 'chalk';
 import { getMessage } from './languages.js';
@@ -15,6 +16,24 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// --- Serialized session mutation utilities (avoid race conditions on sessions.json) ---
+let __sessionsMutex = Promise.resolve();
+
+function mutateUserSession(jid, update) {
+  const task = async () => {
+    // Always read fresh
+    const all = loadJson(SESSIONS_FILE, {});
+    const current = all[jid] || {};
+    const next = typeof update === 'function' ? update(current) : { ...current, ...update };
+    all[jid] = next;
+    saveJson(SESSIONS_FILE, all);
+    return next;
+  };
+  const run = __sessionsMutex.then(task, task);
+  __sessionsMutex = run.catch(() => {});
+  return run;
+}
 
 // Simple health check server for Railway
 const PORT = process.env.PORT || 3000;
@@ -424,16 +443,21 @@ async function runExpirySweep(sock) {
  * @param {Object} sessions - Current sessions data
  */
 function resetSessionState(jid, sessions) {
-  const session = sessions[jid];
-  if (session) {
-    session.currentStep = 'awaiting_niche';
-    session.status = 'idle';
-    session.currentLoadingPercentage = 0;
-    session.lastLoadingUpdateTimestamp = 0;
-    sessions[jid] = session;
-    saveJson(SESSIONS_FILE, sessions);
+  // Use serialized mutation to avoid overwriting concurrent updates
+  mutateUserSession(jid, (s) => {
+    const updated = { ...s };
+    updated.currentStep = 'awaiting_niche';
+    updated.status = 'idle';
+    updated.currentLoadingPercentage = 0;
+    updated.lastLoadingUpdateTimestamp = 0;
+    return updated;
+  })
+    .then(() => {
     console.log(chalk.yellow(`🔧 Session state reset for ${jid}: currentStep -> 'awaiting_niche'`));
-  }
+    })
+    .catch((e) => {
+      console.log(chalk.yellow(`⚠️ Failed to reset session state for ${jid}: ${e.message}`));
+    });
 }
 
 // Admin management
@@ -1210,6 +1234,18 @@ async function handleMessage(sock, message) {
       adminSessions.set(jid, adminSession);
       saveAdminSessions();
       console.log(chalk.blue(`🔍 Fixed admin session: set currentMenu = "${adminSession.currentMenu}"`));
+    }
+    
+    // Handle ADMIN LIMIT <number>
+    if (/^ADMIN\s+LIMIT\s+\d+$/i.test(text)) {
+      const num = parseInt(text.trim().split(/\s+/).pop(), 10);
+      try {
+        concurrencyManager.setLimit(num);
+        await sock.sendMessage(jid, { text: `✅ Concurrency limit set to ${num}` });
+      } catch (e) {
+        await sock.sendMessage(jid, { text: `❌ ${e.message}` });
+      }
+      return;
     }
     
     // FULL ADMIN MENU: Handle numbers 1-9 when IN main menu (PRIORITY 1)
@@ -4551,13 +4587,18 @@ async function handleMessage(sock, message) {
             const niche = currentSession.pendingNiche;
             const { source, dataType, format, limit } = currentSession.prefs;
             
-            // Clear pending niche
-            delete currentSession.pendingNiche;
-            currentSession.currentStep = 'scraping_in_progress';
-            
-            // Save updated session state (count will be incremented on first progress update)
-            sessions[jid] = currentSession;
-            saveJson(SESSIONS_FILE, sessions);
+            // Helper to update sessions safely (serialized)
+            const updateSessionState = (userId, partial) => mutateUserSession(userId, partial);
+
+            // Function to actually run the scraper when capacity is available
+            const runScraper = async () => {
+                // Clear pending niche when we really start
+                await mutateUserSession(jid, (s) => {
+                    const next = { ...s };
+                    delete next.pendingNiche;
+                    next.currentStep = 'scraping_in_progress';
+                    return next;
+                });
             
             // Start the scraping job
             console.log(chalk.cyan(`🔍 Job started: "${niche}" (${source}/${dataType}/${format}/${limit})`));
@@ -4590,10 +4631,11 @@ async function handleMessage(sock, message) {
                 didIncrementDailyCount: false
             });
 
-            currentSession.status = 'running';
-            currentSession.meta.lastNiche = niche;
-            sessions[jid] = currentSession;
-            saveJson(SESSIONS_FILE, sessions);
+            await mutateUserSession(jid, (s) => ({
+                ...s,
+                status: 'running',
+                meta: { ...(s.meta || {}), lastNiche: niche }
+            }));
 
             let resultCount = 0;
             
@@ -4779,12 +4821,15 @@ async function handleMessage(sock, message) {
 
                 // Job completed successfully - perform cleanup and reset session state
                 activeJobs.delete(jid);
-                session.status = 'idle';
-                session.currentStep = 'main_menu'; // Return to main menu after job completion
-                session.meta.totalJobs++;
-                
-                sessions[jid] = session;
-                saveJson(SESSIONS_FILE, sessions);
+                await mutateUserSession(jid, (s) => ({
+                    ...s,
+                    status: 'idle',
+                    currentStep: 'main_menu',
+                    meta: { ...(s.meta || {}), totalJobs: ((s.meta?.totalJobs) || 0) + 1 }
+                }));
+
+                // Notify concurrency manager that this user finished
+                await concurrencyManager.finishScraping(jid);
 
                 console.log(chalk.blue(`[DEBUG] Scraper result: ${JSON.stringify(result)}`));
                 console.log(chalk.blue(`[DEBUG] Result filePath exists: ${!!result.filePath}`));
@@ -4898,10 +4943,10 @@ async function handleMessage(sock, message) {
                 
                 // Clean up
                 activeJobs.delete(jid);
-                session.status = 'idle';
-                session.currentStep = 'main_menu'; // Return to main menu on error
-                sessions[jid] = session;
-                saveJson(SESSIONS_FILE, sessions);
+                await mutateUserSession(jid, { status: 'idle', currentStep: 'main_menu' });
+
+                // Notify concurrency manager that this user finished (even on error)
+                await concurrencyManager.finishScraping(jid);
 
                 // ✅ ENHANCED: Handle specific errors with localization
                 let errorMessage = '';
@@ -5019,6 +5064,25 @@ async function handleMessage(sock, message) {
                     text: getMessage(session.language, 'main_menu')
                 });
             }
+            };
+
+            // Start via concurrency manager
+            const resultState = await concurrencyManager.startScraping(jid, runScraper, {
+                updateSession: (userId, partial) => updateSessionState(userId, partial),
+                notifyQueued: async () => {
+                    await sock.sendMessage(jid, { 
+                        text: getMessage(session.language, 'queued_waiting')
+                    });
+                }
+            });
+
+            if (resultState === 'already_queued') {
+                // If user pings again while queued, resend the same waiting message
+                await sock.sendMessage(jid, { 
+                    text: getMessage(session.language, 'queued_waiting')
+                });
+                return;
+            }
             
             return;
         } else if (text.toUpperCase() === 'STOP') { // Allow STOP during ready_to_start
@@ -5026,10 +5090,7 @@ async function handleMessage(sock, message) {
             if (activeJob && activeJob.abort) {
                 activeJob.abort.abort();
                 activeJobs.delete(jid); // Ensure job is cleared
-                session.status = 'idle';
-                session.currentStep = 'main_menu';
-                sessions[jid] = session;
-                saveJson(SESSIONS_FILE, sessions);
+                await mutateUserSession(jid, { status: 'idle', currentStep: 'main_menu' });
                 await sock.sendMessage(jid, { text: '🛑 **Job cancelled successfully.** You can send a new search query when ready.' });
                 
                 // Show main menu after job cancellation
@@ -5047,6 +5108,12 @@ async function handleMessage(sock, message) {
             await sock.sendMessage(jid, { text: session.previousMessage });
             return;
         }
+    } else if (session.currentStep === 'queued_for_scraping') {
+        // User is queued: resend waiting message and don't re-enqueue
+        await sock.sendMessage(jid, { 
+            text: getMessage(session.language, 'queued_waiting')
+        });
+        return;
     } else if (session.currentStep === 'scraping_in_progress') {
 
         // Only allow STOP and STATUS commands during scraping

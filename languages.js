@@ -51,6 +51,7 @@ export const languages = {
     job_complete: "✅ **Lead Finding Complete!**\n\n📊 **Results Summary:**\n• Total Results: {total}\n• Emails: {emails}\n• Phones: {phones}\n• Websites: {websites}\n\n💾 **File ready for download** ⬇️",
     job_stopped: "🛑 **Lead‑finding session stopped.**",
     job_status: "📊 **Current Job Status:** {status}",
+    queued_waiting: "⏳ Many users are searching for leads right now. Your job will start as soon as possible. Please wait.",
     
     // Navigation
     go_back: "↩️ Please enter your new search niche.",
@@ -157,6 +158,7 @@ export const languages = {
     job_complete: "✅ **Recherche de prospects terminée!**\n\n📊 **Résumé des Résultats:**\n• Total: {total}\n• Emails: {emails}\n• Téléphones: {phones}\n• Sites Web: {websites}\n\n💾 **Fichier prêt au téléchargement** ⬇️",
     job_stopped: "🛑 **Session interrompue.**",
     job_status: "📊 **Statut Actuel du Job:** {status}",
+    queued_waiting: "⏳ De nombreux utilisateurs recherchent des prospects en ce moment. Votre tâche démarrera dès que possible. Merci de patienter.",
     
     // Navigation
     go_back: "↩️ Veuillez entrer votre nouvelle niche de recherche.",
@@ -193,7 +195,7 @@ export const languages = {
     status_title: "📊 **Votre statut de recherche de prospects**\n\n",
     daily_status_ok: "📊 **Statut quotidien :** {remaining}/{limit} restants\n⏰ **Réinitialisation :** Demain à minuit",
     daily_status_reached: "🚫 **Limite quotidienne atteinte**\n\nVous avez utilisé toutes vos {limit} recherches quotidiennes.\n⏰ **Revenez demain** pour continuer.\n\n💡 **Prochaine réinitialisation :** {resetTime}",
-    paid_status: "\n\n💳 Abonnement : Actif\n⏰ Expire le : {expires}\n⌛ Restant : {remaining}\n",
+    paid_status: "\n\n💳 Abonnement : Actif\n⏰ Expire le : {expires}\n⌛ Remant : {remaining}\n",
     
     // File Messages
     file_ready: "📎 **Fichier prêt pour téléchargement:**\n{filename}",
@@ -263,6 +265,7 @@ export const languages = {
     job_complete: "✅ **اكتملت عملية البحث!**\n\n📊 **ملخص النتائج:**\n• إجمالي النتائج: {total}\n• البريد الإلكتروني: {emails}\n• الهاتف: {phones}\n• مواقع الويب: {websites}\n\n💾 **الملف جاهز للتحميل** ⬇️",
     job_stopped: "🛑 **تم إيقاف الجلسة.**",
     job_status: "📊 **حالة المهمة الحالية:** {status}",
+    queued_waiting: "⏳ هناك عدد كبير من المستخدمين يبحثون عن عملاء محتملين الآن. ستبدأ مهمتك في أقرب وقت ممكن. يرجى الانتظار.",
     
     // Navigation
     go_back: "↩️ يرجى إدخال نيش البحث الجديد الخاص بك.",
