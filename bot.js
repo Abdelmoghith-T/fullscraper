@@ -667,6 +667,170 @@ function loadJson(filePath, defaultValue = {}) {
   }
 }
 
+/**
+ * 🗑️ STORAGE OPTIMIZATION: Clean up result files from multiple locations
+ * This function removes files from both the main results folder and lead-scraper folder
+ */
+function cleanupResultFile(filePath) {
+  try {
+    if (!filePath) {
+      console.log(chalk.yellow(`⚠️ No file path provided for cleanup`));
+      return false;
+    }
+
+    // Check if file exists in the main results folder
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(chalk.green(`🗑️ Storage optimization: Deleted result file: ${path.basename(filePath)}`));
+      console.log(chalk.gray(`   File path: ${filePath}`));
+      
+      // 🗑️ SPECIAL CASE: For Google Maps Excel files, also delete the corresponding JSON file
+      const fileName = path.basename(filePath);
+      const fileExt = path.extname(fileName).toLowerCase();
+      const fileNameWithoutExt = path.basename(fileName, fileExt);
+      
+      if (fileExt === '.xlsx' && fileName.includes('google_maps')) {
+        // Look for corresponding JSON file in the same results directory
+        const resultsDir = path.dirname(filePath);
+        if (fs.existsSync(resultsDir)) {
+          try {
+            const files = fs.readdirSync(resultsDir);
+            
+            // Find JSON files that match the Excel file pattern
+            const jsonPatterns = [
+              `${fileNameWithoutExt}.json`,
+              `${fileNameWithoutExt.replace('_complete_', '_')}.json`,
+              `${fileNameWithoutExt.replace('_complete_', '_autosave_')}.json`
+            ];
+            
+            for (const pattern of jsonPatterns) {
+              const jsonFile = files.find(f => f === pattern);
+              if (jsonFile) {
+                const jsonPath = path.join(resultsDir, jsonFile);
+                fs.unlinkSync(jsonPath);
+                console.log(chalk.green(`🗑️ Storage optimization: Deleted corresponding JSON file: ${jsonFile}`));
+                console.log(chalk.gray(`   File path: ${jsonPath}`));
+                break; // Only delete one matching JSON file
+              }
+            }
+          } catch (jsonError) {
+            console.log(chalk.yellow(`⚠️ Could not cleanup corresponding JSON file: ${jsonError.message}`));
+          }
+        }
+      }
+      
+      return true;
+    }
+
+    // Check if file exists in the lead-scraper folder
+    const leadScraperPath = path.join(__dirname, 'google search + linkdin scraper', 'lead-scraper', 'results', path.basename(filePath));
+    if (fs.existsSync(leadScraperPath)) {
+      fs.unlinkSync(leadScraperPath);
+      console.log(chalk.green(`🗑️ Storage optimization: Deleted result file from lead-scraper: ${path.basename(filePath)}`));
+      console.log(chalk.gray(`   File path: ${leadScraperPath}`));
+      return true;
+    }
+
+    // Check if file exists in the maps_scraper folder
+    const mapsScraperPath = path.join(__dirname, 'maps_scraper', 'results', path.basename(filePath));
+    if (fs.existsSync(mapsScraperPath)) {
+      fs.unlinkSync(mapsScraperPath);
+      console.log(chalk.green(`🗑️ Storage optimization: Deleted result file from maps_scraper: ${path.basename(filePath)}`));
+      console.log(chalk.gray(`   File path: ${mapsScraperPath}`));
+      return true;
+    }
+
+    console.log(chalk.yellow(`⚠️ File not found in any expected location: ${path.basename(filePath)}`));
+    return false;
+
+  } catch (error) {
+    console.log(chalk.red(`❌ Failed to cleanup result file: ${error.message}`));
+    console.log(chalk.gray(`   File path: ${filePath}`));
+    return false;
+  }
+}
+
+/**
+ * 🗑️ STORAGE OPTIMIZATION: Clean up old result files from all locations
+ * This function removes files older than the specified number of hours
+ */
+function cleanupOldResultFiles(maxAgeHours = 24) {
+  try {
+    const maxAgeMs = maxAgeHours * 60 * 60 * 1000; // Convert hours to milliseconds
+    const cutoffTime = Date.now() - maxAgeMs;
+    let totalCleaned = 0;
+
+    console.log(chalk.blue(`🗑️ Starting cleanup of result files older than ${maxAgeHours} hours...`));
+
+    // Clean up main results folder
+    const resultsDir = path.join(__dirname, 'results');
+    if (fs.existsSync(resultsDir)) {
+      const files = fs.readdirSync(resultsDir);
+      for (const file of files) {
+        const filePath = path.join(resultsDir, file);
+        const stats = fs.statSync(filePath);
+        
+        if (stats.isFile() && stats.mtime.getTime() < cutoffTime) {
+          try {
+            fs.unlinkSync(filePath);
+            console.log(chalk.green(`🗑️ Deleted old file: ${file}`));
+            totalCleaned++;
+          } catch (error) {
+            console.log(chalk.red(`❌ Failed to delete old file: ${file} - ${error.message}`));
+          }
+        }
+      }
+    }
+
+    // Clean up lead-scraper results folder
+    const leadScraperDir = path.join(__dirname, 'google search + linkdin scraper', 'lead-scraper', 'results');
+    if (fs.existsSync(leadScraperDir)) {
+      const files = fs.readdirSync(leadScraperDir);
+      for (const file of files) {
+        const filePath = path.join(leadScraperDir, file);
+        const stats = fs.statSync(filePath);
+        
+        if (stats.isFile() && stats.mtime.getTime() < cutoffTime) {
+          try {
+            fs.unlinkSync(filePath);
+            console.log(chalk.green(`🗑️ Deleted old file from lead-scraper: ${file}`));
+            totalCleaned++;
+          } catch (error) {
+            console.log(chalk.red(`❌ Failed to delete old file from lead-scraper: ${file} - ${error.message}`));
+          }
+        }
+      }
+    }
+
+    // Clean up maps_scraper results folder
+    const mapsScraperDir = path.join(__dirname, 'maps_scraper', 'results');
+    if (fs.existsSync(mapsScraperDir)) {
+      const files = fs.readdirSync(mapsScraperDir);
+      for (const file of files) {
+        const filePath = path.join(mapsScraperDir, file);
+        const stats = fs.statSync(filePath);
+        
+        if (stats.isFile() && stats.mtime.getTime() < cutoffTime) {
+          try {
+            fs.unlinkSync(filePath);
+            console.log(chalk.green(`🗑️ Deleted old file from maps_scraper: ${file}`));
+            totalCleaned++;
+          } catch (error) {
+            console.log(chalk.red(`❌ Failed to delete old file from maps_scraper: ${file} - ${error.message}`));
+          }
+        }
+      }
+    }
+
+    console.log(chalk.green(`✅ Cleanup completed: ${totalCleaned} old files removed`));
+    return totalCleaned;
+
+  } catch (error) {
+    console.log(chalk.red(`❌ Failed to cleanup old result files: ${error.message}`));
+    return 0;
+  }
+}
+
 function saveJson(filePath, data) {
   try {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
@@ -759,13 +923,18 @@ async function checkAndSendPendingResults() {
       if (fs.existsSync(pendingResult.filePath)) {
         console.log(chalk.blue(`📄 Found pending results file: ${pendingResult.filePath}`));
         
-        // Send the results
-        await sendResultsToUser(sock, jid, pendingResult.filePath, pendingResult.meta, session.language);
+        // Send the results (this will automatically delete the file after successful delivery)
+        const fileSent = await sendResultsToUser(sock, jid, pendingResult.filePath, pendingResult.meta, session.language);
         
-        // Remove from pending
+        // Remove from pending regardless of send success (file cleanup is handled in sendResultsToUser)
         pendingResults.delete(jid);
         savePendingResults(); // Save updated pending results
-        console.log(chalk.green(`✅ Pending results sent successfully to ${jid}`));
+        
+        if (fileSent) {
+          console.log(chalk.green(`✅ Pending results sent successfully to ${jid}`));
+        } else {
+          console.log(chalk.yellow(`⚠️ Pending results send failed for ${jid}, but removed from pending queue`));
+        }
       } else {
         console.log(chalk.yellow(`⚠️ Pending results file not found: ${pendingResult.filePath}`));
         pendingResults.delete(jid);
@@ -975,6 +1144,27 @@ async function sendResultsToUser(sock, jid, filePath, meta, userLanguage = 'en')
     if (!fileSent) {
       console.log(chalk.red(`❌ All ${maxRetries} attempts failed or file was too large. No fallback attempted.`));
       // No text fallback for oversized files or general send failures, as sendFile already handles user notification
+    }
+    
+    // 🗑️ STORAGE OPTIMIZATION: Delete file after successful delivery
+    if (fileSent) {
+      try {
+        // Add a small delay to ensure the file was fully sent
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        // Use the comprehensive cleanup function that checks multiple locations
+        const cleanupSuccess = cleanupResultFile(filePath);
+        
+        if (cleanupSuccess) {
+          console.log(chalk.green(`🗑️ Storage optimization: Successfully cleaned up result file after delivery: ${fileName}`));
+        } else {
+          console.log(chalk.yellow(`⚠️ File cleanup completed but file may have been already deleted: ${fileName}`));
+        }
+      } catch (deleteError) {
+        console.log(chalk.red(`❌ Failed to cleanup result file after delivery: ${deleteError.message}`));
+        console.log(chalk.gray(`   File path: ${filePath}`));
+        // Don't throw error - file was sent successfully, deletion is just optimization
+      }
     }
     
     return fileSent;
@@ -2817,6 +3007,30 @@ async function handleMessage(sock, message) {
       return;
     }
 
+    // Admin command: Cleanup
+    if (text.toUpperCase() === 'ADMIN CLEANUP') {
+      console.log(chalk.blue(`🔍 Processing ADMIN CLEANUP command for ${adminSession.adminCode}`));
+      try {
+        await sock.sendMessage(jid, { 
+          text: `🗑️ **Storage Cleanup Started**\n\nCleaning up old result files...`
+        });
+
+        const cleanedFiles = cleanupOldResultFiles(24); // Clean files older than 24 hours
+        
+        await sock.sendMessage(jid, { 
+          text: `✅ **Storage Cleanup Complete**\n\n🗑️ **Files Removed:** ${cleanedFiles}\n⏰ **Age Threshold:** 24 hours\n📁 **Locations Cleaned:**\n• Main results folder\n• Lead-scraper results folder\n• Maps-scraper results folder`
+        });
+
+        console.log(chalk.blue(`🗑️ Manual cleanup requested by admin ${adminSession.adminCode}: ${cleanedFiles} files removed`));
+      } catch (error) {
+        console.log(chalk.red(`❌ Manual cleanup failed: ${error.message}`));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Cleanup Failed**\n\nError: ${error.message}`
+        });
+      }
+      return;
+    }
+
     // Admin command: Help
     if (text.toUpperCase() === 'ADMIN HELP') {
       const permissions = adminSession.permissions;
@@ -2843,6 +3057,7 @@ async function handleMessage(sock, message) {
       
       if (permissions.includes('system_control')) {
         message += `• **ADMIN STATUS** - View system status and statistics\n`;
+        message += `• **ADMIN CLEANUP** - Clean up old result files (storage optimization)\n`;
       }
       
       message += `• **ADMIN HELP** - Show this help message\n`;
@@ -3758,7 +3973,7 @@ async function handleMessage(sock, message) {
       // Check if it's a valid admin command
       const validCommands = [
         'ADMIN USERS', 'ADMIN ADD USER', 'ADMIN REMOVE USER', 'ADMIN ADMINS', 
-        'ADMIN ADD ADMIN', 'ADMIN REMOVE ADMIN', 'ADMIN STATUS', 'ADMIN HELP',
+        'ADMIN ADD ADMIN', 'ADMIN REMOVE ADMIN', 'ADMIN STATUS', 'ADMIN CLEANUP', 'ADMIN HELP',
         'ADMIN SESSIONS', 'ADMIN REFRESH', 'ADMIN ADMINSESSIONSFILE', 
         'ADMIN USERSESSIONSFILE', 'ADMIN FILES', 'ADMIN DEBUG', 'ADMIN LOG',
         'ADMIN SESSIONSFILE', 'ADMIN RESET', 'ADMIN CONFIGFILE', 'ADMIN CODESFILE',
@@ -5980,6 +6195,14 @@ async function startBot() {
     // Load pending results from disk
     loadPendingResults();
 
+    // 🗑️ STORAGE OPTIMIZATION: Clean up old result files on startup
+    console.log(chalk.blue('🗑️ Running storage optimization cleanup...'));
+    const cleanedFiles = cleanupOldResultFiles(24); // Clean files older than 24 hours
+    if (cleanedFiles > 0) {
+      console.log(chalk.green(`✅ Storage optimization: Cleaned up ${cleanedFiles} old result files`));
+    } else {
+      console.log(chalk.gray('✅ Storage optimization: No old files to clean up'));
+    }
     
     // Load admin sessions from disk
     loadAdminSessions();
@@ -6113,6 +6336,7 @@ async function startBot() {
            adminManager.sessions = adminManager.loadSessions();
            console.log(chalk.blue('🔄 Admin manager data refreshed'));
          }
+         
        }, 60000); // Every 60 seconds
 
     // Message handler
