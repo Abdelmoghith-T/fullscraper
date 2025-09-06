@@ -806,18 +806,19 @@ function loadPendingResults() {
   }
 }
 
-async function sendFile(sock, jid, filePath, caption = '') {
+async function sendFile(sock, jid, filePath, caption = '', customFileName = null) {
   try {
     console.log(chalk.blue(`🔍 sendFile: Starting file send process...`));
     console.log(chalk.blue(`🔍 sendFile: File path: ${filePath}`));
     console.log(chalk.blue(`🔍 sendFile: JID: ${jid}`));
     console.log(chalk.blue(`🔍 sendFile: Caption: ${caption}`));
+    console.log(chalk.blue(`🔍 sendFile: Custom filename: ${customFileName || 'none'}`));
     
     if (!fs.existsSync(filePath)) {
       throw new Error('File not found');
     }
 
-    const fileName = path.basename(filePath);
+    const fileName = customFileName || path.basename(filePath);
     const fileData = fs.readFileSync(filePath);
     const fileExt = path.extname(fileName).toLowerCase();
     
@@ -903,12 +904,20 @@ async function sendResultsToUser(sock, jid, filePath, meta, userLanguage = 'en')
       throw new Error(`Results file not found: ${filePath}`);
     }
     
-    const fileName = path.basename(filePath);
+    const fileName = meta.customFilename || path.basename(filePath);
     const fileExtension = path.extname(filePath).toLowerCase();
     
     // Create appropriate caption based on source and format in user's language
-    let caption = `📄 **${getMessage(userLanguage, 'file_ready', { filename: fileName })}**\n\n`;
-    caption += `📊 **${getMessage(userLanguage, 'summary')}:** ${meta.totalResults || 'Unknown'} ${getMessage(userLanguage, 'results')}\n`;
+    let caption = `📄 **${getMessage(userLanguage, 'file_ready')}**\n\n`;
+    
+    // Handle totalResults - if it's already formatted (contains the word "results"), use as is
+    // Otherwise, append the localized "results" word
+    const totalResultsText = meta.totalResults || 'Unknown';
+    const summaryText = totalResultsText.toString().includes(getMessage(userLanguage, 'results')) 
+      ? totalResultsText 
+      : `${totalResultsText} ${getMessage(userLanguage, 'results')}`;
+    
+    caption += `📊 **${getMessage(userLanguage, 'summary')}:** ${summaryText}\n`;
     caption += `🎯 **${getMessage(userLanguage, 'source')}:** ${meta.source || 'Unknown'}\n`;
     caption += `📋 **${getMessage(userLanguage, 'format')}:** ${meta.format || fileExtension.toUpperCase()}\n`;
     
@@ -922,6 +931,8 @@ async function sendResultsToUser(sock, jid, filePath, meta, userLanguage = 'en')
     }
     
     console.log(chalk.blue(`📤 Sending results to ${jid}: ${fileName}`));
+    console.log(chalk.blue(`📤 Custom filename from meta: ${meta.customFilename || 'none'}`));
+    console.log(chalk.blue(`📤 Original file path: ${filePath}`));
     
     // Try to send file with retry mechanism
     let fileSent = false;
@@ -943,8 +954,8 @@ async function sendResultsToUser(sock, jid, filePath, meta, userLanguage = 'en')
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
         
-        // Try to send file as document attachment
-        fileSent = await sendFile(sock, jid, filePath, caption);
+        // Try to send file as document attachment with custom filename
+        fileSent = await sendFile(sock, jid, filePath, caption, meta.customFilename);
         
         if (fileSent) {
           console.log(chalk.green(`📄 Results file sent successfully as attachment: ${fileName}`));
@@ -1120,7 +1131,7 @@ async function handleMessage(sock, message) {
   console.log(chalk.gray(`📱 Session data loaded for ${jid.split('@')[0]}: ${Object.keys(sessions).length} total sessions`));
 
 
-  // Initialize session if not exists (but don't send welcome message yet)
+  // Initialize session if not exists and send language selection message
   if (!sessions[jid]) {
     sessions[jid] = {
       prefs: {
@@ -1128,8 +1139,8 @@ async function handleMessage(sock, message) {
         format: 'XLSX'
       },
       status: 'idle',
-      currentStep: 'awaiting_language', // New: Start with language selection
-      previousMessage: null, // New: Stores the previous message content for "go back" functionality
+      currentStep: 'awaiting_language', // Start with language selection
+      previousMessage: null, // Stores the previous message content for "go back" functionality
       language: 'en', // Default language
       meta: {
         createdAt: new Date().toISOString(),
@@ -1150,11 +1161,12 @@ async function handleMessage(sock, message) {
     };
     saveJson(SESSIONS_FILE, sessions);
     
-
-    // DON'T send welcome message for new users - they must authenticate first
-    // The welcome message will only be sent after they provide a valid CODE
-    console.log(chalk.yellow(`🔒 New user ${jid.split('@')[0]} created session - awaiting authentication`));
-    return; // Exit without any response
+    // Send language selection message for new users
+    console.log(chalk.yellow(`🌐 New user ${jid.split('@')[0]} - sending language selection`));
+    await sock.sendMessage(jid, { 
+      text: getMessage('en', 'welcome')
+    });
+    return;
   }
 
   const session = sessions[jid];
@@ -3777,7 +3789,64 @@ async function handleMessage(sock, message) {
      }
    }
 
-   // STRICT AUTHENTICATION: No responses until CODE is provided (for regular users)
+   // Handle language selection for unauthenticated users
+   if (session.currentStep === 'awaiting_language' && !session.apiKeys) {
+     const langNumber = parseInt(text);
+     const langMap = { 1: 'en', 2: 'fr', 3: 'ar' };
+     
+     if (langNumber >= 1 && langNumber <= 3) {
+       session.language = langMap[langNumber];
+       session.currentStep = 'awaiting_authentication';
+       saveJson(SESSIONS_FILE, sessions);
+       
+       console.log(chalk.green(`🌐 User ${jid.split('@')[0]} selected language: ${session.language}`));
+       console.log(chalk.green(`🌐 Session saved with language: ${session.language}, currentStep: ${session.currentStep}`));
+       console.log(chalk.green(`🌐 Session object after save:`, JSON.stringify(session, null, 2)));
+       
+       await sock.sendMessage(jid, { 
+         text: getMessage(session.language, 'auth_required')
+       });
+       return;
+     } else if (text.trim() === '0') {
+       // For unauthenticated users, "0" should resend the welcome message (no main menu to go back to)
+       console.log(chalk.yellow(`⚠️ User ${jid.split('@')[0]} pressed 0 during language selection - resending welcome message`));
+       await sock.sendMessage(jid, { 
+         text: getMessage('en', 'welcome')
+       });
+       return;
+     } else {
+       // Invalid selection - resend language selection message
+       console.log(chalk.yellow(`⚠️ Invalid language selection from ${jid.split('@')[0]}: "${text}" - resending language selection`));
+       await sock.sendMessage(jid, { 
+         text: getMessage('en', 'welcome')
+       });
+       return;
+     }
+   }
+   
+   // Handle authentication for users who have selected language
+   if (session.currentStep === 'awaiting_authentication' && !session.apiKeys) {
+     if (text.trim() === '0') {
+       // User wants to go back to language selection
+       session.currentStep = 'awaiting_language';
+       saveJson(SESSIONS_FILE, sessions);
+       console.log(chalk.yellow(`🔄 User ${jid.split('@')[0]} going back to language selection from authentication`));
+       await sock.sendMessage(jid, { 
+         text: getMessage('en', 'welcome')
+       });
+       return;
+     } else if (!/^CODE:?\s+/i.test(text)) {
+       // Invalid input - resend authentication message
+       console.log(chalk.yellow(`⚠️ Invalid authentication attempt from ${jid.split('@')[0]}: "${text}" - resending auth message`));
+       await sock.sendMessage(jid, { 
+         text: getMessage(session.language, 'auth_required')
+       });
+       return;
+     }
+     // If it's a CODE command, let it continue to the authentication logic below
+   }
+   
+   // STRICT AUTHENTICATION: No responses until CODE is provided (for regular users who haven't selected language)
   if (!session.apiKeys && !/^CODE:?\s+/i.test(text)) {
     // SILENT IGNORE: Don't respond to any messages until authentication
     console.log(chalk.yellow(`🔒 Unauthorized message from ${jid.split('@')[0]}: "${shortText}" - Ignoring silently`));
@@ -3824,7 +3893,7 @@ async function handleMessage(sock, message) {
   }
 
   try {
-    // Handle language selection first for new users (only if authenticated)
+    // Handle language selection for authenticated users
     if (session.currentStep === 'awaiting_language' && session.apiKeys) {
       const langNumber = parseInt(text);
       const langMap = { 1: 'en', 2: 'fr', 3: 'ar' };
@@ -3845,10 +3914,27 @@ async function handleMessage(sock, message) {
           text: getMessage(session.language, 'main_menu')
         });
         return;
-      } else {
-        // Resend welcome message for any invalid input until language is selected
+      } else if (text.trim() === '0') {
+        // User wants to go back to main menu
+        session.currentStep = 'main_menu';
+        saveJson(SESSIONS_FILE, sessions);
+        
         await sock.sendMessage(jid, { 
-          text: getMessage('en', 'welcome') // Always use English for welcome message
+          text: getMessage(session.language, 'main_menu')
+        });
+        return;
+      } else {
+        // Invalid selection - send invalid selection error message and resend language selection
+        console.log(chalk.yellow(`⚠️ Invalid language selection from ${jid.split('@')[0]}: "${text}" - sending invalid selection message`));
+        
+        // Send invalid selection error message
+        await sock.sendMessage(jid, { 
+          text: getMessage(session.language, 'invalid_selection', { max: 3 })
+        });
+        
+        // Then resend language selection message
+        await sock.sendMessage(jid, { 
+          text: getMessage(session.language, 'language_selection')
         });
         return;
       }
@@ -3858,7 +3944,7 @@ async function handleMessage(sock, message) {
     if (session.currentStep === 'main_menu' && session.apiKeys) {
       const menuChoice = parseInt(text);
       
-      if (menuChoice >= 1 && menuChoice <= 5) {
+      if (menuChoice >= 1 && menuChoice <= 4) {
         switch (menuChoice) {
           case 1: // START SCRAPER
             // Early trial check: block immediately if trial finished
@@ -3883,6 +3969,23 @@ async function handleMessage(sock, message) {
             } catch (e) {
               // If any issue reading codes, fall back to normal flow
             }
+            
+            // Check daily scraping limit before allowing user to enter niche
+            const limitInfo = checkDailyScrapingLimit(jid, sessions);
+            console.log(chalk.yellow(`🔍 Daily limit check for ${jid.split('@')[0]} (main menu): ${JSON.stringify(limitInfo)}`));
+            
+            if (!limitInfo.canScrape) {
+              console.log(chalk.red(`🚫 User ${jid.split('@')[0]} attempted to start scraper but daily limit reached: ${limitInfo.remaining}/${DAILY_SCRAPING_LIMIT}`));
+              const limitMessage = getDailyScrapingStatusMessage(limitInfo, session.language);
+              await sock.sendMessage(jid, { text: limitMessage });
+              
+              // Stay in main menu
+              await sock.sendMessage(jid, { text: getMessage(session.language, 'main_menu') });
+              return;
+            }
+            
+            console.log(chalk.green(`✅ User ${jid.split('@')[0]} can start scraper: ${limitInfo.remaining}/${DAILY_SCRAPING_LIMIT} remaining`));
+            
             session.currentStep = 'awaiting_niche';
             saveJson(SESSIONS_FILE, sessions);
             await sock.sendMessage(jid, { 
@@ -3890,18 +3993,7 @@ async function handleMessage(sock, message) {
             });
             return;
             
-          case 2: // VIEW HISTORY
-            // TODO: Implement history viewing
-            await sock.sendMessage(jid, { 
-              text: getMessage(session.language, 'no_history')
-            });
-            // Show main menu again
-            await sock.sendMessage(jid, { 
-              text: getMessage(session.language, 'main_menu')
-            });
-            return;
-            
-          case 3: // STATUS
+          case 2: // STATUS
             try {
               // Trial-first status
               const codesNow = loadJson(CODES_FILE, {});
@@ -3957,15 +4049,15 @@ async function handleMessage(sock, message) {
             });
             return;
             
-          case 4: // CHANGE LANGUAGE
+          case 3: // CHANGE LANGUAGE
             session.currentStep = 'awaiting_language';
             saveJson(SESSIONS_FILE, sessions);
             await sock.sendMessage(jid, { 
-              text: getMessage('en', 'welcome')
+              text: getMessage(session.language, 'language_selection')
             });
             return;
             
-          case 5: // LOGOUT
+          case 4: // LOGOUT
             // Ask for logout confirmation
             session.currentStep = 'logout_confirmation';
             sessions[jid] = session;
@@ -3985,9 +4077,610 @@ async function handleMessage(sock, message) {
       }
     }
     
+    // Handle stop confirmation state
+    if (session.currentStep === 'stop_confirmation') {
+      if (text.trim() === '1') {
+        // User confirmed stopping the job
+        try {
+          const activeJob = activeJobs.get(jid);
+          if (activeJob && activeJob.abort) {
+            // Stop the progress simulator first
+            if (activeJob.progressSimulator) {
+              activeJob.progressSimulator.stop();
+              console.log(chalk.yellow(`🛑 Stopped progress simulator for ${jid.split('@')[0]}`));
+            }
+            
+            // Stop the job
+            activeJob.abort.abort();
+            console.log(chalk.yellow(`🛑 User ${jid.split('@')[0]} confirmed stopping the job`));
+            
+            // Clear the active job from the Map
+            activeJobs.delete(jid);
+            console.log(chalk.yellow(`🛑 Cleared active job for ${jid.split('@')[0]}`));
+            
+            // Check if there are any results to send
+            let resultsFound = false;
+            
+            // First check pendingResults
+            if (pendingResults.has(jid)) {
+              const pendingResult = pendingResults.get(jid);
+              try {
+                // Send the results that were found
+                await sendResultsToUser(sock, jid, pendingResult.filePath, pendingResult.meta, session.language);
+                pendingResults.delete(jid);
+                savePendingResults();
+                
+                // Send success message with results
+                await sock.sendMessage(jid, { 
+                  text: getMessage(session.language, 'stop_success', { results: 'Results found and sent above' })
+                });
+                resultsFound = true;
+              } catch (error) {
+                console.log(chalk.red(`❌ Failed to send results after stop: ${error.message}`));
+                await sock.sendMessage(jid, { 
+                  text: getMessage(session.language, 'stop_success', { results: 'Results found but failed to send' })
+                });
+                resultsFound = true;
+              }
+            }
+            
+            // If no pending results, check for autosaved files
+            if (!resultsFound) {
+              try {
+                const resultsDir = path.join(__dirname, 'results');
+                if (fs.existsSync(resultsDir)) {
+                  const files = fs.readdirSync(resultsDir);
+                  
+                  // Look for autosaved files for this session ONLY
+                  const currentNiche = session.meta?.lastNiche || session.niche || 'unknown';
+                  const currentSource = session.meta?.lastSource || 'unknown';
+                  const sessionStartTime = session.meta?.jobStartTime || Date.now();
+                  const maxFileAge = 10 * 60 * 1000; // 10 minutes - files older than this are not from current session
+                  
+                  // If no job start time is recorded, use a very recent time to ensure we only get current session files
+                  const effectiveStartTime = sessionStartTime === Date.now() ? Date.now() - (5 * 60 * 1000) : sessionStartTime;
+                  
+                  console.log(chalk.blue(`🔍 Looking for autosaved files for niche: "${currentNiche}" and source: "${currentSource}"`));
+                  console.log(chalk.blue(`⏰ Session started at: ${new Date(sessionStartTime).toLocaleString()}`));
+                  console.log(chalk.blue(`⏰ Effective start time: ${new Date(effectiveStartTime).toLocaleString()}`));
+                  console.log(chalk.blue(`⏰ Max file age: ${Math.round(maxFileAge / 1000 / 60)} minutes`));
+                  
+                  // Determine what file types to look for based on the source
+                  let fileExtensions = ['.xlsx'];
+                  let filePatterns = [];
+                  let searchDirectory = resultsDir; // Default to results directory
+                  
+                  if (currentSource === 'MAPS' || currentSource === 'google_maps') {
+                    // Google Maps creates .json files with pattern: niche_google_maps_autosave_SESSION_ID.json
+                    fileExtensions = ['.json'];
+                    filePatterns.push('google_maps_autosave');
+                    searchDirectory = resultsDir; // Look in results directory
+                    console.log(chalk.blue(`🗺️ Looking for Google Maps autosave files (.json) in: ${searchDirectory}`));
+                  } else if (currentSource === 'LINKEDIN' || currentSource === 'linkedin') {
+                    // LinkedIn creates .xlsx files with autosave pattern
+                    filePatterns.push('autosave', 'SESSION_');
+                    searchDirectory = resultsDir; // Look in results directory
+                    console.log(chalk.blue(`💼 Looking for LinkedIn autosave files in: ${searchDirectory}`));
+                  } else if (currentSource === 'GOOGLE' || currentSource === 'google_search') {
+                    // Google Search creates .txt files in lead-scraper directory
+                    fileExtensions = ['.txt'];
+                    filePatterns.push('results');
+                    searchDirectory = path.join(__dirname, 'google search + linkdin scraper', 'lead-scraper'); // Look in lead-scraper directory
+                    console.log(chalk.blue(`🌐 Looking for Google Search results files in: ${searchDirectory}`));
+                  }
+                  
+                  // Get files from the appropriate directory
+                  let searchDirectoryFiles = [];
+                  if (fs.existsSync(searchDirectory)) {
+                    searchDirectoryFiles = fs.readdirSync(searchDirectory);
+                    console.log(chalk.blue(`📁 Found ${searchDirectoryFiles.length} files in search directory: ${searchDirectory}`));
+                  } else {
+                    console.log(chalk.yellow(`⚠️ Search directory does not exist: ${searchDirectory}`));
+                  }
+                  
+                  // STRICT filtering: Only look for files that are:
+                  // 1. From the current session (created after session start)
+                  // 2. Match the current niche exactly
+                  // 3. Match the current source type
+                  // 4. Are actually autosaved (not completed files)
+                  let autosaveFiles = searchDirectoryFiles.filter(file => {
+                    try {
+                      const filePath = path.join(searchDirectory, file);
+                      const fileStat = fs.statSync(filePath);
+                      const fileCreationTime = fileStat.mtime.getTime();
+                      
+                                                                   // Check if file is from current session (created AFTER session started, within 10 minutes)
+                      const isFromCurrentSession = fileCreationTime >= effectiveStartTime && (fileCreationTime - effectiveStartTime) <= maxFileAge;
+                      
+                      // Check if file matches current niche exactly
+                      // Handle multiple naming formats: with underscores, without spaces, with spaces
+                      const nicheWithUnderscores = currentNiche.toLowerCase().replace(/\s+/g, '_');
+                      const nicheWithoutSpaces = currentNiche.toLowerCase().replace(/\s+/g, '');
+                      const hasCorrectNiche = file.toLowerCase().includes(nicheWithUnderscores) || 
+                                            file.toLowerCase().includes(nicheWithoutSpaces) ||
+                                            file.toLowerCase().includes(currentNiche.toLowerCase());
+                      
+                      // Debug logging for niche matching
+                      if (currentSource === 'MAPS' || currentSource === 'google_maps') {
+                        console.log(chalk.gray(`   🔍 Niche matching for "${file}":`));
+                        console.log(chalk.gray(`      - Current niche: "${currentNiche}"`));
+                        console.log(chalk.gray(`      - With underscores: "${nicheWithUnderscores}"`));
+                        console.log(chalk.gray(`      - Without spaces: "${nicheWithoutSpaces}"`));
+                        console.log(chalk.gray(`      - Matches: ${hasCorrectNiche}`));
+                      }
+                      
+                      // Check if file has correct extension and patterns
+                      const hasCorrectExtension = fileExtensions.some(ext => file.endsWith(ext));
+                      const hasCorrectPatterns = filePatterns.every(pattern => file.includes(pattern));
+                      
+                      // Check if file is actually autosaved (not completed)
+                      const isAutosaved = file.includes('autosave') || file.includes('SESSION');
+                      
+                      // Check if file matches current source type
+                      const matchesSource = (currentSource === 'MAPS' || currentSource === 'google_maps') ? 
+                        file.includes('google_maps') : 
+                        (currentSource === 'LINKEDIN' || currentSource === 'linkedin') ? 
+                        file.includes('linkedin') : 
+                        (currentSource === 'GOOGLE' || currentSource === 'google_search') ? 
+                        file.includes('results') : true;
+                      
+                      // Log detailed filtering for debugging
+                      if (hasCorrectExtension && hasCorrectNiche && isAutosaved && matchesSource) {
+                        console.log(chalk.blue(`🔍 File "${file}" filtering details:`));
+                        console.log(chalk.blue(`   - Extension: ${hasCorrectExtension} (${fileExtensions.join(', ')})`));
+                        console.log(chalk.blue(`   - Niche: ${hasCorrectNiche} (looking for: ${currentNiche})`));
+                        console.log(chalk.blue(`   - Patterns: ${hasCorrectPatterns} (${filePatterns.join(', ')})`));
+                        console.log(chalk.blue(`   - Autosaved: ${isAutosaved}`));
+                        console.log(chalk.blue(`   - Source: ${matchesSource} (${currentSource})`));
+                        console.log(chalk.blue(`   - Session: ${isFromCurrentSession} (created: ${new Date(fileCreationTime).toLocaleString()}, effective session: ${new Date(effectiveStartTime).toLocaleString()})`));
+                      }
+                      
+                      // ALL conditions must be met
+                      return hasCorrectExtension && 
+                             hasCorrectNiche && 
+                             hasCorrectPatterns && 
+                             isAutosaved && 
+                             matchesSource && 
+                             isFromCurrentSession;
+                    } catch (error) {
+                      console.log(chalk.yellow(`⚠️ Error checking file "${file}": ${error.message}`));
+                      return false;
+                    }
+                  });
+                  
+                  console.log(chalk.blue(`📁 Found ${autosaveFiles.length} autosaved files from current session:`));
+                  autosaveFiles.forEach(file => console.log(chalk.blue(`   - ${file}`)));
+                  
+                  // If no files found, this means the job was stopped before autosave
+                  if (autosaveFiles.length === 0) {
+                    console.log(chalk.yellow(`⚠️ No autosaved files found from current session`));
+                    console.log(chalk.yellow(`⚠️ This means the job was stopped before any results could be saved`));
+                    console.log(chalk.yellow(`⚠️ Will send "no results found" message instead of old files`));
+                  }
+                  
+                  if (autosaveFiles.length > 0) {
+                    // Sort by modification time to get the most recent
+                    const sortedFiles = autosaveFiles.sort((a, b) => {
+                      const statA = fs.statSync(path.join(searchDirectory, a));
+                      const statB = fs.statSync(path.join(searchDirectory, b));
+                      return statB.mtime.getTime() - statA.mtime.getTime();
+                    });
+                    
+                    const mostRecentFile = sortedFiles[0];
+                    const filePath = path.join(searchDirectory, mostRecentFile);
+                    
+                    console.log(chalk.green(`📁 Found matching autosaved file: ${mostRecentFile}`));
+                    console.log(chalk.blue(`📝 Original filename analysis:`));
+                    console.log(chalk.blue(`   - Full filename: ${mostRecentFile}`));
+                    console.log(chalk.blue(`   - Contains autosave: ${mostRecentFile.includes('autosave')}`));
+                    console.log(chalk.blue(`   - Contains SESSION: ${mostRecentFile.includes('SESSION')}`));
+                    console.log(chalk.blue(`   - File extension: ${path.extname(mostRecentFile)}`));
+                    
+                    // Create a clean filename for the user
+                    // Handle different file types and patterns
+                    let cleanFilename = mostRecentFile;
+                    
+                    console.log(chalk.blue(`🔍 Filename cleaning process:`));
+                    console.log(chalk.blue(`   - Original: ${mostRecentFile}`));
+                    console.log(chalk.blue(`   - Source type: ${currentSource}`));
+                    
+                    let cleaned = false;
+                    
+                    if (currentSource === 'MAPS' || currentSource === 'google_maps') {
+                      // Google Maps files: niche_google_maps_autosave_SESSION_ID.json
+                      if (cleanFilename.includes('_google_maps_autosave')) {
+                        // Remove session ID part to get clean filename
+                        const googleMapsPattern = /_google_maps_autosave(_SESSION_[A-Z0-9]+)?\.json$/;
+                        cleanFilename = cleanFilename.replace(googleMapsPattern, '_google_maps_autosave.json');
+                        console.log(chalk.blue(`🗺️ Google Maps Pattern: ${mostRecentFile} → ${cleanFilename}`));
+                        cleaned = true;
+                      }
+                    } else if (currentSource === 'LINKEDIN' || currentSource === 'linkedin') {
+                      // LinkedIn files: handle autosave patterns
+                      if (cleanFilename.includes('_autosave_SESSION_') && cleanFilename.endsWith('.xlsx')) {
+                        const sessionPattern = /_autosave_SESSION_[A-Z0-9]+\.xlsx$/;
+                        if (sessionPattern.test(cleanFilename)) {
+                          cleanFilename = cleanFilename.replace(sessionPattern, '.xlsx');
+                          console.log(chalk.blue(`📝 LinkedIn Pattern 1 match: ${mostRecentFile} → ${cleanFilename}`));
+                          cleaned = true;
+                        }
+                      }
+                      
+                      if (!cleaned && cleanFilename.includes('_autosave_') && cleanFilename.endsWith('.xlsx')) {
+                        const autosavePattern = /_autosave_[A-Z0-9]+\.xlsx$/;
+                        if (autosavePattern.test(cleanFilename)) {
+                          cleanFilename = cleanFilename.replace(autosavePattern, '.xlsx');
+                          console.log(chalk.blue(`📝 LinkedIn Pattern 2 match: ${mostRecentFile} → ${cleanFilename}`));
+                          cleaned = true;
+                        }
+                      }
+                      
+                      if (!cleaned && cleanFilename.includes('_autosave') && cleanFilename.endsWith('.xlsx')) {
+                        const fallbackPattern = /_autosave.*?\.xlsx$/;
+                        cleanFilename = cleanFilename.replace(fallbackPattern, '.xlsx');
+                        console.log(chalk.blue(`📝 LinkedIn Pattern 3 fallback: ${mostRecentFile} → ${cleanFilename}`));
+                        cleaned = true;
+                      }
+                    } else if (currentSource === 'GOOGLE' || currentSource === 'google_search') {
+                      // Google Search files: remove session part like LinkedIn
+                      // Pattern: niche_results_autosave_session_TIMESTAMP.txt → niche_results.txt
+                      if (cleanFilename.includes('_autosave_session_')) {
+                        const googleSearchPattern = /_autosave_session_\d+\.txt$/;
+                        cleanFilename = cleanFilename.replace(googleSearchPattern, '.txt');
+                        console.log(chalk.blue(`🌐 Google Search Pattern 1: ${mostRecentFile} → ${cleanFilename}`));
+                        cleaned = true;
+                      } else if (cleanFilename.includes('_autosave') && cleanFilename.endsWith('.txt')) {
+                        const fallbackPattern = /_autosave.*?\.txt$/;
+                        cleanFilename = cleanFilename.replace(fallbackPattern, '.txt');
+                        console.log(chalk.blue(`🌐 Google Search Pattern 2 fallback: ${mostRecentFile} → ${cleanFilename}`));
+                        cleaned = true;
+                      }
+                    }
+                    
+                    // If no patterns matched, keep original but log warning
+                    if (!cleaned) {
+                      console.log(chalk.yellow(`⚠️ No cleaning pattern found for source "${currentSource}", keeping original filename: ${cleanFilename}`));
+                    }
+                    
+                    console.log(chalk.green(`✅ Final cleaned filename: ${cleanFilename}`));
+                    
+                    // Verify that the niche name is preserved
+                    if (cleanFilename.includes('linkedin_results.xlsx') && !cleanFilename.includes('_')) {
+                      console.log(chalk.red(`⚠️ WARNING: Niche name appears to be lost! Filename: ${cleanFilename}`));
+                      console.log(chalk.red(`⚠️ This suggests the autosaved file doesn't contain the niche name`));
+                    }
+                    
+                    // Read the file to get actual result count
+                    let resultCount = 0;
+                    try {
+                      console.log(chalk.blue(`📁 Attempting to read file: ${filePath}`));
+                      console.log(chalk.blue(`📁 File exists: ${fs.existsSync(filePath)}`));
+                      console.log(chalk.blue(`📁 File size: ${fs.statSync(filePath).size} bytes`));
+                      
+                      // Check file type and read accordingly
+                      if (filePath.endsWith('.json')) {
+                        // Google Maps JSON file
+                        console.log(chalk.blue(`📦 Reading Google Maps JSON file`));
+                        const fs = require('fs');
+                        const jsonData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                        
+                        // Google Maps JSON has structure: { metadata: {...}, results: [...] }
+                        if (jsonData.results && Array.isArray(jsonData.results)) {
+                          resultCount = jsonData.results.length;
+                          console.log(chalk.green(`📊 Successfully read ${resultCount} results from Google Maps JSON file`));
+                        } else if (Array.isArray(jsonData)) {
+                          // Fallback: direct array structure
+                          resultCount = jsonData.length;
+                          console.log(chalk.green(`📊 Successfully read ${resultCount} results from JSON array file`));
+                        } else {
+                          resultCount = 0;
+                          console.log(chalk.yellow(`⚠️ JSON file doesn't have expected structure: ${JSON.stringify(Object.keys(jsonData))}`));
+                        }
+                      } else if (filePath.endsWith('.xlsx')) {
+                        // LinkedIn/Excel file
+                        console.log(chalk.blue(`📦 Reading Excel file with XLSX library`));
+                        const XLSX = require('xlsx');
+                        const workbook = XLSX.readFile(filePath);
+                        console.log(chalk.blue(`📖 Workbook read successfully, sheets: ${workbook.SheetNames.join(', ')}`));
+                        
+                        const sheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[sheetName];
+                        console.log(chalk.blue(`📋 Worksheet "${sheetName}" loaded, dimensions: ${worksheet['!ref']}`));
+                        
+                        const data = XLSX.utils.sheet_to_json(worksheet);
+                        resultCount = data.length;
+                        console.log(chalk.green(`📊 Successfully read ${resultCount} results from Excel file`));
+                      } else {
+                        // Text file (Google Search)
+                        console.log(chalk.blue(`📦 Reading Google Search text file`));
+                        const fs = require('fs');
+                        const content = fs.readFileSync(filePath, 'utf8');
+                        const lines = content.split('\n').filter(line => line.trim());
+                        
+                        // Try to parse the header to get the correct count
+                        let headerCount = 0;
+                        let foundHeader = false;
+                        
+                        for (const line of lines) {
+                          // Look for the header line with total counts
+                          if (line.includes('Total Emails:') && line.includes('Total Phone Numbers:')) {
+                            console.log(chalk.blue(`📊 Found header line: ${line}`));
+                            foundHeader = true;
+                            
+                            // Parse: "Total Emails: 185 | Total Phone Numbers: 37"
+                            const emailMatch = line.match(/Total Emails:\s*(\d+)/);
+                            const phoneMatch = line.match(/Total Phone Numbers:\s*(\d+)/);
+                            
+                            if (emailMatch && phoneMatch) {
+                              const emailCount = parseInt(emailMatch[1]);
+                              const phoneCount = parseInt(phoneMatch[1]);
+                              headerCount = emailCount + phoneCount;
+                              console.log(chalk.green(`📊 Parsed header counts: ${emailCount} emails + ${phoneCount} phones = ${headerCount} total`));
+                            }
+                            break;
+                          }
+                        }
+                        
+                        if (foundHeader && headerCount > 0) {
+                          // Use the header count if available
+                          resultCount = headerCount;
+                          console.log(chalk.green(`📊 Using header count: ${resultCount} results`));
+                        } else {
+                          // Fallback: count data lines (skip headers and formatting)
+                          const dataLines = lines.filter(line => {
+                            // Skip header lines and empty lines
+                            const isHeader = line.includes('Email and Phone Numbers Data for:') ||
+                                           line.includes('Results for:') ||
+                                           line.includes('Session:') ||
+                                           line.includes('Timestamp:') ||
+                                           line.includes('Generated on:') ||
+                                           line.includes('Total Emails:') ||
+                                           line.includes('Total Phone Numbers:') ||
+                                           line.includes('─') ||
+                                           line.includes('=') ||
+                                           line.includes('📧') ||
+                                           line.includes('📞') ||
+                                           line.includes('🌐') ||
+                                           line.includes('📍') ||
+                                           line.includes('📊') ||
+                                           line.includes('Total:') ||
+                                           line.includes('Found:');
+                            
+                            // Skip lines that are just separators or formatting
+                            const isSeparator = line.trim().length === 0 || 
+                                              line.trim() === '─' || 
+                                              line.trim() === '=' ||
+                                              line.trim() === '|';
+                            
+                            return !isHeader && !isSeparator && line.trim().length > 0;
+                          });
+                          
+                          resultCount = dataLines.length;
+                          console.log(chalk.yellow(`⚠️ Header parsing failed, using line count: ${resultCount} results`));
+                        }
+                        
+                        console.log(chalk.green(`📊 Final result count: ${resultCount} results from Google Search text file`));
+                        console.log(chalk.gray(`   - Total lines in file: ${lines.length}`));
+                        console.log(chalk.gray(`   - Header parsing: ${foundHeader ? 'success' : 'failed'}`));
+                        console.log(chalk.gray(`   - Count method: ${foundHeader ? 'header' : 'line counting'}`));
+                      }
+                    } catch (error) {
+                      console.log(chalk.red(`❌ Error reading file: ${error.message}`));
+                      console.log(chalk.red(`❌ Error stack: ${error.stack}`));
+                      // Use localized fallback text instead of hardcoded English
+                      resultCount = getMessage(session.language, 'autosaved_results');
+                    }
+                    
+                    // Apply Google Search data type adjustment: subtract 2 for emails-only or phones-only
+                    if (typeof resultCount === 'number' && resultCount > 0) {
+                      const currentSource = session.meta?.lastSource || 'unknown';
+                      const currentDataType = session.meta?.lastDataType || 'unknown';
+                      
+                      // Check if conditions are met: Google Search + (emails-only OR phones-only)
+                      if (currentSource === 'GOOGLE' && (currentDataType === 'emails' || currentDataType === 'phones')) {
+                        const originalCount = resultCount;
+                        resultCount = Math.max(0, resultCount - 2); // Ensure it doesn't go below 0
+                        console.log(chalk.blue(`📊 Google Search data type adjustment:`));
+                        console.log(chalk.blue(`   - Source: ${currentSource}`));
+                        console.log(chalk.blue(`   - Data Type: ${currentDataType}`));
+                        console.log(chalk.blue(`   - Original count: ${originalCount}`));
+                        console.log(chalk.blue(`   - Adjusted count: ${resultCount} (subtracted 2)`));
+                      }
+                    }
+                    
+                    // Format the result count properly
+                    const formattedResults = typeof resultCount === 'number' 
+                      ? `${resultCount} ${getMessage(session.language, 'results')}`
+                      : resultCount;
+                    
+                    console.log(chalk.blue(`📊 Result count formatting:`));
+                    console.log(chalk.blue(`   - Original resultCount: ${resultCount} (type: ${typeof resultCount})`));
+                    console.log(chalk.blue(`   - Formatted results: ${formattedResults}`));
+                    console.log(chalk.blue(`   - Language: ${session.language}`));
+                    
+                    // Check if the file actually has results
+                    if (resultCount === 0) {
+                      console.log(chalk.yellow(`⚠️ File contains 0 results - this is likely a completed file, not an autosaved file`));
+                      console.log(chalk.yellow(`⚠️ Will not send this file to user - should send "no results found" message instead`));
+                      // Don't set resultsFound = true, let it fall through to "no results found" message
+                    } else {
+                      // First send success message ONLY if we have results to send
+                      await sock.sendMessage(jid, { 
+                        text: getMessage(session.language, 'stop_success')
+                      });
+                      
+                      // For Google Maps JSON files, convert to Excel before sending
+                      let finalFilePath = filePath;
+                      let finalFormat = filePath.endsWith('.json') ? 'JSON' : filePath.endsWith('.xlsx') ? 'XLSX' : 'TXT';
+                      let finalCustomFilename = cleanFilename;
+                      
+                      if (filePath.endsWith('.json') && (currentSource === 'MAPS' || currentSource === 'google_maps')) {
+                        try {
+                          console.log(chalk.blue(`🔄 Converting Google Maps JSON to Excel format...`));
+                          
+                          // Read the JSON data
+                          const fs = require('fs');
+                          const jsonData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+                          
+                          if (jsonData.results && Array.isArray(jsonData.results)) {
+                            // Create Excel file from JSON data
+                            const XLSX = require('xlsx');
+                            const workbook = XLSX.utils.book_new();
+                            
+                            // Process the results to handle arrays properly
+                            const processedResults = jsonData.results.map(result => {
+                              const processedResult = { ...result };
+                              
+                              // Handle emails array - join with "/" if it's an array
+                              if (Array.isArray(processedResult.emails)) {
+                                if (processedResult.emails.length > 0) {
+                                  console.log(chalk.blue(`📧 Processing emails array for "${processedResult.name}": ${processedResult.emails.join(', ')}`));
+                                  processedResult.emails = processedResult.emails.join(' / ');
+                                } else {
+                                  processedResult.emails = '';
+                                }
+                              }
+                              
+                              // Handle other potential arrays (phones, websites, etc.)
+                              if (Array.isArray(processedResult.phone)) {
+                                if (processedResult.phone.length > 0) {
+                                  console.log(chalk.blue(`📞 Processing phone array for "${processedResult.name}": ${processedResult.phone.join(', ')}`));
+                                  processedResult.phone = processedResult.phone.join(' / ');
+                                } else {
+                                  processedResult.phone = '';
+                                }
+                              }
+                              
+                              if (Array.isArray(processedResult.website)) {
+                                if (processedResult.website.length > 0) {
+                                  console.log(chalk.blue(`🌐 Processing website array for "${processedResult.name}": ${processedResult.website.join(', ')}`));
+                                  processedResult.website = processedResult.website.join(' / ');
+                                } else {
+                                  processedResult.website = '';
+                                }
+                              }
+                              
+                              return processedResult;
+                            });
+                            
+                            // Convert processed results to worksheet
+                            const worksheet = XLSX.utils.json_to_sheet(processedResults);
+                            XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
+                            
+                            // Create Excel filename with session ID to prevent overwriting
+                            // Use original filename (with session ID) for actual file, clean filename for display
+                            const excelFilename = mostRecentFile.replace('.json', '.xlsx');
+                            const excelFilePath = path.join(__dirname, 'results', excelFilename);
+                            
+                            // Save Excel file
+                            XLSX.writeFile(workbook, excelFilePath);
+                            console.log(chalk.green(`✅ Successfully converted JSON to Excel: ${excelFilename}`));
+                            
+                            // Update variables for sending
+                            finalFilePath = excelFilePath;
+                            finalFormat = 'XLSX';
+                            finalCustomFilename = cleanFilename.replace('.json', '.xlsx'); // Use clean filename for display
+                          } else {
+                            console.log(chalk.yellow(`⚠️ JSON file doesn't have results array, keeping original JSON`));
+                          }
+                        } catch (conversionError) {
+                          console.log(chalk.red(`❌ Error converting JSON to Excel: ${conversionError.message}`));
+                          console.log(chalk.yellow(`⚠️ Will send original JSON file instead`));
+                        }
+                      }
+                      
+                      // Send the file to the user (now Excel for Google Maps, original for others)
+                      await sendResultsToUser(sock, jid, finalFilePath, { 
+                        totalResults: formattedResults,
+                        source: currentSource === 'MAPS' ? 'Google Maps' : currentSource === 'LINKEDIN' ? 'LinkedIn' : 'Google Search',
+                        format: finalFormat,
+                        customFilename: finalCustomFilename
+                      }, session.language);
+                      resultsFound = true;
+                    }
+                  } else {
+                    console.log(chalk.yellow(`⚠️ No matching autosaved files found for niche "${currentNiche}"`));
+                  }
+                  
+                  // Additional debugging: show why files were filtered out
+                  if (autosaveFiles.length === 0) {
+                    console.log(chalk.yellow(`🔍 Debug: Analyzing why no files were found:`));
+                    console.log(chalk.yellow(`   - Current niche: "${currentNiche}"`));
+                    console.log(chalk.yellow(`   - Current source: "${currentSource}"`));
+                    console.log(chalk.yellow(`   - File extensions looking for: ${fileExtensions.join(', ')}`));
+                    console.log(chalk.yellow(`   - File patterns looking for: ${filePatterns.join(', ')}`));
+                    
+                    // Show some example files that were filtered out
+                    const exampleFiles = files.slice(0, 5);
+                    console.log(chalk.yellow(`   - Example files in directory: ${exampleFiles.join(', ')}`));
+                  }
+                }
+              } catch (error) {
+                console.log(chalk.red(`❌ Error checking for autosaved files: ${error.message}`));
+              }
+            }
+            
+            // If still no results found, send no results message
+            if (!resultsFound) {
+              await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'stop_no_results')
+              });
+            }
+            
+            // Reset session state and show main menu
+            session.currentStep = 'main_menu';
+            session.status = 'idle';
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+              text: getMessage(session.language, 'main_menu')
+            });
+          } else {
+                         // No active job found
+             await sock.sendMessage(jid, { 
+               text: getMessage(session.language, 'error_generic')
+             });
+             session.currentStep = 'main_menu';
+             session.status = 'idle';
+             saveJson(SESSIONS_FILE, sessions);
+             await sock.sendMessage(jid, { 
+               text: getMessage(session.language, 'main_menu')
+             });
+          }
+        } catch (error) {
+          console.error(chalk.red(`❌ Error stopping job:`, error.message));
+          await sock.sendMessage(jid, { 
+            text: getMessage(session.language, 'error_generic')
+          });
+          session.currentStep = 'main_menu';
+          session.status = 'idle';
+          saveJson(SESSIONS_FILE, sessions);
+          await sock.sendMessage(jid, { 
+            text: getMessage(session.language, 'main_menu')
+          });
+        }
+        return;
+      } else if (text.trim() === '0') {
+        // User cancelled stopping - return to scraping
+        session.currentStep = 'scraping_in_progress';
+        saveJson(SESSIONS_FILE, sessions);
+        console.log(chalk.green(`✅ User ${jid.split('@')[0]} cancelled stopping the job`));
+        await sock.sendMessage(jid, { 
+          text: getMessage(session.language, 'job_running')
+        });
+        return;
+      } else {
+        // Invalid input - show stop confirmation again
+        await sock.sendMessage(jid, { 
+          text: getMessage(session.language, 'stop_confirmation')
+        });
+        return;
+      }
+    }
+    
     // Handle logout confirmation state
     if (session.currentStep === 'logout_confirmation') {
-      if (text.trim() === '5') {
+      if (text.trim() === '4') {
         // User confirmed logout
         try {
           const userCode = session.code || 'unknown';
@@ -4090,49 +4783,87 @@ async function handleMessage(sock, message) {
       session.code = code;
       session.apiKeys = codesDb[code].apiKeys;
       
-      // Load user's language preference from their profile
-      if (codesDb[code].language) {
+      // CRITICAL FIX: Always preserve user's selected language during onboarding
+      console.log(chalk.blue(`🔍 Language debug - Session language: ${session.language || 'not set'}, currentStep: ${session.currentStep}`));
+      console.log(chalk.blue(`🔍 Language debug - Codes database language: ${codesDb[code].language || 'not set'}`));
+      
+      // If user just completed onboarding (selected language then authenticated), preserve their choice
+      if (session.currentStep === 'awaiting_authentication' && session.language) {
+        // User just selected language during onboarding - this ALWAYS takes precedence
+        codesDb[code].language = session.language;
+        saveJson(CODES_FILE, codesDb);
+        console.log(chalk.blue(`💾 CRITICAL: Preserved user language preference: ${session.language}`));
+      } else if (!session.language && codesDb[code].language) {
+        // Only load from codes database if user hasn't selected language during this session
         session.language = codesDb[code].language;
+        console.log(chalk.blue(`📖 Loaded user language preference from codes database: ${session.language}`));
+      }
+      
+      console.log(chalk.blue(`🔍 Language debug - Final session language: ${session.language || 'not set'}`));
+      
+      // Set appropriate next step based on current state
+      if (session.currentStep === 'awaiting_authentication') {
+        // User just authenticated after language selection - go to main menu
+        session.currentStep = 'main_menu';
+      } else if (session.currentStep === 'awaiting_language') {
+        // User authenticated without language selection - go to language selection
+        session.currentStep = 'awaiting_language';
       }
       
       sessions[jid] = session;
-      saveJson(SESSIONS_FILE, sessions);
-
-
-      // Check if user already has a language preference
-      if (!session.language) {
-        // First time user - show language selection
-        session.currentStep = 'awaiting_language';
         saveJson(SESSIONS_FILE, sessions);
         
+              // Send appropriate welcome message based on current state
+        if (session.currentStep === 'awaiting_language') {
+          // User authenticated but needs to select language - show language selection
         await sock.sendMessage(jid, { 
           text: getMessage('en', 'welcome') // Always use English for welcome
         });
         return;
       } else {
-        // Returning user - show main menu in their language
+          // User is ready for main menu - show welcome and main menu
         session.currentStep = 'main_menu';
         saveJson(SESSIONS_FILE, sessions);
         
-        // If user is on free trial, send a brief trial welcome/summary before main menu
+                // Debug: Log the language being used
+      console.log(chalk.blue(`🌐 Authentication success - User language: ${session.language || 'en'}`));
+      console.log(chalk.blue(`🌐 Session currentStep: ${session.currentStep}`));
+      console.log(chalk.blue(`🌐 Codes database language: ${codesDb[code].language || 'not set'}`));
+          
+          // Send appropriate welcome message based on user stage
         try {
           const codesNow = loadJson(CODES_FILE, {});
           const entry = codesNow[code] || {};
           const stage = entry.stage || 'free_trial';
+            
+                  // Use the session language (which should be set from the user's selection)
+      const userLanguage = session.language || 'en';
+      console.log(chalk.blue(`🎯 Using language for welcome message: ${userLanguage}`));
+            
+            console.log(chalk.blue(`🎯 Sending welcome message in language: ${userLanguage}, stage: ${stage}`));
+            
           if (stage === 'free_trial') {
-            await sock.sendMessage(jid, { text: getMessage(session.language, 'trial_welcome') });
+              await sock.sendMessage(jid, { text: getMessage(userLanguage, 'trial_welcome') });
           } else if (stage === 'paid') {
-            await sock.sendMessage(jid, { text: getMessage(session.language, 'paid_welcome') });
+              await sock.sendMessage(jid, { text: getMessage(userLanguage, 'paid_welcome') });
           } else if (stage === 'unpaid') {
-            await sock.sendMessage(jid, { text: getMessage(session.language, 'subscription_expired') });
+              await sock.sendMessage(jid, { text: getMessage(userLanguage, 'subscription_expired') });
           } else {
             // Fallback welcome
-            await sock.sendMessage(jid, { text: getMessage(session.language, 'paid_welcome') });
+              await sock.sendMessage(jid, { text: getMessage(userLanguage, 'paid_welcome') });
+            }
+          } catch (e) {
+            // If any issue reading codes, fall back to normal welcome
+            const userLanguage = session.language || 'en';
+            console.log(chalk.yellow(`⚠️ Error reading codes, using fallback language: ${userLanguage}`));
+            await sock.sendMessage(jid, { text: getMessage(userLanguage, 'paid_welcome') });
           }
-        } catch (e) {}
-        
+          
+          // Ensure main menu is also sent in the correct language
+          const menuLanguage = session.language || 'en';
+          console.log(chalk.blue(`🎯 Sending main menu in language: ${menuLanguage}`));
         await sock.sendMessage(jid, { 
-          text: getMessage(session.language, 'main_menu')
+            text: getMessage(menuLanguage, 'main_menu')
         });
         return;
       }
@@ -4349,8 +5080,13 @@ async function handleMessage(sock, message) {
             saveJson(SESSIONS_FILE, sessions);
             return;
         } else {
+            // User sent a number - guide them back to search flow
             await sock.sendMessage(jid, { 
-                text: getMessage(session.language, 'invalid_niche')
+                text: '⚠️ **Invalid input.** Please enter your search query (e.g., "dentist casablanca") or send 0 to go back to main menu.'
+            });
+            // Resend the enter_niche message to guide them
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'enter_niche')
             });
             return;
         }
@@ -4388,6 +5124,10 @@ async function handleMessage(sock, message) {
             return;
         } else if (inputNumber >= 1 && inputNumber <= sourceOptions.length) {
             session.prefs.source = sourceOptions[inputNumber - 1];
+            
+            // Track the selected source in session metadata for STOP functionality
+            if (!session.meta) session.meta = {};
+            session.meta.lastSource = session.prefs.source;
             
             // For LinkedIn and Google Maps, automatically set dataType to 'COMPLETE' and format to 'XLSX', skip to ready_to_start
             if (session.prefs.source === 'LINKEDIN' || session.prefs.source === 'MAPS') {
@@ -4565,23 +5305,7 @@ async function handleMessage(sock, message) {
                 return;
             }
             
-            // Check daily scraping limit before starting
-            const limitInfo = checkDailyScrapingLimit(jid, sessions);
-            console.log(chalk.yellow(`🔍 Daily limit check for ${jid.split('@')[0]}: ${JSON.stringify(limitInfo)}`));
-            
-            if (!limitInfo.canScrape) {
-                console.log(chalk.red(`🚫 User ${jid.split('@')[0]} attempted to scrape but daily limit reached: ${limitInfo.remaining}/${DAILY_SCRAPING_LIMIT}`));
-                const limitMessage = getDailyScrapingStatusMessage(limitInfo, currentSession.language);
-                await sock.sendMessage(jid, { text: limitMessage });
-                
-                // Reset session state
-                currentSession.currentStep = 'awaiting_niche';
-                sessions[jid] = currentSession;
-                saveJson(SESSIONS_FILE, sessions);
-                return;
-            }
-            
-            console.log(chalk.green(`✅ User ${jid.split('@')[0]} can scrape: ${limitInfo.remaining}/${DAILY_SCRAPING_LIMIT} remaining`));
+            // Daily limit already checked at main menu level - proceed with job
 
             // Now start the actual scraping job
             const niche = currentSession.pendingNiche;
@@ -4634,7 +5358,7 @@ async function handleMessage(sock, message) {
             await mutateUserSession(jid, (s) => ({
                 ...s,
                 status: 'running',
-                meta: { ...(s.meta || {}), lastNiche: niche }
+                meta: { ...(s.meta || {}), lastNiche: niche, lastSource: source, lastDataType: dataType.toLowerCase() }
             }));
 
             let resultCount = 0;
@@ -4690,8 +5414,7 @@ async function handleMessage(sock, message) {
                                         jobStatus.progressSimulator.start(async (progressData) => {
                                             try {
                                                 // Send progress update to user
-                                                const progressEmoji = getProgressEmoji(progressData.processed);
-                                                const progressMessage = `${progressEmoji} **${progressData.message}**`;
+                                                const progressMessage = `**${progressData.message}**`;
                                                 
                                                 await sock.sendMessage(jid, { text: progressMessage });
                                                 
@@ -4952,7 +5675,9 @@ async function handleMessage(sock, message) {
                 let errorMessage = '';
 
                 if (error.message.includes('aborted')) {
-                    errorMessage = '🛑 **Job was cancelled.** You can send a new search query when ready.';
+                    // Don't send message for user-initiated aborts - our STOP logic already handles this
+                    console.log(chalk.yellow(`🛑 Job aborted by user - skipping error message (already handled by STOP logic)`));
+                    return; // Exit early to avoid duplicate messages
                 } else if (error.message.includes('ALL_USER_API_KEYS_QUOTA_EXCEEDED')) {
                     errorMessage = `🚨 **Daily Quota Exceeded!**\n\n` +
                         `❌ **All your Google Search API keys have exceeded their daily quota.**\n\n` +
@@ -5116,22 +5841,21 @@ async function handleMessage(sock, message) {
         return;
     } else if (session.currentStep === 'scraping_in_progress') {
 
-        // Only allow STOP and STATUS commands during scraping
-        if (text.toUpperCase() === 'STOP') {
-            const activeJob = activeJobs.get(jid);
-            if (activeJob && activeJob.abort) {
-                activeJob.abort.abort();
-                // State will be reset in the catch block of startUnifiedScraper
-            }
+        // Only allow STOP command during scraping (STATUS removed)
+        if (text.toUpperCase() === 'STOP' || text.toLowerCase() === 'stop') {
+            // Ask for confirmation before stopping
+            session.currentStep = 'stop_confirmation';
+            saveJson(SESSIONS_FILE, sessions);
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'stop_confirmation')
+            });
             return;
-        } else if (text.toUpperCase() === 'STATUS') {
-            // Handled below by the general STATUS command
         } else {
 
             // Only respond if user is authenticated
             if (session.apiKeys) {
             await sock.sendMessage(jid, { 
-                text: '⏳ A scraping job is currently in progress. You can type STATUS to check its progress or STOP to cancel it.'
+                text: getMessage(session.language, 'job_running')
             });
 
             }
@@ -5210,7 +5934,14 @@ async function handleMessage(sock, message) {
             await sock.sendMessage(jid, { text: getMessage(session.language, 'error_generic') });
         }
     } else if (!activeJobs.has(jid) && session.currentStep === 'awaiting_niche' && !isNaN(inputNumber)) {
-        await sock.sendMessage(jid, { text: getMessage(session.language, 'invalid_niche') });
+        // User sent a number in awaiting_niche state - guide them back to search flow
+        await sock.sendMessage(jid, { 
+            text: '⚠️ **Invalid input.** Please enter your search query (e.g., "dentist casablanca") or send 0 to go back to main menu.'
+        });
+        // Resend the enter_niche message to guide them
+        await sock.sendMessage(jid, { 
+            text: getMessage(session.language, 'enter_niche')
+        });
     } else if (!activeJobs.has(jid) && isNaN(inputNumber) && text.toUpperCase() !== 'START') {
         // Generic invalid input if not caught by specific steps or other commands
         await sock.sendMessage(jid, { text: getMessage(session.language, 'error_generic') });

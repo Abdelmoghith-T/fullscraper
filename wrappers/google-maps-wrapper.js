@@ -45,6 +45,12 @@ export class GoogleMapsScraper extends ScraperInterface {
    */
   async scrape(niche, options = {}) {
     try {
+      // Check for abort signal at the start
+      if (options.abortSignal?.aborted) {
+        console.log(chalk.yellow('🛑 Google Maps scraping aborted before start'));
+        return [];
+      }
+      
       await this.setup(options);
       
       const { businessType, location } = this.parseNiche(niche);
@@ -72,7 +78,13 @@ export class GoogleMapsScraper extends ScraperInterface {
       console.log(chalk.gray(`   This will find many more businesses than a single search`));
       
       // Call the original orchestration function that uses AI to generate queries
-      let results = await this.runOriginalOrchestration(fullNiche, maxResultsPerSubQuery);
+      let results = await this.runOriginalOrchestration(fullNiche, maxResultsPerSubQuery, options.abortSignal);
+      
+      // Check for abort signal after orchestration
+      if (options.abortSignal?.aborted) {
+        console.log(chalk.yellow('🛑 Google Maps scraping aborted after orchestration'));
+        return [];
+      }
       
       console.log(chalk.blue(`✅ Found ${results.length} businesses`));
       
@@ -121,7 +133,7 @@ export class GoogleMapsScraper extends ScraperInterface {
   /**
    * Run the original orchestrateScraping logic that generates multiple AI queries
    */
-  async runOriginalOrchestration(userQuery, maxResultsPerSubQuery) {
+  async runOriginalOrchestration(userQuery, maxResultsPerSubQuery, abortSignal) {
     try {
       // Since the original is CommonJS and this is ES modules, we need to spawn it as a child process
       const { spawn } = await import('child_process');
@@ -148,6 +160,17 @@ export class GoogleMapsScraper extends ScraperInterface {
             GEMINI_API_KEY: this.getGeminiApiKey() || process.env.GEMINI_API_KEY
           }
         });
+
+        // Set up abort signal handler to kill child process
+        let abortHandler = null;
+        if (abortSignal) {
+          abortHandler = () => {
+            console.log(chalk.yellow('🛑 Abort signal received, terminating Google Maps scraper...'));
+            child.kill('SIGTERM');
+            reject(new Error('Google Maps scraping aborted by user'));
+          };
+          abortSignal.addEventListener('abort', abortHandler);
+        }
 
         // Interruption handler for Ctrl+C  
         const handleInterruption = async () => {
@@ -208,6 +231,18 @@ export class GoogleMapsScraper extends ScraperInterface {
           process.removeListener('SIGINT', handleInterruption);
           process.removeListener('SIGTERM', handleInterruption);
           
+          // Clean up abort signal handler
+          if (abortHandler && abortSignal) {
+            abortSignal.removeEventListener('abort', abortHandler);
+          }
+          
+          // Check if this was an abort
+          if (abortSignal?.aborted) {
+            console.log(chalk.yellow('🛑 Google Maps scraper terminated by abort signal'));
+            reject(new Error('Google Maps scraping aborted by user'));
+            return;
+          }
+          
           if (code === 0 || (this.options?.trialMode && trialInterrupted)) {
             console.log(chalk.green('✅ Google Maps scraper completed successfully'));
             // Parse results from the generated file
@@ -218,11 +253,19 @@ export class GoogleMapsScraper extends ScraperInterface {
             reject(new Error(`Maps scraper exited with code ${code}. Error: ${stderr}`));
           }
         });
-        
+
+        // Handle child process errors
         child.on('error', (error) => {
           // Clean up interruption handlers on error
           process.removeListener('SIGINT', handleInterruption);
           process.removeListener('SIGTERM', handleInterruption);
+          
+          // Clean up abort signal handler
+          if (abortHandler && abortSignal) {
+            abortSignal.removeEventListener('abort', abortHandler);
+          }
+          
+          console.log(chalk.red(`❌ Google Maps scraper error: ${error.message}`));
           reject(new Error(`Failed to start maps scraper: ${error.message}`));
         });
       });

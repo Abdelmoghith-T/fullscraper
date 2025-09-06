@@ -6,7 +6,8 @@
 export const languages = {
   en: {
     // Welcome and Language Selection
-    welcome: "🚀 **Welcome to the Business Lead Finder!**\n\nPlease select your preferred language:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **Reply with the number** corresponding to your choice.",
+    welcome: "🤖 **Welcome to the Business Lead Finder!**\n\nPlease select your preferred language:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **Reply with the number** corresponding to your choice.",
+    language_selection: "🌐 **Language Selection**\n\nPlease select your preferred language:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **Reply with the number** corresponding to your choice.\n\n0️⃣ **BACK TO MENU** - Return to main menu",
     
     // Authentication
     auth_required: "🔐 **Authentication required.** Please send your access code first.\n\n💬 **Format:** CODE: your_code_here\n💬 **Example:** CODE: user1\n\n💡 Contact admin if you don't have an access code.\n\n0️⃣ **CHANGE LANGUAGE** - Select a different language",
@@ -14,14 +15,14 @@ export const languages = {
     access_granted: "✅ **Access granted!** Welcome to the Business Lead Finder.\n\n📝 Send a search query (e.g., \"restaurant casablanca\").\n\n📅 **Daily Limits:** You can perform 4 lead searches per day. Limits reset at midnight.\n\n💡 Use STATUS command to check your remaining searches.",
     
     // Main Menu
-    main_menu: "🏠 **Main Menu**\n\nWhat would you like to do?\n\n1️⃣ **🚀 START LEAD FINDER** - Start a new lead‑finding session\n2️⃣ **📊 VIEW HISTORY** - See your previous lead results\n3️⃣ **📈 STATUS** - Check your account status and daily limits\n4️⃣ **🌐 CHANGE LANGUAGE** - Switch to a different language\n5️⃣ **🔓 LOGOUT** - Sign out and switch accounts\n\n💬 **Reply with the number** corresponding to your choice.",
+    main_menu: "🏠 **Main Menu**\n\nWhat would you like to do?\n\n1️⃣ **🚀 START LEAD FINDER** - Start a new lead‑finding session\n2️⃣ **📈 STATUS** - Check your account status and daily limits\n3️⃣ **🌐 CHANGE LANGUAGE** - Switch to a different language\n4️⃣ **🔓 LOGOUT** - Sign out and switch accounts\n\n💬 **Reply with the number** corresponding to your choice.",
     language_changed: "🌐 **Language changed successfully!**\n\nYour language preference has been updated and saved to your profile.\n\n💡 **Tip:** This setting will be remembered for future sessions.",
     no_history: "📊 **No Lead History**\n\nYou haven't completed any lead‑finding sessions yet.\n\n🚀 **Get started:** Choose option 1 to begin your first lead search!",
     history_header: "📊 **Your Scraping History**\n\nHere are your recent scraping jobs:",
     
     // Search Flow
     enter_niche: "🎯 **Enter your search query:**\n\n💬 **Examples:**\n• dentist casablanca\n• restaurant marrakech\n• web developer fes\n\n💡 **Tip:** Include location for better results\n\n0️⃣ **BACK TO MENU** - Return to main menu",
-    invalid_niche: "⚠️ Please send your search query (e.g., \"dentist casablanca\").",
+    invalid_niche: "⚠️ **Invalid input.** Please enter your search query (e.g., \"dentist casablanca\") or send 0 to go back to main menu.",
     
     // Source Selection
     select_source: "🎯 **Select Data Source for \"{niche}\":**\n\n1️⃣ **GOOGLE** - Business websites & contact pages\n2️⃣ **LINKEDIN** - Professional profiles & companies\n3️⃣ **MAPS** - Business directory & local listings\n\n0️⃣ **BACK** - Go back to niche input\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
@@ -51,6 +52,11 @@ export const languages = {
     job_complete: "✅ **Lead Finding Complete!**\n\n📊 **Results Summary:**\n• Total Results: {total}\n• Emails: {emails}\n• Phones: {phones}\n• Websites: {websites}\n\n💾 **File ready for download** ⬇️",
     job_stopped: "🛑 **Lead‑finding session stopped.**",
     job_status: "📊 **Current Job Status:** {status}",
+    job_running: "⏳ **A lead‑finding session is currently in progress.**\n\n🛑 **Reply with STOP to cancel the current session.**",
+    stop_confirmation: "🛑 **Stop Lead Finding Session?**\n\n⚠️ **Warning:** Stopping now will end the current session immediately.\n\n🚫 **Daily Limit Impact:** You will lose 1 of your 4 daily tries.\n\n💡 **Note:** Any results found so far will be saved and sent to you.\n\n💬 **Reply with:**\n• **1** to confirm stopping the session\n• **0** to continue the session",
+    stop_success: "🛑 **Lead Finding Session Stopped!**\n\n✅ Your session has been stopped successfully.\n\n💡 **Note:** These are the results found so far. If you had let the job continue, you would have ended up with more comprehensive results.\n\n💾 **File ready for download** ⬇️",
+    stop_no_results: "🛑 **Lead Finding Session Stopped!**\n\n❌ **No leads found** - The session was too short to generate results.\n\n💡 **Tip:** Try running the session longer for better results.",
+    autosaved_results: "Auto-saved results",
     queued_waiting: "⏳ Many users are searching for leads right now. Your job will start as soon as possible. Please wait.",
     
     // Navigation
@@ -63,10 +69,10 @@ export const languages = {
     
     // Progress Messages
     progress_update: "⏱️ **Progress Update:** {message}",
-    progress_complete: "Progress: 100% — Lead finding complete!",
-    progress_analyzing: "🚀 *Progress: {progress}% - Analyzing search results...*",
-    progress_processing: "🚀 *Progress: {progress}% - Processing business data...*",
-    progress_extracting: "⚡ *Progress: {progress}% - Extracting contact information...*",
+    progress_complete: "🎉 Progress: 100% — Lead finding complete!",
+    progress_analyzing: "🔍 *Progress: {progress}% - Analyzing search results...*",
+    progress_processing: "⚙️ *Progress: {progress}% - Processing business data...*",
+    progress_extracting: "📥 *Progress: {progress}% - Extracting contact information...*",
     progress_validating: "📊 *Progress: {progress}% - Validating business profiles...*",
     progress_compiling: "🎯 *Progress: {progress}% - Compiling results...*",
     progress_finalizing: "✨ *Progress: {progress}% - Finalizing data...*",
@@ -91,7 +97,7 @@ export const languages = {
     paid_status: "\n\n💳 Subscription: Active\n⏰ Expires: {expires}\n⌛ Remaining: {remaining}\n",
     
     // File Messages
-    file_ready: "📎 **File ready for download:**\n{filename}",
+    file_ready: "📎 **File ready for download:**",
     
     // Additional translations for completion messages
     summary: "Summary",
@@ -106,14 +112,15 @@ export const languages = {
     results_saved_later: "Results saved for later delivery",
     
     // Logout Messages
-    logout_confirmation: "🔓 **Confirm Logout**\n\n⚠️ Are you sure you want to logout?\n\nThis will end your current session and you'll need to authenticate again.\n\n💬 **Reply with:**\n• **5** to confirm logout\n• **0** to cancel and return to main menu",
+    logout_confirmation: "🔓 **Confirm Logout**\n\n⚠️ Are you sure you want to logout?\n\nThis will end your current session and you'll need to authenticate again.\n\n💬 **Reply with:**\n• **4** to confirm logout\n• **0** to cancel and return to main menu",
     logout_successful: "🔓 **User Logout Successful!**\n\n✅ You have been logged out of your user session.\n\n💡 **To log back in:**\n• Send CODE: <user_code> to start a new user session\n• Example: CODE: user1",
     logout_error: "❌ **Error during logout**\n\nAn error occurred while logging out. Please try again or contact support."
   },
   
   fr: {
     // Welcome and Language Selection
-    welcome: "🚀 **Bienvenue dans le Localisateur de Prospects!**\n\nVeuillez sélectionner votre langue préférée:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
+    welcome: "🤖 **Bienvenue dans le Localisateur de Prospects!**\n\nVeuillez sélectionner votre langue préférée:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
+    language_selection: "🌐 **Sélection de Langue**\n\nVeuillez sélectionner votre langue préférée:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **Répondez avec le numéro** correspondant à votre choix.\n\n0️⃣ **RETOUR AU MENU** - Retourner au menu principal",
     
     // Authentication
     auth_required: "🔐 **Authentification requise.** Veuillez d'abord envoyer votre code d'accès.\n\n💬 **Format:** CODE: votre_code_ici\n💬 **Exemple:** CODE: user1\n\n💡 Contactez l'administrateur si vous n'avez pas de code d'accès.\n\n0️⃣ **CHANGER DE LANGUE** - Sélectionner une langue différente",
@@ -121,14 +128,14 @@ export const languages = {
     access_granted: "✅ **Accès accordé!** Bienvenue dans le Localisateur de Prospects.\n\n📝 Envoyez une requête de recherche (ex: \"restaurant casablanca\").\n\n📅 **Limites Quotidiennes:** Vous pouvez effectuer 4 recherches de prospects par jour. Réinitialisation à minuit.\n\n💡 Utilisez la commande STATUS pour vérifier vos recherches restantes.",
     
     // Main Menu
-    main_menu: "🏠 **Menu Principal**\n\nQue souhaitez-vous faire?\n\n1️⃣ **🚀 DÉMARRER LA RECHERCHE DE PROSPECTS** - Nouvelle session\n2️⃣ **📊 VOIR L'HISTORIQUE** - Voir vos résultats précédents\n3️⃣ **📈 STATUT** - Vérifier votre statut et limites quotidiennes\n4️⃣ **🌐 CHANGER LA LANGUE** - Passer à une autre langue\n5️⃣ **🔓 DÉCONNEXION** - Se déconnecter et changer de compte\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
+    main_menu: "🏠 **Menu Principal**\n\nQue souhaitez-vous faire?\n\n1️⃣ **🚀 DÉMARRER LA RECHERCHE DE PROSPECTS** - Nouvelle session\n2️⃣ **📈 STATUT** - Vérifier votre statut et limites quotidiennes\n3️⃣ **🌐 CHANGER LA LANGUE** - Passer à une autre langue\n4️⃣ **🔓 DÉCONNEXION** - Se déconnecter et changer de compte\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
     language_changed: "🌐 **Langue changée avec succès!**\n\nVotre préférence de langue a été mise à jour et enregistrée dans votre profil.\n\n💡 **Conseil:** Ce paramètre sera conservé pour les sessions futures.",
     no_history: "📊 **Aucun Historique de Prospects**\n\nVous n'avez pas encore effectué de sessions de recherche de prospects.\n\n🚀 **Commencez:** Choisissez l'option 1 pour lancer votre première recherche!",
     history_header: "📊 **Votre Historique de Scraping**\n\nVoici vos derniers jobs de scraping:",
     
     // Search Flow
     enter_niche: "🎯 **Entrez votre requête de recherche:**\n\n💬 **Exemples:**\n• dentiste casablanca\n• restaurant marrakech\n• développeur web fes\n\n💡 **Conseil:** Incluez la localisation pour de meilleurs résultats\n\n0️⃣ **RETOUR AU MENU** - Retourner au menu principal",
-    invalid_niche: "⚠️ Veuillez envoyer votre requête de recherche (ex: \"dentiste casablanca\").",
+    invalid_niche: "⚠️ **Entrée invalide.** Veuillez entrer votre requête de recherche (ex: \"dentiste casablanca\") ou envoyez 0 pour retourner au menu principal.",
     
     // Source Selection
     select_source: "🎯 **Sélectionnez la Source de Données pour \"{niche}\":**\n\n1️⃣ **GOOGLE** - Sites web d'entreprises et pages de contact\n2️⃣ **LINKEDIN** - Profils professionnels et entreprises\n3️⃣ **MAPS** - Annuaire d'entreprises et listes locales\n\n0️⃣ **RETOUR** - Retour à la saisie de niche\n0️⃣0️⃣ **REDÉMARRER** - Commencer une nouvelle recherche\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
@@ -158,6 +165,11 @@ export const languages = {
     job_complete: "✅ **Recherche de prospects terminée!**\n\n📊 **Résumé des Résultats:**\n• Total: {total}\n• Emails: {emails}\n• Téléphones: {phones}\n• Sites Web: {websites}\n\n💾 **Fichier prêt au téléchargement** ⬇️",
     job_stopped: "🛑 **Session interrompue.**",
     job_status: "📊 **Statut Actuel du Job:** {status}",
+    job_running: "⏳ **Une session de recherche de prospects est en cours.**\n\n🛑 **Répondez avec STOP pour annuler la session en cours.**",
+    stop_confirmation: "🛑 **Arrêter la Session de Recherche de Prospects?**\n\n⚠️ **Attention:** L'arrêt maintenant mettra fin à la session en cours immédiatement.\n\n🚫 **Impact sur la Limite Quotidienne:** Vous perdrez 1 de vos 4 essais quotidiens.\n\n💡 **Note:** Tous les résultats trouvés jusqu'à présent seront sauvegardés et envoyés.\n\n💬 **Répondez avec:**\n• **1** pour confirmer l'arrêt de la session\n• **0** pour continuer la session",
+    stop_success: "🛑 **Session de Recherche de Prospects Arrêtée!**\n\n✅ Votre session a été arrêtée avec succès.\n\n💡 **Note:** Ce sont les résultats trouvés jusqu'à présent. Si vous aviez laissé la tâche continuer, vous auriez obtenu des résultats plus complets.\n\n💾 **Fichier prêt au téléchargement** ⬇️",
+    stop_no_results: "🛑 **Session de Recherche de Prospects Arrêtée!**\n\n❌ **Aucun prospect trouvé** - La session était trop courte pour générer des résultats.\n\n💡 **Conseil:** Essayez de faire fonctionner la session plus longtemps pour de meilleurs résultats.",
+    autosaved_results: "Résultats auto-sauvegardés",
     queued_waiting: "⏳ De nombreux utilisateurs recherchent des prospects en ce moment. Votre tâche démarrera dès que possible. Merci de patienter.",
     
     // Navigation
@@ -170,10 +182,10 @@ export const languages = {
     
     // Progress Messages
     progress_update: "⏱️ **Mise à Jour de Progression:** {message}",
-    progress_complete: "Progression: 100% — Recherche terminée!",
-    progress_analyzing: "🚀 *Progression: {progress}% - Analyse des résultats de recherche...*",
-    progress_processing: "🚀 *Progression: {progress}% - Traitement des données d'entreprise...*",
-    progress_extracting: "⚡ *Progression: {progress}% - Extraction des informations de contact...*",
+    progress_complete: "🎉 Progression: 100% — Recherche terminée!",
+    progress_analyzing: "🔍 *Progression: {progress}% - Analyse des résultats de recherche...*",
+    progress_processing: "⚙️ *Progression: {progress}% - Traitement des données d'entreprise...*",
+    progress_extracting: "📥 *Progression: {progress}% - Extraction des informations de contact...*",
     progress_validating: "📊 *Progression: {progress}% - Validation des profils d'entreprise...*",
     progress_compiling: "🎯 *Progression: {progress}% - Compilation des résultats...*",
     progress_finalizing: "✨ *Progression: {progress}% - Finalisation des données...*",
@@ -198,7 +210,7 @@ export const languages = {
     paid_status: "\n\n💳 Abonnement : Actif\n⏰ Expire le : {expires}\n⌛ Remant : {remaining}\n",
     
     // File Messages
-    file_ready: "📎 **Fichier prêt pour téléchargement:**\n{filename}",
+    file_ready: "📎 **Fichier prêt pour téléchargement:**",
     
     // Additional translations for completion messages
     summary: "Résumé",
@@ -213,14 +225,15 @@ export const languages = {
     results_saved_later: "Résultats sauvegardés pour envoi ultérieur",
     
     // Logout Messages
-    logout_confirmation: "🔓 **Confirmer la Déconnexion**\n\n⚠️ Êtes-vous sûr de vouloir vous déconnecter?\n\nCela mettra fin à votre session actuelle et vous devrez vous authentifier à nouveau.\n\n💬 **Répondez avec:**\n• **5** pour confirmer la déconnexion\n• **0** pour annuler et retourner au menu principal",
+    logout_confirmation: "🔓 **Confirmer la Déconnexion**\n\n⚠️ Êtes-vous sûr de vouloir vous déconnecter?\n\nCela mettra fin à votre session actuelle et vous devrez vous authentifier à nouveau.\n\n💬 **Répondez avec:**\n• **4** pour confirmer la déconnexion\n• **0** pour annuler et retourner au menu principal",
     logout_successful: "🔓 **Déconnexion Utilisateur Réussie!**\n\n✅ Vous avez été déconnecté de votre session utilisateur.\n\n💡 **Pour vous reconnecter:**\n• Envoyez CODE: <votre_code> pour commencer une nouvelle session utilisateur\n• Exemple: CODE: user1",
     logout_error: "❌ **Erreur lors de la déconnexion**\n\nUne erreur s'est produite lors de la déconnexion. Veuillez réessayer ou contacter le support."
   },
   
   ar: {
     // Welcome and Language Selection
-    welcome: "🚀 **مرحباً بك في مُحدِّد العملاء المحتملين!**\n\nيرجى اختيار لغتك المفضلة:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
+    welcome: "🤖 **مرحباً بك في مُحدِّد العملاء المحتملين!**\n\nيرجى اختيار لغتك المفضلة:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
+    language_selection: "🌐 **اختيار اللغة**\n\nيرجى اختيار لغتك المفضلة:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **أرسل الرقم** المقابل لاختيارك.\n\n0️⃣ **العودة إلى القائمة** - العودة إلى القائمة الرئيسية",
     
     // Authentication
     auth_required: "🔐 **مطلوب مصادقة.** يرجى إرسال رمز الوصول أولاً.\n\n💬 **التنسيق:** CODE: رمزك_هنا\n💬 **مثال:** CODE: user1\n\n💡 اتصل بالمدير إذا لم يكن لديك رمز وصول.\n\n0️⃣ **تغيير اللغة** - اختر لغة مختلفة",
@@ -228,14 +241,14 @@ export const languages = {
     access_granted: "✅ **تم منح الوصول!** مرحباً بك في محدِّد العملاء المحتملين.\n\n📝 أرسل استعلام بحث (مثال: \"مطعم الدار البيضاء\").\n\n📅 **الحدود اليومية:** يمكنك إجراء 4 عمليات بحث عن العملاء المحتملين يومياً. تُعاد التهيئة عند منتصف الليل.\n\n💡 استخدم STATUS للتحقق من الباقي.",
     
     // Main Menu
-    main_menu: "🏠 **القائمة الرئيسية**\n\nماذا تريد أن تفعل؟\n\n1️⃣ **🚀 بدء البحث عن العملاء المحتملين** - بدء جلسة جديدة\n2️⃣ **📊 عرض السجل** - عرض النتائج السابقة\n3️⃣ **📈 الحالة** - التحقق من الحالة والحدود اليومية\n4️⃣ **🌐 تغيير اللغة** - تغيير اللغة المفضلة\n5️⃣ **🔓 تسجيل الخروج** - تسجيل الخروج وتغيير الحساب\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
+    main_menu: "🏠 **القائمة الرئيسية**\n\nماذا تريد أن تفعل؟\n\n1️⃣ **🚀 بدء البحث عن العملاء المحتملين** - بدء جلسة جديدة\n2️⃣ **📈 الحالة** - التحقق من الحالة والحدود اليومية\n3️⃣ **🌐 تغيير اللغة** - تغيير اللغة المفضلة\n4️⃣ **🔓 تسجيل الخروج** - تسجيل الخروج وتغيير الحساب\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
     language_changed: "🌐 **تم تغيير اللغة بنجاح!**\n\nتم تحديث تفضيل اللغة وحفظه في ملف الملف الشخصي.\n\n💡 **نصيحة:** سيتم تذكر هذه الإعداد للجلسات القادمة.",
     no_history: "📊 **لا يوجد سجل للعملاء المحتملين**\n\nلم تُكمل أي جلسات بحث حتى الآن.\n\n🚀 **ابدأ:** اختر الخيار 1 لبدء أول جلسة بحث!",
     history_header: "📊 **تاريخ استخراج البيانات الخاص بك**\n\nهذه هي آخر مهام استخراج البيانات الخاصة بك:",
     
     // Search Flow
     enter_niche: "🎯 **أدخل استعلام البحث الخاص بك:**\n\n💬 **أمثلة:**\n• طبيب أسنان الدار البيضاء\n• مطعم مراكش\n• مطور ويب فاس\n\n💡 **نصيحة:** أضف الموقع للحصول على نتائج أفضل\n\n0️⃣ **العودة إلى القائمة** - العودة إلى القائمة الرئيسية",
-    invalid_niche: "⚠️ يرجى إرسال استعلام البحث الخاص بك (مثال: \"طبيب أسنان الدار البيضاء\").",
+    invalid_niche: "⚠️ **إدخال غير صحيح.** يرجى إدخال استعلام البحث الخاص بك (مثال: \"طبيب أسنان الدار البيضاء\") أو أرسل 0 للعودة إلى القائمة الرئيسية.",
     
     // Source Selection
     select_source: "🎯 **اختر مصدر البيانات لـ \"{niche}\":**\n\n1️⃣ **GOOGLE** - مواقع الويب التجارية وصفحات الاتصال\n2️⃣ **LINKEDIN** - الملفات الشخصية المهنية والشركات\n3️⃣ **MAPS** - دليل الأعمال والقوائم المحلية\n\n0️⃣ **رجوع** - العودة لإدخال النيش\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
@@ -265,6 +278,11 @@ export const languages = {
     job_complete: "✅ **اكتملت عملية البحث!**\n\n📊 **ملخص النتائج:**\n• إجمالي النتائج: {total}\n• البريد الإلكتروني: {emails}\n• الهاتف: {phones}\n• مواقع الويب: {websites}\n\n💾 **الملف جاهز للتحميل** ⬇️",
     job_stopped: "🛑 **تم إيقاف الجلسة.**",
     job_status: "📊 **حالة المهمة الحالية:** {status}",
+    job_running: "⏳ **جلسة البحث عن العملاء المحتملين قيد التشغيل حالياً.**\n\n🛑 **أرسل STOP لإلغاء الجلسة الحالية.**",
+    stop_confirmation: "🛑 **إيقاف جلسة البحث عن العملاء المحتملين؟**\n\n⚠️ **تحذير:** الإيقاف الآن سينهي الجلسة الحالية فوراً.\n\n🚫 **تأثير الحد اليومي:** ستخسر 1 من محاولاتك الأربع اليومية.\n\n💡 **ملاحظة:** أي نتائج تم العثور عليها حتى الآن سيتم حفظها وإرسالها إليك.\n\n💬 **أرسل:**\n• **1** لتأكيد إيقاف الجلسة\n• **0** لمواصلة الجلسة",
+    stop_success: "🛑 **تم إيقاف جلسة البحث عن العملاء المحتملين!**\n\n✅ تم إيقاف جلستك بنجاح.\n\n💡 **ملاحظة:** هذه هي النتائج التي تم العثور عليها حتى الآن. إذا كنت قد تركت المهمة تستمر، لكانت النتائج أكثر شمولاً.\n\n💾 **الملف جاهز للتحميل** ⬇️",
+    stop_no_results: "🛑 **تم إيقاف جلسة البحث عن العملاء المحتملين!**\n\n❌ **لم يتم العثور على عملاء محتملين** - كانت الجلسة قصيرة جداً لتوليد نتائج.\n\n💡 **نصيحة:** حاول تشغيل الجلسة لفترة أطول للحصول على نتائج أفضل.",
+    autosaved_results: "نتائج محفوظة تلقائياً",
     queued_waiting: "⏳ هناك عدد كبير من المستخدمين يبحثون عن عملاء محتملين الآن. ستبدأ مهمتك في أقرب وقت ممكن. يرجى الانتظار.",
     
     // Navigation
@@ -277,10 +295,10 @@ export const languages = {
     
     // Progress Messages
     progress_update: "⏱️ **تحديث التقدم:** {message}",
-    progress_complete: "التقدم: 100% — اكتمل البحث!",
-    progress_analyzing: "🚀 *التقدم: {progress}% - تحليل نتائج البحث...*",
-    progress_processing: "🚀 *التقدم: {progress}% - معالجة بيانات الأعمال...*",
-    progress_extracting: "⚡ *التقدم: {progress}% - استخراج معلومات الاتصال...*",
+    progress_complete: "🎉 التقدم: 100% — اكتمل البحث!",
+    progress_analyzing: "🔍 *التقدم: {progress}% - تحليل نتائج البحث...*",
+    progress_processing: "⚙️ *التقدم: {progress}% - معالجة بيانات الأعمال...*",
+    progress_extracting: "📥 *التقدم: {progress}% - استخراج معلومات الاتصال...*",
     progress_validating: "📊 *التقدم: {progress}% - التحقق من صحة ملفات الأعمال...*",
     progress_compiling: "🎯 *التقدم: {progress}% - تجميع النتائج...*",
     progress_finalizing: "✨ *التقدم: {progress}% - إنهاء البيانات...*",
@@ -305,7 +323,7 @@ export const languages = {
     paid_status: "\n\n💳 الاشتراك: نشِط\n⏰ ينتهي في: {expires}\n⌛ المتبقي: {remaining}\n",
     
     // File Messages
-    file_ready: "📎 **الملف جاهز للتحميل:**\n{filename}",
+    file_ready: "📎 **الملف جاهز للتحميل:**",
     
     // Additional translations for completion messages
     summary: "الملخص",
@@ -320,7 +338,7 @@ export const languages = {
     results_saved_later: "تم حفظ النتائج للإرسال لاحقاً",
     
     // Logout Messages
-    logout_confirmation: "🔓 **تأكيد تسجيل الخروج**\n\n⚠️ هل أنت متأكد من أنك تريد تسجيل الخروج؟\n\nسيؤدي هذا إلى إنهاء جلستك الحالية وستحتاج إلى المصادقة مرة أخرى.\n\n💬 **أرسل:**\n• **5** لتأكيد تسجيل الخروج\n• **0** للإلغاء والعودة إلى القائمة الرئيسية",
+    logout_confirmation: "🔓 **تأكيد تسجيل الخروج**\n\n⚠️ هل أنت متأكد من أنك تريد تسجيل الخروج؟\n\nسيؤدي هذا إلى إنهاء جلستك الحالية وستحتاج إلى المصادقة مرة أخرى.\n\n💬 **أرسل:**\n• **4** لتأكيد تسجيل الخروج\n• **0** للإلغاء والعودة إلى القائمة الرئيسية",
     logout_successful: "🔓 **تم تسجيل الخروج بنجاح!**\n\n✅ تم تسجيل خروجك من جلسة المستخدم.\n\n💡 **للإعادة تسجيل الدخول:**\n• أرسل CODE: <رمز_المستخدم> لبدء جلسة مستخدم جديدة\n• مثال: CODE: user1",
     logout_error: "❌ **خطأ أثناء تسجيل الخروج**\n\nحدث خطأ أثناء تسجيل الخروج. يرجى المحاولة مرة أخرى أو الاتصال بالدعم."
   }

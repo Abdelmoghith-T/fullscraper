@@ -10,7 +10,7 @@ import { extractPhones } from './helpers/extractPhones.js';
 import { exportResults } from './helpers/exportToCsv.js';
 
 // Main scraping logic, now exported for programmatic use
-async function runScraper({ queries, format, output, onQuotaExceeded } = {}) {
+async function runScraper({ queries, format, output, onQuotaExceeded, dataType } = {}) {
   // ...existing code...
   let isProcessing = false;
   let currentResults = [];

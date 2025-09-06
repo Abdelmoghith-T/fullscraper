@@ -106,9 +106,44 @@ export class LinkedInScraper extends ScraperInterface {
     console.log(chalk.blue('   🚀 Starting with full detailed logging...'));
     console.log('');
     
-    return new Promise((resolve, reject) => {
-      // Run the standalone scraper with special environment for detailed logging
-      // Inject user's API keys into child process environment
+          return new Promise((resolve, reject) => {
+        // Check for abortion at the start
+        if (options.abortSignal?.aborted) {
+          reject(new Error('Operation was aborted'));
+          return;
+        }
+        
+        // Set up abort signal listener
+        const abortHandler = () => {
+          if (!isResolved) {
+            console.log(chalk.yellow('\n🛑 LinkedIn scraper aborted by user'));
+            console.log(chalk.blue('💾 Sending interruption signal to child process...'));
+            
+            try {
+              child.kill('SIGINT');
+              console.log(chalk.gray('   📡 SIGINT signal sent to child process'));
+            } catch (e) {
+              console.log(chalk.red('❌ Failed to send SIGINT, trying SIGTERM...'));
+              try {
+                child.kill('SIGTERM');
+                console.log(chalk.gray('   📡 SIGTERM signal sent to child process'));
+              } catch (e2) {
+                console.log(chalk.red('❌ Failed to send SIGTERM, forcing kill...'));
+                child.kill('SIGKILL');
+              }
+            }
+            
+            reject(new Error('Operation was aborted'));
+          }
+        };
+        
+        // Add abort signal listener
+        if (options.abortSignal) {
+          options.abortSignal.addEventListener('abort', abortHandler);
+        }
+        
+        // Run the standalone scraper with special environment for detailed logging
+        // Inject user's API keys into child process environment
       const childEnv = { 
         ...process.env, 
         FORCE_COLOR: '1',  // Enable colors in child process
@@ -227,10 +262,12 @@ export class LinkedInScraper extends ScraperInterface {
                     console.log(chalk.yellow('⚠️  No partial LinkedIn results found to recover'));
                     console.log(chalk.gray('   The scraper may have been interrupted too early'));
                   }
+                  cleanup();
                   resolve(results || []);
                 })
                 .catch(() => {
                   console.log(chalk.yellow('⚠️  No auto-save file found - scraper was interrupted before first auto-save'));
+                  cleanup();
                   resolve([]);
                 });
             }
@@ -245,6 +282,20 @@ export class LinkedInScraper extends ScraperInterface {
         isResolved = true;
         process.removeListener('SIGINT', handleInterruption);
         process.removeListener('SIGTERM', handleInterruption);
+        
+        // Remove abort signal listener if it exists
+        if (options.abortSignal) {
+          options.abortSignal.removeEventListener('abort', abortHandler);
+        }
+        
+        // Kill child process if it's still running
+        if (child && !child.killed) {
+          try {
+            child.kill('SIGTERM');
+          } catch (e) {
+            // Ignore errors if process already terminated
+          }
+        }
       };
       
       // Enhanced output forwarding with spinner recreation
@@ -400,10 +451,12 @@ export class LinkedInScraper extends ScraperInterface {
               } else {
                 console.log(chalk.yellow('⚠️  No LinkedIn profiles found in results file'));
               }
+              cleanup();
               resolve(results);
             })
             .catch(error => {
               console.log(chalk.yellow(`⚠️  Could not parse LinkedIn results: ${error.message}`));
+              cleanup();
               resolve([]);
             });
         } else if (code === null || code === 130) {
@@ -427,11 +480,13 @@ export class LinkedInScraper extends ScraperInterface {
                 console.log(chalk.yellow('⚠️  No partial LinkedIn results found to recover'));
                 console.log(chalk.gray('   The scraper may have been interrupted too early'));
               }
+              cleanup();
               resolve(results || []);
             })
             .catch(() => {
               console.log(chalk.yellow('⚠️  No LinkedIn results file found for recovery'));
               console.log(chalk.gray('   Auto-save may not have been triggered yet'));
+              cleanup();
               resolve([]);
             });
         } else {
@@ -439,6 +494,7 @@ export class LinkedInScraper extends ScraperInterface {
           if (stderr) {
             console.log(chalk.red('Error details:', stderr));
           }
+          cleanup();
           reject(new Error(`LinkedIn scraper exited with code ${code}. Error: ${stderr}`));
         }
       });

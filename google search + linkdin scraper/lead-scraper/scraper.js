@@ -173,7 +173,11 @@ async function performAutoSave() {
       const { exportLinkedInResults } = await import('./helpers/exportToCsv.js');
       // Use LinkedIn session code for unique auto-save filename
       const sessionSuffix = process.env.LINKEDIN_SESSION_CODE ? `_SESSION_${process.env.LINKEDIN_SESSION_CODE}` : '';
-      const filename = `${currentNiche.replace(/[^a-zA-Z0-9]/g, '_')}_linkedin_results_autosave${sessionSuffix}.xlsx`;
+      // Preserve Arabic and other Unicode characters, only replace problematic path characters
+      const cleanNiche = currentNiche
+        .replace(/[<>:"/\\|?*]/g, '_') // Replace only problematic path characters
+        .replace(/\s+/g, '_'); // Replace spaces with underscores
+      const filename = `${cleanNiche}_linkedin_results_autosave${sessionSuffix}.xlsx`;
       await exportLinkedInResults(currentResults, 'xlsx', filename, currentNiche);
       console.log(chalk.green(`✅ Auto-saved LinkedIn results to: ${filename}`));
     } else {
@@ -234,7 +238,11 @@ async function saveResultsAutoSave(allResults, niche, dataType = null) {
 
     // Generate filename for auto-save with session ID if in unified mode
     const sessionSuffix = process.env.SESSION_ID ? `_session_${process.env.SESSION_ID}` : '';
-    const filename = `${niche.replace(/[^a-zA-Z0-9]/g, '_')}_results_autosave${sessionSuffix}.txt`;
+    // Preserve Arabic and other Unicode characters, only replace problematic path characters
+    const cleanNiche = niche
+      .replace(/[<>:"/\\|?*]/g, '_') // Replace only problematic path characters
+      .replace(/\s+/g, '_'); // Replace spaces with underscores
+    const filename = `${cleanNiche}_results_autosave${sessionSuffix}.txt`;
     
     // Export results to text format
     const { exportResults } = await import('./helpers/exportToCsv.js');
@@ -1096,7 +1104,13 @@ async function main() {
     isProcessing = true;
     currentNiche = niche;
     currentResults = [];
-    currentDataType = dataType;
+    // Use dataType from parameter or environment variable (from unified scraper)
+    currentDataType = dataType || process.env.DATA_TYPE || 'both';
+    
+    console.log(chalk.blue(`📊 Data Type: ${currentDataType}`));
+    console.log(chalk.gray(`   • Emails Only: ${currentDataType === 'emails_only' ? 'YES' : 'NO'}`));
+    console.log(chalk.gray(`   • Phones Only: ${currentDataType === 'phones_only' ? 'YES' : 'NO'}`));
+    console.log(chalk.gray(`   • Both (Contacts): ${currentDataType === 'both' ? 'YES' : 'NO'}`));
 
     // Start auto-save functionality
     startAutoSave();
@@ -1164,7 +1178,11 @@ async function main() {
         if (allResults[0].name && allResults[0].profileUrl) {
           // LinkedIn: export with deduplication
           const { exportLinkedInResults } = await import('./helpers/exportToCsv.js');
-          const finalFilename = await exportLinkedInResults(allResults, 'xlsx', `${niche.replace(/[^a-zA-Z0-9]/g, '_')}_linkedin_results.xlsx`);
+          // Preserve Arabic and other Unicode characters, only replace problematic path characters
+          const cleanNiche = niche
+            .replace(/[<>:"/\\|?*]/g, '_') // Replace only problematic path characters
+            .replace(/\s+/g, '_'); // Replace spaces with underscores
+          const finalFilename = await exportLinkedInResults(allResults, 'xlsx', `${cleanNiche}_linkedin_results.xlsx`);
           console.log(chalk.green.bold(`\n✅ LinkedIn results saved to: ${finalFilename}`));
         } else if (allResults[0].source === 'google_maps') {
           // Google Maps: export with special formatting

@@ -30,6 +30,11 @@ export class GoogleSearchScraper extends ScraperInterface {
    */
   async scrape(niche, options = {}) {
     try {
+      // Check for abortion at the start
+      if (options.abortSignal?.aborted) {
+        throw new Error('Operation was aborted');
+      }
+      
       await this.setup(options);
       
       console.log(chalk.blue('🔍 Starting Google Search scraping workflow...'));
@@ -52,13 +57,20 @@ export class GoogleSearchScraper extends ScraperInterface {
       console.log(chalk.blue('📡 Running Google Search API queries...'));
       
       // Run existing Google Search scraper with EXACT same workflow
-      // Pass API keys to the scraper
+      // Pass API keys, dataType, and abort signal to the scraper
       const results = await runScraper({
         ...scraperOptions,
         apiKeys: options.apiKeys,
+        dataType: options.dataType, // Pass the data type for proper autosave filtering
         trialMode: options.trialMode,
-        trialLimit: options.trialLimit
+        trialLimit: options.trialLimit,
+        abortSignal: options.abortSignal // Pass the abort signal
       });
+      
+      // Check for abortion after scraper completes
+      if (options.abortSignal?.aborted) {
+        throw new Error('Operation was aborted');
+      }
       
       // Transform results based on requested data type
       let transformedResults = this.transformResults(results, options.dataType);
@@ -116,6 +128,7 @@ export class GoogleSearchScraper extends ScraperInterface {
     
     const niche = options.niche || 'dentist fes';
     const apiKeys = options.apiKeys || {};
+    const abortSignal = options.abortSignal || null;
     
     // Debug: Log what API keys we received
     console.log(chalk.yellow(`🔍 DEBUG: Received apiKeys:`, JSON.stringify(apiKeys, null, 2)));
@@ -137,7 +150,8 @@ export class GoogleSearchScraper extends ScraperInterface {
         FORCE_COLOR: '1',  // Enable colors in child process
         UNIFIED_SCRAPER: '1',  // Tell scraper to use detailed console logging
         SESSION_ID: this.sessionId.toString(),  // Unique session ID
-        SESSION_TIMESTAMP: this.sessionTimestamp  // Human-readable timestamp
+        SESSION_TIMESTAMP: this.sessionTimestamp,  // Human-readable timestamp
+        DATA_TYPE: options.dataType || 'contacts'  // Pass data type for proper autosave filtering
       };
       
       // Inject Google Search API keys if available
@@ -207,11 +221,68 @@ export class GoogleSearchScraper extends ScraperInterface {
       console.log(chalk.gray(`   📁 Working directory: ${process.cwd()}/google search + linkdin scraper/lead-scraper`));
       console.log(chalk.gray(`   📄 Script: scraper.js`));
       
+      // Set up abort signal handling for Google Search scraper
+      let abortHandler = null;
+      if (abortSignal) {
+        abortHandler = () => {
+          if (!isResolved) {
+            console.log(chalk.yellow('🛑 Abort signal received, terminating Google Search scraper...'));
+            try {
+              // First try graceful termination
+              child.kill('SIGINT');
+              console.log(chalk.gray('   📡 SIGINT signal sent to child process'));
+              
+              // Give it a moment to save, then force kill if needed
+              setTimeout(() => {
+                if (!isResolved) {
+                  try {
+                    child.kill('SIGTERM');
+                    console.log(chalk.gray('   📡 SIGTERM signal sent to child process'));
+                    
+                    // Final force kill if still not responding
+                    setTimeout(() => {
+                      if (!isResolved) {
+                        child.kill('SIGKILL');
+                        console.log(chalk.gray('   📡 SIGKILL signal sent to child process'));
+                      }
+                    }, 2000);
+                  } catch (e) {
+                    console.log(chalk.red('❌ Failed to send SIGTERM, force killing...'));
+                    child.kill('SIGKILL');
+                  }
+                }
+              }, 3000);
+            } catch (e) {
+              console.log(chalk.red('❌ Failed to send SIGINT, force killing...'));
+              child.kill('SIGKILL');
+            }
+          }
+        };
+        
+        abortSignal.addEventListener('abort', abortHandler);
+        console.log(chalk.blue('   🛑 Abort signal handler attached to Google Search scraper'));
+      }
+      
+      // Map data type to scraper selection
+      let dataTypeSelection = '3'; // Default to "Both"
+      if (options.dataType === 'emails' || options.dataType === 'emails_only') {
+        dataTypeSelection = '1'; // Emails Only
+      } else if (options.dataType === 'phones' || options.dataType === 'phones_only') {
+        dataTypeSelection = '2'; // Phone Numbers Only
+      } else if (options.dataType === 'contacts' || options.dataType === 'both') {
+        dataTypeSelection = '3'; // Both Emails and Phone Numbers
+      }
+      
+      console.log(chalk.blue(`   📤 Will send answers to Google Search scraper:`));
+      console.log(chalk.blue(`     1. Niche: "${niche}"`));
+      console.log(chalk.blue(`     2. Source: "1" (Google Search)`));
+      console.log(chalk.blue(`     3. Type: "${dataTypeSelection}" (${options.dataType})`));
+      
       // Feed the answers via stdin with proper timing
       const answers = [
-        niche,     // Business niche
-        '1',       // Google Search (Business Websites)
-        '3'        // Both Emails and Phone Numbers
+        niche,           // Business niche
+        '1',             // Google Search (Business Websites)
+        dataTypeSelection // Data type based on user selection
       ];
       
       let currentAnswer = 0;
@@ -298,6 +369,22 @@ export class GoogleSearchScraper extends ScraperInterface {
         isResolved = true;
         process.removeListener('SIGINT', handleInterruption);
         process.removeListener('SIGTERM', handleInterruption);
+        
+        // Remove abort signal event listener if it exists
+        if (abortSignal && abortHandler) {
+          abortSignal.removeEventListener('abort', abortHandler);
+          console.log(chalk.gray('   🛑 Abort signal handler removed from Google Search scraper'));
+        }
+        
+        // Kill child process if it's still running
+        if (child && !child.killed) {
+          try {
+            child.kill('SIGTERM');
+            console.log(chalk.gray('   📡 SIGTERM signal sent to child process during cleanup'));
+          } catch (e) {
+            console.log(chalk.red('❌ Failed to send SIGTERM during cleanup'));
+          }
+        }
       };
       
       // Enhanced output forwarding with spinner recreation

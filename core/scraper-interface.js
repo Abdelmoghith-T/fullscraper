@@ -19,6 +19,11 @@ export class ScraperInterface {
    * @returns {Promise<Array>} Scraped results
    */
   async scrape(niche, options = {}) {
+    // Check for abortion at the start
+    if (options.abortSignal?.aborted) {
+      throw new Error('Operation was aborted');
+    }
+    
     throw new Error(`Scraper ${this.sourceName} must implement scrape() method`);
   }
 

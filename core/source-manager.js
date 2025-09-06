@@ -19,7 +19,7 @@ export class SourceManager {
    * Main execution method - routes to appropriate scraper
    */
   async run(niche, source, dataType, format, options = {}) {
-    const { onResult, onBatch, onProgress, apiKeys, trialMode = false, trialLimit = 20 } = options;
+    const { onResult, onBatch, onProgress, apiKeys, trialMode = false, trialLimit = 20, abortSignal = null } = options;
     this.isProcessing = true;
     this.currentSource = source;
     
@@ -28,6 +28,11 @@ export class SourceManager {
       console.log(chalk.cyan(`📊 Source: ${chalk.white(this.getSourceDisplayName(source))}`));
       console.log(chalk.cyan(`📋 Data Type: ${chalk.white(dataType)}`));
       console.log(chalk.cyan(`💾 Format: ${chalk.white(format.toUpperCase())}\n`));
+      
+      // Check for abortion
+      if (abortSignal?.aborted) {
+        throw new Error('Operation was aborted');
+      }
       
       // Load appropriate scraper
       const scraper = await this.loadScraper(source);
@@ -53,7 +58,8 @@ export class SourceManager {
             maxResults: this.getMaxResults(source),
             apiKeys: apiKeys || {}, // Pass API keys to the scraper
             trialMode,
-            trialLimit
+            trialLimit,
+            abortSignal // Pass the abort signal to the scraper
           });
         
         // Handle empty results gracefully
@@ -69,6 +75,11 @@ export class SourceManager {
         
         // Process results through callbacks
         for (let i = 0; i < results.length; i++) {
+          // Check for abortion before processing each result
+          if (abortSignal?.aborted) {
+            throw new Error('Operation was aborted');
+          }
+          
           const result = results[i];
           processedCount++;
           allResults.push(result);

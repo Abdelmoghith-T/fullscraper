@@ -565,11 +565,7 @@ class FlexibleBusinessScraper {
       results: results
     };
 
-    // Save to current directory (original behavior)
-    fs.writeFileSync(filename, JSON.stringify(resultData, null, 2));
-    console.log(`\n💾 Results saved to: ${filename}`);
-    
-    // Also save to unified results folder when running in unified mode
+    // Save only to unified results folder
     if (process.env.SESSION_ID) {
       const path = require('path');
       const unifiedResultsDir = path.join('..', 'results');
@@ -584,8 +580,9 @@ class FlexibleBusinessScraper {
         
         let unifiedFilename;
         if (isAutoSave) {
-          // For auto-saves, use a consistent filename (overwrites previous auto-saves)
-          unifiedFilename = `${niche}_google_maps_autosave.json`;
+          // For auto-saves, use session ID to make filename unique (prevents overwriting)
+          const sessionSuffix = process.env.SESSION_ID ? `_SESSION_${process.env.SESSION_ID}` : '';
+          unifiedFilename = `${niche}_google_maps_autosave${sessionSuffix}.json`;
         } else {
           // For final saves, use timestamped filename
           const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
@@ -595,13 +592,16 @@ class FlexibleBusinessScraper {
         const unifiedPath = path.join(unifiedResultsDir, unifiedFilename);
         
         fs.writeFileSync(unifiedPath, JSON.stringify(resultData, null, 2));
-        console.log(`📁 Also saved to unified results: ${unifiedFilename}`);
+        console.log(`📁 Results saved to unified results: ${unifiedFilename}`);
+        return unifiedFilename;
       } catch (error) {
         console.log(`⚠️  Could not save to unified results: ${error.message}`);
+        return null;
       }
+    } else {
+      console.log(`⚠️  No SESSION_ID found, cannot save results`);
+      return null;
     }
-    
-    return filename;
   }
 
   // Display results summary
