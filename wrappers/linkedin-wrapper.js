@@ -187,7 +187,7 @@ export class LinkedInScraper extends ScraperInterface {
       console.log(chalk.yellow(`   GOOGLE_API_KEY_2: ${childEnv.GOOGLE_API_KEY_2 || 'NOT SET'}`));
       
       const child = spawn('node', ['scraper.js'], {
-        cwd: './google search + linkdin scraper/lead-scraper',
+        cwd: path.join(process.cwd(), 'google search + linkdin scraper', 'lead-scraper'),
         stdio: ['pipe', 'pipe', 'pipe'],
         env: childEnv
       });

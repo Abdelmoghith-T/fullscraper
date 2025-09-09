@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import path from 'path';
 import { ScraperInterface } from '../core/scraper-interface.js';
 
 /**
@@ -212,7 +213,7 @@ export class GoogleSearchScraper extends ScraperInterface {
       console.log(chalk.yellow(`   GOOGLE_API_KEY_2: ${childEnv.GOOGLE_API_KEY_2 || 'NOT SET'}`));
       
       const child = spawn('node', ['scraper.js'], {
-        cwd: './google search + linkdin scraper/lead-scraper',
+        cwd: path.join(process.cwd(), 'google search + linkdin scraper', 'lead-scraper'),
         stdio: ['pipe', 'pipe', 'pipe'],
         env: childEnv
       });
@@ -853,7 +854,7 @@ export class GoogleSearchScraper extends ScraperInterface {
     
     try {
       // Look for results files in the Google Search directory
-      const resultsDir = './google search + linkdin scraper/lead-scraper';
+      const resultsDir = path.join(process.cwd(), 'google search + linkdin scraper', 'lead-scraper');
       const files = fs.readdirSync(resultsDir);
       
       // Prioritize current session autosave file, then fall back to other files

@@ -14,13 +14,13 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-09-05T22:12:14.242Z",
-      "useCount": 18
+      "lastUsed": "2025-09-08T16:57:59.272Z",
+      "useCount": 19
     },
     "dailyScraping": {
-      "date": "Sat Sep 06 2025",
-      "count": 3,
-      "lastReset": "2025-09-05T23:00:12.521Z"
+      "date": "Mon Sep 08 2025",
+      "count": 0,
+      "lastReset": "2025-09-08T16:58:03.824Z"
     },
     "language": "en",
     "stage": "paid",
@@ -48,13 +48,13 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-09-01T02:19:39.127Z",
-      "useCount": 8
+      "lastUsed": "2025-09-07T13:20:16.866Z",
+      "useCount": 9
     },
     "dailyScraping": {
-      "date": "Mon Sep 01 2025",
-      "count": 1,
-      "lastReset": "2025-08-31T23:10:15.464Z"
+      "date": "Sun Sep 07 2025",
+      "count": 3,
+      "lastReset": "2025-09-07T13:20:24.956Z"
     },
     "language": "en",
     "stage": "paid",
@@ -78,13 +78,13 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-09-03T21:20:39.402Z",
-      "useCount": 6
+      "lastUsed": "2025-09-08T23:22:15.301Z",
+      "useCount": 8
     },
     "dailyScraping": {
-      "date": "Wed Sep 03 2025",
+      "date": "Tue Sep 09 2025",
       "count": 1,
-      "lastReset": "2025-09-03T21:21:18.743Z"
+      "lastReset": "2025-09-08T23:22:32.498Z"
     },
     "language": "en",
     "stage": "paid",
@@ -108,13 +108,13 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-09-03T20:04:48.096Z",
-      "useCount": 8
+      "lastUsed": "2025-09-08T18:17:55.901Z",
+      "useCount": 11
     },
     "dailyScraping": {
-      "date": "Wed Sep 03 2025",
-      "count": 0,
-      "lastReset": "2025-09-03T18:49:56.921Z"
+      "date": "Mon Sep 08 2025",
+      "count": 2,
+      "lastReset": "2025-09-08T18:18:02.736Z"
     },
     "language": "en",
     "stage": "paid",
@@ -142,13 +142,13 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-09-05T00:53:25.538Z",
-      "useCount": 16
+      "lastUsed": "2025-09-08T21:27:11.562Z",
+      "useCount": 20
     },
     "dailyScraping": {
-      "date": "Fri Sep 05 2025",
-      "count": 3,
-      "lastReset": "2025-09-05T00:53:32.101Z"
+      "date": "Tue Sep 09 2025",
+      "count": 1,
+      "lastReset": "2025-09-08T23:18:54.508Z"
     },
     "language": "en",
     "stage": "paid",
@@ -164,69 +164,137 @@
   "user6": {
     "apiKeys": {
       "googleSearchKeys": [
-        "api1",
-        "api2"
+        "AIzaSyBnGchXIMWD9FFk9ggsDXDGY-eRyEgs48E",
+        "AIzaSyCc3DAVg8_JMWMoXLZ8b_hXtSoGf82h-qo"
       ],
       "geminiKeys": [
-        "api3",
-        "api4"
+        "AIzaSyBnGchXIMWD9FFk9ggsDXDGY-eRyEgs48E",
+        "AIzaSyBq0DPKpULM37IwrpFstMLB6bBtj_kOj88"
       ]
     },
-    "createdAt": "2025-09-01T04:20:38.329Z",
+    "createdAt": "2025-09-07T18:27:01.182Z",
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-09-01T04:34:34.227Z",
-      "useCount": 1
+      "lastUsed": "2025-09-08T20:50:04.588Z",
+      "useCount": 3
     },
     "dailyScraping": {
-      "date": "Mon Sep 01 2025",
+      "date": "Mon Sep 08 2025",
       "count": 0,
-      "lastReset": "2025-09-01T04:20:38.329Z"
+      "lastReset": "2025-09-08T18:49:59.703Z"
     },
     "language": "en",
-    "stage": "free_trial",
+    "stage": "paid",
     "trial": {
       "triesUsed": 0,
       "maxTries": 3
     },
     "paid": {
-      "grantedAt": null,
-      "expiresAt": null
+      "grantedAt": "2025-09-08T20:49:40.663Z",
+      "expiresAt": "2025-10-08T20:49:40.663Z"
     }
   },
   "user7": {
     "apiKeys": {
       "googleSearchKeys": [
-        "api1",
-        "api2"
+        "AIzaSyAhDD94npK27Bzjaq5PWIqJVvdYZ-3BPRs",
+        "AIzaSyABaK4qdG-uuWBCALfS1Q3NJCmpolgqKyk"
       ],
       "geminiKeys": [
-        "api3",
-        "api4"
+        "AIzaSyBQVxX67nBfTY6pmEuL905jiKK15QXa7O0",
+        "AIzaSyBq0DPKpULM37IwrpFstMLB6bBtj_kOj88"
       ]
     },
-    "createdAt": "2025-09-02T00:47:37.522Z",
+    "createdAt": "2025-09-07T18:51:46.267Z",
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-09-02T00:49:51.081Z",
-      "useCount": 2
+      "lastUsed": "2025-09-08T18:51:58.620Z",
+      "useCount": 3
     },
     "dailyScraping": {
-      "date": "Tue Sep 02 2025",
+      "date": "Mon Sep 08 2025",
       "count": 0,
-      "lastReset": "2025-09-02T00:47:37.522Z"
+      "lastReset": "2025-09-08T16:57:03.448Z"
     },
-    "language": "fr",
-    "stage": "free_trial",
+    "language": "en",
+    "stage": "paid",
+    "trial": {
+      "triesUsed": 3,
+      "maxTries": 3
+    },
+    "paid": {
+      "grantedAt": "2025-09-07T20:19:17.202Z",
+      "expiresAt": "2025-10-07T20:19:17.202Z"
+    }
+  },
+  "user8": {
+    "apiKeys": {
+      "googleSearchKeys": [
+        "AIzaSyABxn4QBOAPscyZk1wOSmGxCmSlV-RCOR8",
+        "AIzaSyASZiwOfWDzzPpKndkzgkSTJtihAZnk4I8"
+      ],
+      "geminiKeys": [
+        "AIzaSyCNtecSAUJDTt-50HU01V_GuGbtxsEFntU",
+        "AIzaSyBXta8NHbk6sWckCxjXoGRPgRsU4FL4YnE"
+      ]
+    },
+    "createdAt": "2025-09-08T23:42:05.913Z",
+    "expiresAt": null,
+    "meta": {
+      "issuedBy": "admin123",
+      "lastUsed": "2025-09-08T23:42:34.389Z",
+      "useCount": 1
+    },
+    "dailyScraping": {
+      "date": "Tue Sep 09 2025",
+      "count": 2,
+      "lastReset": "2025-09-08T23:42:05.913Z"
+    },
+    "language": "en",
+    "stage": "paid",
     "trial": {
       "triesUsed": 0,
       "maxTries": 3
     },
     "paid": {
-      "grantedAt": null,
-      "expiresAt": null
+      "grantedAt": "2025-09-08T23:42:21.910Z",
+      "expiresAt": "2025-10-08T23:42:21.910Z"
+    }
+  },
+  "user9": {
+    "apiKeys": {
+      "googleSearchKeys": [
+        "AIzaSyCytCXfxuZ7N6fW20vsIZuddc2FtZs_bQI",
+        "AIzaSyCJ9bbQtVZYzqAQA451TSD91dX5guFiI-o"
+      ],
+      "geminiKeys": [
+        "AIzaSyAjW6Vt55REeBRJmDtRnVa-RZkCuBjqx_0",
+        "AIzaSyAddITIe67_8GI_iN1w4aUlgNyDBmWod2g$"
+      ]
+    },
+    "createdAt": "2025-09-09T01:28:18.752Z",
+    "expiresAt": null,
+    "meta": {
+      "issuedBy": "admin123",
+      "lastUsed": "2025-09-09T01:29:04.641Z",
+      "useCount": 1
+    },
+    "dailyScraping": {
+      "date": "Tue Sep 09 2025",
+      "count": 2,
+      "lastReset": "2025-09-09T01:28:18.752Z"
+    },
+    "language": "en",
+    "stage": "paid",
+    "trial": {
+      "triesUsed": 0,
+      "maxTries": 3
+    },
+    "paid": {
+      "grantedAt": "2025-09-09T01:28:44.109Z",
+      "expiresAt": "2025-10-09T01:28:44.109Z"
     }
   }
 }

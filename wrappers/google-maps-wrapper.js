@@ -139,7 +139,7 @@ export class GoogleMapsScraper extends ScraperInterface {
       const { spawn } = await import('child_process');
       const path = await import('path');
       
-      const mapsScraperPath = './maps_scraper/run.js';
+      const mapsScraperPath = path.join(process.cwd(), 'maps_scraper', 'run.js');
       
       console.log(chalk.blue('🚀 Starting original Google Maps orchestration...'));
       console.log(chalk.gray(`   Command: node run.js "${userQuery}" ${maxResultsPerSubQuery}`));
@@ -149,7 +149,7 @@ export class GoogleMapsScraper extends ScraperInterface {
       
       return new Promise((resolve, reject) => {
         const child = spawn('node', ['run.js', userQuery, maxResultsPerSubQuery.toString()], {
-          cwd: './maps_scraper',
+          cwd: path.join(process.cwd(), 'maps_scraper'),
           stdio: ['pipe', 'pipe', 'pipe'],
           env: { 
             ...process.env, 
@@ -283,12 +283,12 @@ export class GoogleMapsScraper extends ScraperInterface {
     const path = await import('path');
     
     try {
-      // Look for the most recent results file in maps_scraper directory
-      const resultsDir = './maps_scraper';
+      // Look for the most recent results file in results directory (where the scraper actually saves)
+      const resultsDir = path.join(process.cwd(), 'results');
       const files = fs.readdirSync(resultsDir);
       
       // Prioritize current session results file, then fall back to other files
-      const sessionResultsPattern = `scraping_results_session_${this.sessionId}.json`;
+      const sessionResultsPattern = `SESSION_${this.sessionId}`;
       const sessionFiles = files.filter(f => f.includes(sessionResultsPattern));
       
              let jsonFiles;
@@ -304,33 +304,29 @@ export class GoogleMapsScraper extends ScraperInterface {
        }
       
       if (jsonFiles.length === 0) {
-        // Fallback: look for unified autosave in ../results created by run.js autosave
-        console.log(chalk.yellow('⚠️  No current session results found - checking unified autosave file...'));
+        // Fallback: look for any Google Maps results file in the results directory
+        console.log(chalk.yellow('⚠️  No current session results found - looking for any Google Maps results...'));
         try {
-          const unifiedDir = path.join('..', 'results');
-          const list = fs.readdirSync(unifiedDir);
-          let nicheKey = '';
-          if (typeof userQuery === 'string' && userQuery.trim()) {
-            const words = userQuery.toLowerCase().split(/\s+/).filter(Boolean);
-            const location = words.length > 0 ? words[words.length - 1] : '';
-            const businessType = words.slice(0, -1).join(' ');
-            nicheKey = `${businessType}_${location}`.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').toLowerCase();
-          }
-          const expectedName = nicheKey ? `${nicheKey}_google_maps_autosave.json` : null;
-          if (expectedName) {
-            const candidate = list.find(f => f.toLowerCase() === expectedName);
-            if (candidate) {
-              const autosavePath = path.join(unifiedDir, candidate);
-              console.log(chalk.cyan(`🎯 Found unified autosave file: ${candidate}`));
-              const resultsContent = fs.readFileSync(autosavePath, 'utf8');
-              const data = JSON.parse(resultsContent);
-              const results = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
-              console.log(chalk.blue(`📊 Loaded ${results.length} results from unified autosave`));
-              return results;
-            }
+          const googleMapsFiles = files.filter(f => f.includes('google_maps') && f.endsWith('.json'));
+          if (googleMapsFiles.length > 0) {
+            // Get the most recent Google Maps file
+            const mostRecent = googleMapsFiles
+              .map(f => ({ 
+                name: f, 
+                time: fs.statSync(path.join(resultsDir, f)).mtime 
+              }))
+              .sort((a, b) => b.time - a.time)[0];
+            
+            const resultsPath = path.join(resultsDir, mostRecent.name);
+            console.log(chalk.cyan(`🎯 Found Google Maps results file: ${mostRecent.name}`));
+            const resultsContent = fs.readFileSync(resultsPath, 'utf8');
+            const data = JSON.parse(resultsContent);
+            const results = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+            console.log(chalk.blue(`📊 Loaded ${results.length} results from Google Maps file`));
+            return results;
           }
         } catch (fallbackErr) {
-          console.log(chalk.yellow(`⚠️  Unified autosave lookup failed: ${fallbackErr.message}`));
+          console.log(chalk.yellow(`⚠️  Google Maps results lookup failed: ${fallbackErr.message}`));
         }
         throw new Error('No results file found from original maps scraper');
       }

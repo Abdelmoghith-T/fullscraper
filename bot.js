@@ -668,6 +668,103 @@ function loadJson(filePath, defaultValue = {}) {
 }
 
 /**
+ * 🗑️ Helper function to extract base niche from filename for cleanup
+ * @param {string} fileName - The filename to extract niche from
+ * @returns {string} - The base niche (e.g., "dentist_casablanca" or "dentisterabat")
+ */
+function extractBaseNicheFromFileName(fileName) {
+  const fileNameWithoutExt = path.basename(fileName, path.extname(fileName));
+  
+  // Remove source-specific suffixes and timestamps
+  let baseNiche = fileNameWithoutExt
+    .replace(/_google_maps.*$/, '') // Remove everything from _google_maps onwards
+    .replace(/_complete_.*$/, '')   // Remove _complete_ and timestamp
+    .replace(/_autosave.*$/, '')    // Remove _autosave and session info
+    .replace(/_SESSION_.*$/, '')    // Remove _SESSION_ and session ID
+    .replace(/_linkedin.*$/, '')    // Remove _linkedin and related info
+    .replace(/_google_search.*$/, '') // Remove _google_search and related info
+    .replace(/_all_sources.*$/, '') // Remove _all_sources and related info
+    .replace(/_results.*$/, ''); // Remove _results and everything after it (for Google Search files in lead-scraper)
+  
+  // Handle different filename patterns:
+  // 1. "dentiste_rabat_google_maps_complete_..." -> "dentiste_rabat"
+  // 2. "dentisterabat_google_maps_complete_..." -> "dentisterabat"
+  // 3. "dentiste rabat_google_maps_complete_..." -> "dentiste rabat"
+  
+  return baseNiche;
+}
+
+/**
+ * 🗑️ Helper function to cleanup related files for a specific source and niche
+ * @param {string} resultsDir - Directory to search in
+ * @param {string} baseNiche - Base niche to match
+ * @param {string} source - Source type (google_maps, linkedin, etc.)
+ * @param {string} excludeFile - File to exclude from deletion (already being deleted)
+ * @returns {number} - Number of files deleted
+ */
+function cleanupRelatedFiles(resultsDir, baseNiche, source, excludeFile = null) {
+  if (!fs.existsSync(resultsDir)) {
+    console.log(chalk.red(`❌ Directory does not exist: ${resultsDir}`));
+    return 0;
+  }
+  
+  try {
+    const files = fs.readdirSync(resultsDir);
+    
+    // Find ALL files that match this niche and source
+    // Use more flexible matching to handle different filename patterns
+    const relatedFiles = files.filter(f => {
+      // Must contain the source type (with special handling for Google Search)
+      if (source === 'google_search') {
+        // Google Search files have pattern: niche_results.txt or niche_results_autosave_session_TIMESTAMP.txt
+        if (!f.includes('_results') && !f.includes('results_')) return false;
+      } else {
+        if (!f.includes(source)) return false;
+      }
+      
+      // Must be a result file
+      if (!(f.endsWith('.json') || f.endsWith('.xlsx') || f.endsWith('.csv') || f.endsWith('.txt'))) return false;
+      
+      // Extract the niche part from the filename for comparison
+      const fileNiche = extractBaseNicheFromFileName(f);
+      
+      // Check if this file belongs to the same niche (handle different patterns)
+      // Examples:
+      // - baseNiche: "dentiste_rabat", fileNiche: "dentisterabat" -> should match
+      // - baseNiche: "dentisterabat", fileNiche: "dentiste_rabat" -> should match
+      // - baseNiche: "dentiste rabat", fileNiche: "dentisterabat" -> should match
+      
+      // Normalize both niches for comparison (remove spaces, underscores, convert to lowercase)
+      const normalizeNiche = (niche) => niche.toLowerCase().replace(/[\s_]/g, '');
+      const normalizedBaseNiche = normalizeNiche(baseNiche);
+      const normalizedFileNiche = normalizeNiche(fileNiche);
+      
+      return normalizedBaseNiche === normalizedFileNiche;
+    });
+    
+    console.log(chalk.blue(`🔍 Found ${relatedFiles.length} related ${source} files with base niche: "${baseNiche}"`));
+    console.log(chalk.blue(`🔍 Files: ${relatedFiles.join(', ')}`));
+    
+    let deletedCount = 0;
+    // Delete all related files
+    for (const relatedFile of relatedFiles) {
+      const relatedPath = path.join(resultsDir, relatedFile);
+      if (fs.existsSync(relatedPath) && relatedPath !== excludeFile) {
+        fs.unlinkSync(relatedPath);
+        console.log(chalk.green(`🗑️ Storage optimization: Deleted related ${source} file: ${relatedFile}`));
+        console.log(chalk.gray(`   File path: ${relatedPath}`));
+        deletedCount++;
+      }
+    }
+    
+    return deletedCount;
+  } catch (error) {
+    console.log(chalk.yellow(`⚠️ Could not cleanup related ${source} files: ${error.message}`));
+    return 0;
+  }
+}
+
+/**
  * 🗑️ STORAGE OPTIMIZATION: Clean up result files from multiple locations
  * This function removes files from both the main results folder and lead-scraper folder
  */
@@ -684,50 +781,58 @@ function cleanupResultFile(filePath) {
       console.log(chalk.green(`🗑️ Storage optimization: Deleted result file: ${path.basename(filePath)}`));
       console.log(chalk.gray(`   File path: ${filePath}`));
       
-      // 🗑️ SPECIAL CASE: For Google Maps Excel files, also delete the corresponding JSON file
+      // 🗑️ SPECIAL CASE: For any source files, delete ALL related files (Excel, JSON autosave, JSON complete, etc.)
       const fileName = path.basename(filePath);
-      const fileExt = path.extname(fileName).toLowerCase();
-      const fileNameWithoutExt = path.basename(fileName, fileExt);
       
-      if (fileExt === '.xlsx' && fileName.includes('google_maps')) {
-        // Look for corresponding JSON file in the same results directory
-        const resultsDir = path.dirname(filePath);
-        if (fs.existsSync(resultsDir)) {
-          try {
-            const files = fs.readdirSync(resultsDir);
-            
-            // Find JSON files that match the Excel file pattern
-            const jsonPatterns = [
-              `${fileNameWithoutExt}.json`,
-              `${fileNameWithoutExt.replace('_complete_', '_')}.json`,
-              `${fileNameWithoutExt.replace('_complete_', '_autosave_')}.json`
-            ];
-            
-            for (const pattern of jsonPatterns) {
-              const jsonFile = files.find(f => f === pattern);
-              if (jsonFile) {
-                const jsonPath = path.join(resultsDir, jsonFile);
-                fs.unlinkSync(jsonPath);
-                console.log(chalk.green(`🗑️ Storage optimization: Deleted corresponding JSON file: ${jsonFile}`));
-                console.log(chalk.gray(`   File path: ${jsonPath}`));
-                break; // Only delete one matching JSON file
-              }
-            }
-          } catch (jsonError) {
-            console.log(chalk.yellow(`⚠️ Could not cleanup corresponding JSON file: ${jsonError.message}`));
-          }
+      // Determine source type and cleanup related files
+      let sourceType = null;
+      if (fileName.includes('google_maps')) {
+        sourceType = 'google_maps';
+      } else if (fileName.includes('linkedin')) {
+        sourceType = 'linkedin';
+      } else if (fileName.includes('google_search')) {
+        sourceType = 'google_search';
+      } else if (fileName.includes('all_sources')) {
+        sourceType = 'all_sources';
+      }
+      
+      if (sourceType) {
+        // For Google Search files, look in the lead-scraper directory, not the results directory
+        let resultsDir;
+        if (sourceType === 'google_search') {
+          resultsDir = path.join(__dirname, 'google search + linkdin scraper', 'lead-scraper');
+        } else {
+          resultsDir = path.dirname(filePath);
         }
+        
+        const baseNiche = extractBaseNicheFromFileName(fileName);
+        console.log(chalk.blue(`🔍 Looking for ${sourceType} files with base niche: "${baseNiche}"`));
+        
+        const deletedCount = cleanupRelatedFiles(resultsDir, baseNiche, sourceType, filePath);
+        console.log(chalk.blue(`🗑️ Cleaned up ${deletedCount} related ${sourceType} files`));
       }
       
       return true;
     }
 
-    // Check if file exists in the lead-scraper folder
-    const leadScraperPath = path.join(__dirname, 'google search + linkdin scraper', 'lead-scraper', 'results', path.basename(filePath));
+    
+    // Check if file exists in the lead-scraper folder (for other sources)
+    const leadScraperPath = path.join(__dirname, 'google search + linkdin scraper', 'lead-scraper', path.basename(filePath));
     if (fs.existsSync(leadScraperPath)) {
       fs.unlinkSync(leadScraperPath);
       console.log(chalk.green(`🗑️ Storage optimization: Deleted result file from lead-scraper: ${path.basename(filePath)}`));
       console.log(chalk.gray(`   File path: ${leadScraperPath}`));
+      
+      // 🗑️ SPECIAL CASE: For any source files in lead-scraper, also delete related files
+      if (sourceType && sourceType !== 'google_search') {
+        const leadScraperDir = path.join(__dirname, 'google search + linkdin scraper', 'lead-scraper');
+        const baseNiche = extractBaseNicheFromFileName(fileName);
+        console.log(chalk.blue(`🔍 Looking for ${sourceType} files in lead-scraper with base niche: "${baseNiche}"`));
+        
+        const deletedCount = cleanupRelatedFiles(leadScraperDir, baseNiche, sourceType, leadScraperPath);
+        console.log(chalk.blue(`🗑️ Cleaned up ${deletedCount} related ${sourceType} files from lead-scraper`));
+      }
+      
       return true;
     }
 
@@ -737,6 +842,31 @@ function cleanupResultFile(filePath) {
       fs.unlinkSync(mapsScraperPath);
       console.log(chalk.green(`🗑️ Storage optimization: Deleted result file from maps_scraper: ${path.basename(filePath)}`));
       console.log(chalk.gray(`   File path: ${mapsScraperPath}`));
+      
+      // 🗑️ SPECIAL CASE: For any source files in maps_scraper, also delete related files
+      const fileName = path.basename(filePath);
+      
+      // Determine source type and cleanup related files
+      let sourceType = null;
+      if (fileName.includes('google_maps')) {
+        sourceType = 'google_maps';
+      } else if (fileName.includes('linkedin')) {
+        sourceType = 'linkedin';
+      } else if (fileName.includes('google_search')) {
+        sourceType = 'google_search';
+      } else if (fileName.includes('all_sources')) {
+        sourceType = 'all_sources';
+      }
+      
+      if (sourceType) {
+        const mapsScraperDir = path.join(__dirname, 'maps_scraper', 'results');
+        const baseNiche = extractBaseNicheFromFileName(fileName);
+        console.log(chalk.blue(`🔍 Looking for ${sourceType} files in maps_scraper with base niche: "${baseNiche}"`));
+        
+        const deletedCount = cleanupRelatedFiles(mapsScraperDir, baseNiche, sourceType, mapsScraperPath);
+        console.log(chalk.blue(`🗑️ Cleaned up ${deletedCount} related ${sourceType} files from maps_scraper`));
+      }
+      
       return true;
     }
 
@@ -782,15 +912,20 @@ function cleanupOldResultFiles(maxAgeHours = 24) {
       }
     }
 
-    // Clean up lead-scraper results folder
-    const leadScraperDir = path.join(__dirname, 'google search + linkdin scraper', 'lead-scraper', 'results');
+    // Clean up lead-scraper folder (Google Search files are created directly in lead-scraper, not in results subfolder)
+    const leadScraperDir = path.join(__dirname, 'google search + linkdin scraper', 'lead-scraper');
     if (fs.existsSync(leadScraperDir)) {
       const files = fs.readdirSync(leadScraperDir);
       for (const file of files) {
         const filePath = path.join(leadScraperDir, file);
         const stats = fs.statSync(filePath);
         
-        if (stats.isFile() && stats.mtime.getTime() < cutoffTime) {
+        // Only delete actual result files, not project files
+        const isResultFile = (file.includes('_results') && 
+                             (file.endsWith('.txt') || file.endsWith('.json') || file.endsWith('.xlsx'))) ||
+                             file.includes('_autosave_session_');
+        
+        if (stats.isFile() && isResultFile && stats.mtime.getTime() < cutoffTime) {
           try {
             fs.unlinkSync(filePath);
             console.log(chalk.green(`🗑️ Deleted old file from lead-scraper: ${file}`));
