@@ -15,7 +15,7 @@ export const languages = {
     access_granted: "✅ **Access granted!** Welcome to the Business Lead Finder.\n\n📝 Send a search query (e.g., \"restaurant casablanca\").\n\n📅 **Daily Limits:** You can perform 4 lead searches per day. Limits reset at midnight.\n\n💡 Use STATUS command to check your remaining searches.",
     
     // Main Menu
-    main_menu: "🏠 **Main Menu**\n\nWhat would you like to do?\n\n1️⃣ **🚀 START LEAD FINDER** - Start a new lead‑finding session\n2️⃣ **📈 STATUS** - Check your account status and daily limits\n3️⃣ **🌐 CHANGE LANGUAGE** - Switch to a different language\n4️⃣ **🔓 LOGOUT** - Sign out and switch accounts\n\n💬 **Reply with the number** corresponding to your choice.",
+    main_menu: "🏠 **Main Menu**\n\nWhat would you like to do?\n\n1️⃣ **🚀 START LEAD FINDER** - Start a new lead‑finding session\n2️⃣ **📈 STATUS** - Check your account status and daily limits\n3️⃣ **📚 USER GUIDE** - Download complete user guide (PDF)\n4️⃣ **🌐 CHANGE LANGUAGE** - Switch to a different language\n5️⃣ **🔓 LOGOUT** - Sign out and switch accounts\n\n💬 **Reply with the number** corresponding to your choice.",
     language_changed: "🌐 **Language changed successfully!**\n\nYour language preference has been updated and saved to your profile.\n\n💡 **Tip:** This setting will be remembered for future sessions.",
     no_history: "📊 **No Lead History**\n\nYou haven't completed any lead‑finding sessions yet.\n\n🚀 **Get started:** Choose option 1 to begin your first lead search!",
     history_header: "📊 **Your Scraping History**\n\nHere are your recent scraping jobs:",
@@ -25,7 +25,7 @@ export const languages = {
     invalid_niche: "⚠️ **Invalid input.** Please enter your search query (e.g., \"dentist casablanca\") or send 0 to go back to main menu.",
     
     // Source Selection
-    select_source: "🎯 **Select Data Source for \"{niche}\":**\n\n1️⃣ **GOOGLE** - Business websites & contact pages\n2️⃣ **LINKEDIN** - Professional profiles & companies\n3️⃣ **MAPS** - Business directory & local listings\n\n0️⃣ **BACK** - Go back to niche input\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
+    select_source: "🎯 **What type of results do you want for \"{niche}\"?**\n\n1️⃣ **Contacts** – Emails 📧 & Phone Numbers 📱\n2️⃣ **Profiles** – Names, LinkedIn URLs & Job Info 👤\n3️⃣ **Businesses** – Names, Phones, Emails, Location & Website 🏢\n\n0️⃣ **Back** – Go back to niche input\n0️⃣0️⃣ **Restart** – Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
     
     // Data Type Selection
     select_type_google: "📋 **Select Data Type for Google Search:**\n\n1️⃣ **EMAILS** - Extract email addresses only\n2️⃣ **PHONES** - Extract phone numbers only\n3️⃣ **CONTACTS** - Both emails and phones\n\n0️⃣ **BACK** - Go back to source selection\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
@@ -39,7 +39,7 @@ export const languages = {
     select_format_linkedin: "💾 **LinkedIn only supports XLSX format**\n\n1️⃣ **XLSX** - Excel file\n\n0️⃣ **BACK** - Go back to data type selection\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
     select_format_maps: "💾 **Select Output Format for Google Maps:**\n\n1️⃣ **JSON** - Native Google Maps format\n2️⃣ **XLSX** - Excel file\n\n0️⃣ **BACK** - Go back to data type selection\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
     select_format_all: "💾 **Select Output Format for All Sources:**\n\n1️⃣ **XLSX** - Recommended for combined data\n2️⃣ **CSV** - Universal format\n3️⃣ **JSON** - Developer format\n\n0️⃣ **BACK** - Go back to data type selection\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
-    format_set: "💾 **Output format set to: {format}**\n\n🚀 **Ready to start scraping!**\n\n0️⃣ **BACK** - Go back to format selection\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Send:** START",
+    format_set: "🚀 **Ready to start scraping!**\n\n0️⃣ **BACK** - Go back to format selection\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Send:** START",
     
     // Configuration Commands
     source_set: "🎯 Data source set to: {source}",
@@ -48,7 +48,7 @@ export const languages = {
     settings_updated: "✅ Settings updated successfully!",
     
     // Job Management
-    job_starting: "🔍 **Starting lead‑finding session...**\n\n📋 **Session Details:**\n• Niche: \"{niche}\"\n• Source: {source}\n• Format: {format}\n\n⏱️ **Progress updates will be sent automatically.**",
+    job_starting: "🔍 **Starting lead‑finding session...**\n\n📋 **Session Details:**\n• Niche: \"{niche}\"\n• Source: {source}\n\n⏱️ **Progress updates will be sent automatically.**",
     job_complete: "✅ **Lead Finding Complete!**\n\n📊 **Results Summary:**\n• Total Results: {total}\n• Emails: {emails}\n• Phones: {phones}\n• Websites: {websites}\n\n💾 **File ready for download** ⬇️",
     job_stopped: "🛑 **Lead‑finding session stopped.**",
     job_status: "📊 **Current Job Status:** {status}",
@@ -65,7 +65,7 @@ export const languages = {
     reset: "♻️ **Preferences reset to defaults.**",
     
     // Help
-    help: "📚 **Lead Finder Help**\n\n🔐 **CODE: <code>**\n   Authenticate with your access code\n   Example: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   Set data source: GOOGLE, LINKEDIN, MAPS\n\n💾 **FORMAT: <format>**\n   Set output format: XLSX, CSV, JSON\n\n📊 **STATUS**\n   Check current session status\n\n🛑 **STOP**\n   Cancel current lead‑finding session\n\n♻️ **RESET**\n   Reset all preferences\n\n🔄 **RESTART** (00)\n   Restart the entire process from niche selection\n\n❓ **HELP**\n   Show this help message\n\n💡 **Getting Started:**\n1. Get your access code from admin\n2. Send: CODE: your_code_here\n3. Send your search query (e.g., \"restaurant casablanca\")\n4. Follow the numbered prompts to configure source, type, and format.\n5. Send: START to begin finding leads\n6. Receive real-time progress updates!\n\n**Navigation Tip:** At any numbered selection step, reply with `0` to go back to the previous step.",
+    help: "📚 **Lead Finder Help**\n\n🔐 **CODE: <code>**\n   Authenticate with your access code\n   Example: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   Set data source: GOOGLE, LINKEDIN, MAPS\n\n📊 **STATUS**\n   Check current session status\n\n🛑 **STOP**\n   Cancel current lead‑finding session\n\n♻️ **RESET**\n   Reset all preferences\n\n🔄 **RESTART** (00)\n   Restart the entire process from niche selection\n\n❓ **HELP**\n   Show this help message\n\n💡 **Getting Started:**\n1. Get your access code from admin\n2. Send: CODE: your_code_here\n3. Send your search query (e.g., \"restaurant casablanca\")\n4. Follow the numbered prompts to configure source and type.\n5. Send: START to begin finding leads\n6. Receive real-time progress updates!\n\n**Navigation Tip:** At any numbered selection step, reply with `0` to go back to the previous step.",
     
     // Progress Messages
     progress_update: "⏱️ **Progress Update:** {message}",
@@ -111,8 +111,13 @@ export const languages = {
     file_not_sent: "File not sent",
     results_saved_later: "Results saved for later delivery",
     
+    // PDF Guide Messages
+    guide_sending: "📚 **Sending User Guide...**\n\n⏳ Please wait while we prepare your complete user guide in {language}...\n\n💡 **Do not send any messages** until the guide is delivered.",
+    guide_processing: "⏳ **Guide is being processed...**\n\n📄 Your user guide is being prepared and will be sent shortly.\n\n⏳ **Please wait** - do not send any messages until the guide arrives.",
+    guide_error: "❌ **Error sending guide**\n\nSorry, there was an error sending the user guide. Please try again later.\n\n0️⃣ **BACK TO MENU** - Return to main menu",
+    
     // Logout Messages
-    logout_confirmation: "🔓 **Confirm Logout**\n\n⚠️ Are you sure you want to logout?\n\nThis will end your current session and you'll need to authenticate again.\n\n💬 **Reply with:**\n• **4** to confirm logout\n• **0** to cancel and return to main menu",
+    logout_confirmation: "🔓 **Confirm Logout**\n\n⚠️ Are you sure you want to logout?\n\nThis will end your current session and you'll need to authenticate again.\n\n💬 **Reply with:**\n• **5** to confirm logout\n• **0** to cancel and return to main menu",
     logout_successful: "🔓 **User Logout Successful!**\n\n✅ You have been logged out of your user session.\n\n💡 **To log back in:**\n• Send CODE: <user_code> to start a new user session\n• Example: CODE: user1",
     logout_error: "❌ **Error during logout**\n\nAn error occurred while logging out. Please try again or contact support."
   },
@@ -128,7 +133,7 @@ export const languages = {
     access_granted: "✅ **Accès accordé!** Bienvenue dans le Localisateur de Prospects.\n\n📝 Envoyez une requête de recherche (ex: \"restaurant casablanca\").\n\n📅 **Limites Quotidiennes:** Vous pouvez effectuer 4 recherches de prospects par jour. Réinitialisation à minuit.\n\n💡 Utilisez la commande STATUS pour vérifier vos recherches restantes.",
     
     // Main Menu
-    main_menu: "🏠 **Menu Principal**\n\nQue souhaitez-vous faire?\n\n1️⃣ **🚀 DÉMARRER LA RECHERCHE DE PROSPECTS** - Nouvelle session\n2️⃣ **📈 STATUT** - Vérifier votre statut et limites quotidiennes\n3️⃣ **🌐 CHANGER LA LANGUE** - Passer à une autre langue\n4️⃣ **🔓 DÉCONNEXION** - Se déconnecter et changer de compte\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
+    main_menu: "🏠 **Menu Principal**\n\nQue souhaitez-vous faire?\n\n1️⃣ **🚀 DÉMARRER LA RECHERCHE DE PROSPECTS** - Nouvelle session\n2️⃣ **📈 STATUT** - Vérifier votre statut et limites quotidiennes\n3️⃣ **📚 GUIDE UTILISATEUR** - Télécharger le guide complet (PDF)\n4️⃣ **🌐 CHANGER LA LANGUE** - Passer à une autre langue\n5️⃣ **🔓 DÉCONNEXION** - Se déconnecter et changer de compte\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
     language_changed: "🌐 **Langue changée avec succès!**\n\nVotre préférence de langue a été mise à jour et enregistrée dans votre profil.\n\n💡 **Conseil:** Ce paramètre sera conservé pour les sessions futures.",
     no_history: "📊 **Aucun Historique de Prospects**\n\nVous n'avez pas encore effectué de sessions de recherche de prospects.\n\n🚀 **Commencez:** Choisissez l'option 1 pour lancer votre première recherche!",
     history_header: "📊 **Votre Historique de Scraping**\n\nVoici vos derniers jobs de scraping:",
@@ -138,7 +143,7 @@ export const languages = {
     invalid_niche: "⚠️ **Entrée invalide.** Veuillez entrer votre requête de recherche (ex: \"dentiste casablanca\") ou envoyez 0 pour retourner au menu principal.",
     
     // Source Selection
-    select_source: "🎯 **Sélectionnez la Source de Données pour \"{niche}\":**\n\n1️⃣ **GOOGLE** - Sites web d'entreprises et pages de contact\n2️⃣ **LINKEDIN** - Profils professionnels et entreprises\n3️⃣ **MAPS** - Annuaire d'entreprises et listes locales\n\n0️⃣ **RETOUR** - Retour à la saisie de niche\n0️⃣0️⃣ **REDÉMARRER** - Commencer une nouvelle recherche\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
+    select_source: "🎯 **Quel type de résultats voulez-vous pour \"{niche}\"?**\n\n1️⃣ **Contacts** – Emails 📧 & Numéros de Téléphone 📱\n2️⃣ **Profils** – Noms, URLs LinkedIn & Infos Professionnelles 👤\n3️⃣ **Entreprises** – Noms, Téléphones, Emails, Localisation & Site Web 🏢\n\n0️⃣ **Retour** – Retour à la saisie de niche\n0️⃣0️⃣ **Redémarrer** – Commencer une nouvelle recherche\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
     
     // Data Type Selection
     select_type_google: "📋 **Sélectionnez le Type de Données pour Google Search:**\n\n1️⃣ **EMAILS** - Extraire uniquement les adresses email\n2️⃣ **PHONES** - Extraire uniquement les numéros de téléphone\n3️⃣ **CONTACTS** - Emails et téléphones\n\n0️⃣ **RETOUR** - Retour à la sélection de source\n0️⃣0️⃣ **REDÉMARRER** - Commencer une nouvelle recherche\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
@@ -152,7 +157,7 @@ export const languages = {
     select_format_linkedin: "💾 **LinkedIn ne supporte que le format XLSX**\n\n1️⃣ **XLSX** - Fichier Excel\n\n0️⃣ **RETOUR** - Retour à la sélection de type de données\n0️⃣0️⃣ **REDÉMARRER** - Commencer une nouvelle recherche\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
     select_format_maps: "💾 **Sélectionnez le Format de Sortie pour Google Maps:**\n\n1️⃣ **JSON** - Format natif Google Maps\n2️⃣ **XLSX** - Fichier Excel\n\n0️⃣ **RETOUR** - Retour à la sélection de type de données\n0️⃣0️⃣ **REDÉMARRER** - Commencer une nouvelle recherche\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
     select_format_all: "💾 **Sélectionnez le Format de Sortie pour Toutes les Sources:**\n\n1️⃣ **XLSX** - Recommandé pour les données combinées\n2️⃣ **CSV** - Format universel\n3️⃣ **JSON** - Format développeur\n\n0️⃣ **RETOUR** - Retour à la sélection de type de données\n0️⃣0️⃣ **REDÉMARRER** - Commencer une nouvelle recherche\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
-    format_set: "💾 **Format de sortie défini sur: {format}**\n\n🚀 **Prêt à commencer le scraping!**\n\n0️⃣ **RETOUR** - Retour à la sélection de format\n0️⃣0️⃣ **REDÉMARRER** - Commencer une nouvelle recherche\n\n💬 **Envoyez:** START",
+    format_set: "🚀 **Prêt à commencer le scraping!**\n\n0️⃣ **RETOUR** - Retour à la sélection de format\n0️⃣0️⃣ **REDÉMARRER** - Commencer une nouvelle recherche\n\n💬 **Envoyez:** START",
     
     // Configuration Commands
     source_set: "🎯 Source de données définie sur: {source}",
@@ -161,7 +166,7 @@ export const languages = {
     settings_updated: "✅ Paramètres mis à jour avec succès!",
     
     // Job Management
-    job_starting: "🔍 **Démarrage de la session de recherche de prospects...**\n\n📋 **Détails de la session:**\n• Niche: \"{niche}\"\n• Source: {source}\n• Format: {format}\n\n⏱️ **Mises à jour envoyées automatiquement.**",
+    job_starting: "🔍 **Démarrage de la session de recherche de prospects...**\n\n📋 **Détails de la session:**\n• Niche: \"{niche}\"\n• Source: {source}\n\n⏱️ **Mises à jour envoyées automatiquement.**",
     job_complete: "✅ **Recherche de prospects terminée!**\n\n📊 **Résumé des Résultats:**\n• Total: {total}\n• Emails: {emails}\n• Téléphones: {phones}\n• Sites Web: {websites}\n\n💾 **Fichier prêt au téléchargement** ⬇️",
     job_stopped: "🛑 **Session interrompue.**",
     job_status: "📊 **Statut Actuel du Job:** {status}",
@@ -178,7 +183,7 @@ export const languages = {
     reset: "♻️ **Préférences remises aux valeurs par défaut.**",
     
     // Help
-    help: "📚 **Aide – Localisateur de Prospects**\n\n🔐 **CODE: <code>**\n   Authentifiez-vous avec votre code d'accès\n   Exemple: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   Définir la source: GOOGLE, LINKEDIN, MAPS\n\n💾 **FORMAT: <format>**\n   Définir le format: XLSX, CSV, JSON\n\n📊 **STATUT**\n   Vérifier le statut de la session\n\n🛑 **STOP**\n   Annuler la session en cours\n\n♻️ **RESET**\n   Réinitialiser les préférences\n\n🔄 **RESTART** (00)\n   Redémarrer depuis la sélection de niche\n\n❓ **HELP**\n   Afficher cette aide\n\n💡 **Pour Commencer:**\n1. Obtenez votre code d'accès\n2. Envoyez: CODE: votre_code_ici\n3. Envoyez votre requête (ex: \"restaurant casablanca\")\n4. Configurez source, type et format\n5. Envoyez: START pour commencer la recherche de prospects\n6. Suivez les mises à jour!\n\n**Astuce:** À chaque étape numérotée, répondez `0` pour revenir en arrière.",
+    help: "📚 **Aide – Localisateur de Prospects**\n\n🔐 **CODE: <code>**\n   Authentifiez-vous avec votre code d'accès\n   Exemple: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   Définir la source: GOOGLE, LINKEDIN, MAPS\n\n📊 **STATUT**\n   Vérifier le statut de la session\n\n🛑 **STOP**\n   Annuler la session en cours\n\n♻️ **RESET**\n   Réinitialiser les préférences\n\n🔄 **RESTART** (00)\n   Redémarrer depuis la sélection de niche\n\n❓ **HELP**\n   Afficher cette aide\n\n💡 **Pour Commencer:**\n1. Obtenez votre code d'accès\n2. Envoyez: CODE: votre_code_ici\n3. Envoyez votre requête (ex: \"restaurant casablanca\")\n4. Configurez source et type\n5. Envoyez: START pour commencer la recherche de prospects\n6. Suivez les mises à jour!\n\n**Astuce:** À chaque étape numérotée, répondez `0` pour revenir en arrière.",
     
     // Progress Messages
     progress_update: "⏱️ **Mise à Jour de Progression:** {message}",
@@ -224,8 +229,13 @@ export const languages = {
     file_not_sent: "Fichier non envoyé",
     results_saved_later: "Résultats sauvegardés pour envoi ultérieur",
     
+    // PDF Guide Messages
+    guide_sending: "📚 **Envoi du Guide Utilisateur...**\n\n⏳ Veuillez patienter pendant que nous préparons votre guide complet en {language}...\n\n💡 **N'envoyez aucun message** jusqu'à ce que le guide soit livré.",
+    guide_processing: "⏳ **Le guide est en cours de traitement...**\n\n📄 Votre guide utilisateur est en cours de préparation et sera envoyé sous peu.\n\n⏳ **Veuillez patienter** - n'envoyez aucun message jusqu'à l'arrivée du guide.",
+    guide_error: "❌ **Erreur d'envoi du guide**\n\nDésolé, il y a eu une erreur lors de l'envoi du guide. Veuillez réessayer plus tard.\n\n0️⃣ **RETOUR AU MENU** - Retourner au menu principal",
+    
     // Logout Messages
-    logout_confirmation: "🔓 **Confirmer la Déconnexion**\n\n⚠️ Êtes-vous sûr de vouloir vous déconnecter?\n\nCela mettra fin à votre session actuelle et vous devrez vous authentifier à nouveau.\n\n💬 **Répondez avec:**\n• **4** pour confirmer la déconnexion\n• **0** pour annuler et retourner au menu principal",
+    logout_confirmation: "🔓 **Confirmer la Déconnexion**\n\n⚠️ Êtes-vous sûr de vouloir vous déconnecter?\n\nCela mettra fin à votre session actuelle et vous devrez vous authentifier à nouveau.\n\n💬 **Répondez avec:**\n• **5** pour confirmer la déconnexion\n• **0** pour annuler et retourner au menu principal",
     logout_successful: "🔓 **Déconnexion Utilisateur Réussie!**\n\n✅ Vous avez été déconnecté de votre session utilisateur.\n\n💡 **Pour vous reconnecter:**\n• Envoyez CODE: <votre_code> pour commencer une nouvelle session utilisateur\n• Exemple: CODE: user1",
     logout_error: "❌ **Erreur lors de la déconnexion**\n\nUne erreur s'est produite lors de la déconnexion. Veuillez réessayer ou contacter le support."
   },
@@ -241,7 +251,7 @@ export const languages = {
     access_granted: "✅ **تم منح الوصول!** مرحباً بك في محدِّد العملاء المحتملين.\n\n📝 أرسل استعلام بحث (مثال: \"مطعم الدار البيضاء\").\n\n📅 **الحدود اليومية:** يمكنك إجراء 4 عمليات بحث عن العملاء المحتملين يومياً. تُعاد التهيئة عند منتصف الليل.\n\n💡 استخدم STATUS للتحقق من الباقي.",
     
     // Main Menu
-    main_menu: "🏠 **القائمة الرئيسية**\n\nماذا تريد أن تفعل؟\n\n1️⃣ **🚀 بدء البحث عن العملاء المحتملين** - بدء جلسة جديدة\n2️⃣ **📈 الحالة** - التحقق من الحالة والحدود اليومية\n3️⃣ **🌐 تغيير اللغة** - تغيير اللغة المفضلة\n4️⃣ **🔓 تسجيل الخروج** - تسجيل الخروج وتغيير الحساب\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
+    main_menu: "🏠 **القائمة الرئيسية**\n\nماذا تريد أن تفعل؟\n\n1️⃣ **🚀 بدء البحث عن العملاء المحتملين** - بدء جلسة جديدة\n2️⃣ **📈 الحالة** - التحقق من الحالة والحدود اليومية\n3️⃣ **📚 دليل المستخدم** - تحميل الدليل الكامل (PDF)\n4️⃣ **🌐 تغيير اللغة** - تغيير اللغة المفضلة\n5️⃣ **🔓 تسجيل الخروج** - تسجيل الخروج وتغيير الحساب\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
     language_changed: "🌐 **تم تغيير اللغة بنجاح!**\n\nتم تحديث تفضيل اللغة وحفظه في ملف الملف الشخصي.\n\n💡 **نصيحة:** سيتم تذكر هذه الإعداد للجلسات القادمة.",
     no_history: "📊 **لا يوجد سجل للعملاء المحتملين**\n\nلم تُكمل أي جلسات بحث حتى الآن.\n\n🚀 **ابدأ:** اختر الخيار 1 لبدء أول جلسة بحث!",
     history_header: "📊 **تاريخ استخراج البيانات الخاص بك**\n\nهذه هي آخر مهام استخراج البيانات الخاصة بك:",
@@ -251,7 +261,7 @@ export const languages = {
     invalid_niche: "⚠️ **إدخال غير صحيح.** يرجى إدخال استعلام البحث الخاص بك (مثال: \"طبيب أسنان الدار البيضاء\") أو أرسل 0 للعودة إلى القائمة الرئيسية.",
     
     // Source Selection
-    select_source: "🎯 **اختر مصدر البيانات لـ \"{niche}\":**\n\n1️⃣ **GOOGLE** - مواقع الويب التجارية وصفحات الاتصال\n2️⃣ **LINKEDIN** - الملفات الشخصية المهنية والشركات\n3️⃣ **MAPS** - دليل الأعمال والقوائم المحلية\n\n0️⃣ **رجوع** - العودة لإدخال النيش\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
+    select_source: "🎯 **ما نوع النتائج التي تريدها لـ \"{niche}\"؟**\n\n1️⃣ **جهات الاتصال** – الإيميلات 📧 & أرقام الهواتف 📱\n2️⃣ **الملفات الشخصية** – الأسماء، روابط LinkedIn & معلومات الوظيفة 👤\n3️⃣ **الشركات** – الأسماء، الهواتف، الإيميلات، الموقع & الموقع الإلكتروني 🏢\n\n0️⃣ **رجوع** – العودة لإدخال النيش\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
     
     // Data Type Selection
     select_type_google: "📋 **اختر نوع البيانات لبحث Google:**\n\n1️⃣ **EMAILS** - استخراج عناوين البريد الإلكتروني فقط\n2️⃣ **PHONES** - استخراج أرقام الهاتف فقط\n3️⃣ **CONTACTS** - البريد الإلكتروني والهاتف معاً\n\n0️⃣ **رجوع** - العودة لاختيار المصدر\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
@@ -265,7 +275,7 @@ export const languages = {
     select_format_linkedin: "💾 **LinkedIn يدعم فقط تنسيق XLSX**\n\n1️⃣ **XLSX** - ملف Excel\n\n0️⃣ **رجوع** - العودة لاختيار نوع البيانات\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
     select_format_maps: "💾 **اختر تنسيق الإخراج لخرائط Google:**\n\n1️⃣ **JSON** - تنسيق خرائط Google الأصلي\n2️⃣ **XLSX** - ملف Excel\n\n0️⃣ **رجوع** - العودة لاختيار نوع البيانات\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
     select_format_all: "💾 **اختر تنسيق الإخراج لجميع المصادر:**\n\n1️⃣ **XLSX** - موصى به للبيانات المجمعة\n2️⃣ **CSV** - تنسيق عالمي\n3️⃣ **JSON** - تنسيق المطور\n\n0️⃣ **رجوع** - العودة لاختيار نوع البيانات\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
-    format_set: "💾 **تم تعيين تنسيق الإخراج على: {format}**\n\n🚀 **جاهز لبدء الاستخراج!**\n\n0️⃣ **رجوع** - العودة لاختيار التنسيق\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل:** START",
+    format_set: "🚀 **جاهز لبدء الاستخراج!**\n\n0️⃣ **رجوع** - العودة لاختيار التنسيق\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل:** START",
     
     // Configuration Commands
     source_set: "🎯 تم تعيين مصدر البيانات على: {source}",
@@ -274,7 +284,7 @@ export const languages = {
     settings_updated: "✅ تم تحديث الإعدادات بنجاح!",
     
     // Job Management
-    job_starting: "🔍 **بدء جلسة البحث عن العملاء المحتملين...**\n\n📋 **تفاصيل الجلسة:**\n• النيش: \"{niche}\"\n• المصدر: {source}\n• التنسيق: {format}\n\n⏱️ **سيتم إرسال التحديثات تلقائياً.**",
+    job_starting: "🔍 **بدء جلسة البحث عن العملاء المحتملين...**\n\n📋 **تفاصيل الجلسة:**\n• النيش: \"{niche}\"\n• المصدر: {source}\n\n⏱️ **سيتم إرسال التحديثات تلقائياً.**",
     job_complete: "✅ **اكتملت عملية البحث!**\n\n📊 **ملخص النتائج:**\n• إجمالي النتائج: {total}\n• البريد الإلكتروني: {emails}\n• الهاتف: {phones}\n• مواقع الويب: {websites}\n\n💾 **الملف جاهز للتحميل** ⬇️",
     job_stopped: "🛑 **تم إيقاف الجلسة.**",
     job_status: "📊 **حالة المهمة الحالية:** {status}",
@@ -291,7 +301,7 @@ export const languages = {
     reset: "♻️ **تم إعادة تعيين التفضيلات إلى القيم الافتراضية.**",
     
     // Help
-    help: "📚 **مساعدة – محدِّد العملاء المحتملين**\n\n🔐 **CODE: <code>**\n   المصادقة برمز الوصول الخاص بك\n   مثال: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   تعيين المصدر: GOOGLE, LINKEDIN, MAPS\n\n💾 **FORMAT: <format>**\n   تعيين التنسيق: XLSX, CSV, JSON\n\n📏 **LIMIT: <number>**\n   الحد الأقصى للنتائج (1-500). الافتراضي: 300\n\n📊 **STATUS**\n   التحقق من حالة الجلسة\n\n🛑 **STOP**\n   إلغاء الجلسة الحالية\n\n♻️ **RESET**\n   إعادة تعيين التفضيلات\n\n🔄 **RESTART** (00)\n   إعادة التشغيل من اختيار النيش\n\n❓ **HELP**\n   عرض هذه المساعدة\n\n💡 **للبدء:**\n1. احصل على رمز الوصول\n2. أرسل: CODE: رمزك_هنا\n3. أرسل استعلامك (مثال: \"مطعم الدار البيضاء\")\n4. كوّن المصدر والنوع والتنسيق\n5. أرسل: START لبدء البحث عن العملاء المحتملين\n6. استلم التحديثات!\n\n**نصيحة:** في أي خطوة مرقمة، أرسل `0` للعودة.",
+    help: "📚 **مساعدة – محدِّد العملاء المحتملين**\n\n🔐 **CODE: <code>**\n   المصادقة برمز الوصول الخاص بك\n   مثال: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   تعيين المصدر: GOOGLE, LINKEDIN, MAPS\n\n📏 **LIMIT: <number>**\n   الحد الأقصى للنتائج (1-500). الافتراضي: 300\n\n📊 **STATUS**\n   التحقق من حالة الجلسة\n\n🛑 **STOP**\n   إلغاء الجلسة الحالية\n\n♻️ **RESET**\n   إعادة تعيين التفضيلات\n\n🔄 **RESTART** (00)\n   إعادة التشغيل من اختيار النيش\n\n❓ **HELP**\n   عرض هذه المساعدة\n\n💡 **للبدء:**\n1. احصل على رمز الوصول\n2. أرسل: CODE: رمزك_هنا\n3. أرسل استعلامك (مثال: \"مطعم الدار البيضاء\")\n4. كوّن المصدر والنوع\n5. أرسل: START لبدء البحث عن العملاء المحتملين\n6. استلم التحديثات!\n\n**نصيحة:** في أي خطوة مرقمة، أرسل `0` للعودة.",
     
     // Progress Messages
     progress_update: "⏱️ **تحديث التقدم:** {message}",
@@ -337,8 +347,13 @@ export const languages = {
     file_not_sent: "لم يتم إرسال الملف",
     results_saved_later: "تم حفظ النتائج للإرسال لاحقاً",
     
+    // PDF Guide Messages
+    guide_sending: "📚 **إرسال دليل المستخدم...**\n\n⏳ يرجى الانتظار بينما نقوم بتحضير دليلك الكامل باللغة {language}...\n\n💡 **لا ترسل أي رسائل** حتى يتم تسليم الدليل.",
+    guide_processing: "⏳ **الدليل قيد المعالجة...**\n\n📄 دليل المستخدم الخاص بك قيد التحضير وسيتم إرساله قريباً.\n\n⏳ **يرجى الانتظار** - لا ترسل أي رسائل حتى وصول الدليل.",
+    guide_error: "❌ **خطأ في إرسال الدليل**\n\nعذراً، حدث خطأ في إرسال دليل المستخدم. يرجى المحاولة مرة أخرى لاحقاً.\n\n0️⃣ **العودة إلى القائمة** - العودة إلى القائمة الرئيسية",
+    
     // Logout Messages
-    logout_confirmation: "🔓 **تأكيد تسجيل الخروج**\n\n⚠️ هل أنت متأكد من أنك تريد تسجيل الخروج؟\n\nسيؤدي هذا إلى إنهاء جلستك الحالية وستحتاج إلى المصادقة مرة أخرى.\n\n💬 **أرسل:**\n• **4** لتأكيد تسجيل الخروج\n• **0** للإلغاء والعودة إلى القائمة الرئيسية",
+    logout_confirmation: "🔓 **تأكيد تسجيل الخروج**\n\n⚠️ هل أنت متأكد من أنك تريد تسجيل الخروج؟\n\nسيؤدي هذا إلى إنهاء جلستك الحالية وستحتاج إلى المصادقة مرة أخرى.\n\n💬 **أرسل:**\n• **5** لتأكيد تسجيل الخروج\n• **0** للإلغاء والعودة إلى القائمة الرئيسية",
     logout_successful: "🔓 **تم تسجيل الخروج بنجاح!**\n\n✅ تم تسجيل خروجك من جلسة المستخدم.\n\n💡 **للإعادة تسجيل الدخول:**\n• أرسل CODE: <رمز_المستخدم> لبدء جلسة مستخدم جديدة\n• مثال: CODE: user1",
     logout_error: "❌ **خطأ أثناء تسجيل الخروج**\n\nحدث خطأ أثناء تسجيل الخروج. يرجى المحاولة مرة أخرى أو الاتصال بالدعم."
   }

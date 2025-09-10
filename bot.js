@@ -17,6 +17,44 @@ const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = requi
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Image helper function
+// Helper function to send images with captions - optimized for mobile display
+async function sendImageWithMessage(sock, jid, imageName, text, language = 'en') {
+  try {
+    // Map language codes to directory names
+    const languageMap = {
+      'en': 'english_imgs',
+      'fr': 'french_imgs', 
+      'ar': 'arabic_imgs'
+    };
+    
+    const imageDir = languageMap[language] || 'english_imgs';
+    const imagePath = path.join(__dirname, 'imgs', imageDir, `${imageName}.png`);
+    
+    // Check if image exists
+    if (fs.existsSync(imagePath)) {
+      const imageBuffer = fs.readFileSync(imagePath);
+      
+      // Send image with caption - optimized for mobile display
+      await sock.sendMessage(jid, {
+        image: imageBuffer,
+        caption: text,
+        // Add metadata for better mobile display
+        mimetype: 'image/png',
+        jpegThumbnail: imageBuffer
+      });
+    } else {
+      // Fallback to text only if image doesn't exist
+      console.log(chalk.yellow(`⚠️ Image not found: ${imagePath}`));
+      await sock.sendMessage(jid, { text });
+    }
+  } catch (error) {
+    console.error(chalk.red(`❌ Error sending image ${imageName}:`, error.message));
+    // Fallback to text only
+    await sock.sendMessage(jid, { text });
+  }
+}
+
 // --- Serialized session mutation utilities (avoid race conditions on sessions.json) ---
 let __sessionsMutex = Promise.resolve();
 
@@ -1046,6 +1084,78 @@ async function testConnection(sock) {
   }
 }
 
+// Handle user guide PDF sending
+async function handleUserGuide(sock, jid, session) {
+  try {
+    const userLanguage = session.language || 'en';
+    
+    // Map language codes to PDF filenames
+    const guideFiles = {
+      'en': 'Lead Finder - Complete User Guide english.pdf',
+      'fr': 'Lead Finder - Guide Complet d\'Utilisation.pdf',
+      'ar': 'Lead Finder - دليل المستخدم الكامل.pdf'
+    };
+    
+    const guideFileName = guideFiles[userLanguage] || guideFiles['en'];
+    const guideFilePath = path.join(__dirname, 'user_guides', guideFileName);
+    
+    // Check if file exists
+    if (!fs.existsSync(guideFilePath)) {
+      console.log(chalk.red(`❌ Guide file not found: ${guideFilePath}`));
+      await sock.sendMessage(jid, { 
+        text: getMessage(userLanguage, 'guide_error')
+      });
+      return;
+    }
+    
+    // Set session state to guide_processing so we can handle user messages during processing
+    session.currentStep = 'guide_processing';
+    const sessions = loadJson(SESSIONS_FILE, {});
+    sessions[jid] = session;
+    saveJson(SESSIONS_FILE, sessions);
+    
+    // Send "sending" message
+    const languageNames = {
+      'en': 'English',
+      'fr': 'Français',
+      'ar': 'العربية'
+    };
+    
+    await sock.sendMessage(jid, { 
+      text: getMessage(userLanguage, 'guide_sending', { 
+        language: languageNames[userLanguage] || 'English' 
+      })
+    });
+    
+    // Send the PDF file
+    const fileSent = await sendFile(sock, jid, guideFilePath, '', guideFileName);
+    
+    if (fileSent) {
+      console.log(chalk.green(`✅ User guide sent successfully to ${jid.split('@')[0]} in ${userLanguage}`));
+      
+      // Go directly back to main menu (no "guide sent" message)
+      session.currentStep = 'main_menu';
+      sessions[jid] = session;
+      saveJson(SESSIONS_FILE, sessions);
+      
+      await sock.sendMessage(jid, { 
+        text: getMessage(userLanguage, 'main_menu')
+      });
+    } else {
+      console.log(chalk.red(`❌ Failed to send user guide to ${jid.split('@')[0]}`));
+      await sock.sendMessage(jid, { 
+        text: getMessage(userLanguage, 'guide_error')
+      });
+    }
+    
+  } catch (error) {
+    console.error(chalk.red(`❌ Error in handleUserGuide:`, error.message));
+    await sock.sendMessage(jid, { 
+      text: getMessage(session.language || 'en', 'guide_error')
+    });
+  }
+}
+
 // Check and send pending results when user comes back online
 async function checkAndSendPendingResults() {
   if (!sock) return;
@@ -1315,7 +1425,6 @@ function formatResultSummary(results, meta) {
   summary += `📊 **Results Summary:**\n`;
   summary += `• Total Results: ${meta.totalResults}\n`;
   summary += `• Source: ${meta.source}\n`;
-  summary += `• Format: ${meta.format}\n`;
   summary += `• Niche: "${meta.niche}"\n`;
   summary += `• Processed: ${new Date(meta.processedAt).toLocaleString()}\n\n`;
 
@@ -1348,7 +1457,6 @@ function formatResultSummary(results, meta) {
   }
 
   summary += `💾 **File Information:**\n`;
-  summary += `• Format: ${meta.format}\n`;
   summary += `• Ready for download below ⬇️\n\n`;
   
   if (meta.isPartial) {
@@ -1488,9 +1596,7 @@ async function handleMessage(sock, message) {
     
     // Send language selection message for new users
     console.log(chalk.yellow(`🌐 New user ${jid.split('@')[0]} - sending language selection`));
-    await sock.sendMessage(jid, { 
-      text: getMessage('en', 'welcome')
-    });
+    await sendImageWithMessage(sock, jid, 'welcome', getMessage('en', 'welcome'), 'en');
     return;
   }
 
@@ -4153,44 +4259,34 @@ async function handleMessage(sock, message) {
        console.log(chalk.green(`🌐 Session saved with language: ${session.language}, currentStep: ${session.currentStep}`));
        console.log(chalk.green(`🌐 Session object after save:`, JSON.stringify(session, null, 2)));
        
-       await sock.sendMessage(jid, { 
-         text: getMessage(session.language, 'auth_required')
-       });
+      await sendImageWithMessage(sock, jid, 'authentication', getMessage(session.language, 'auth_required'), session.language);
        return;
      } else if (text.trim() === '0') {
        // For unauthenticated users, "0" should resend the welcome message (no main menu to go back to)
        console.log(chalk.yellow(`⚠️ User ${jid.split('@')[0]} pressed 0 during language selection - resending welcome message`));
-       await sock.sendMessage(jid, { 
-         text: getMessage('en', 'welcome')
-       });
+       await sendImageWithMessage(sock, jid, 'welcome', getMessage('en', 'welcome'), 'en');
        return;
      } else {
        // Invalid selection - resend language selection message
        console.log(chalk.yellow(`⚠️ Invalid language selection from ${jid.split('@')[0]}: "${text}" - resending language selection`));
-       await sock.sendMessage(jid, { 
-         text: getMessage('en', 'welcome')
-       });
+       await sendImageWithMessage(sock, jid, 'welcome', getMessage('en', 'welcome'), 'en');
        return;
      }
    }
    
    // Handle authentication for users who have selected language
-   if (session.currentStep === 'awaiting_authentication' && !session.apiKeys) {
-     if (text.trim() === '0') {
-       // User wants to go back to language selection
-       session.currentStep = 'awaiting_language';
-       saveJson(SESSIONS_FILE, sessions);
-       console.log(chalk.yellow(`🔄 User ${jid.split('@')[0]} going back to language selection from authentication`));
-       await sock.sendMessage(jid, { 
-         text: getMessage('en', 'welcome')
-       });
-       return;
-     } else if (!/^CODE:?\s+/i.test(text)) {
-       // Invalid input - resend authentication message
-       console.log(chalk.yellow(`⚠️ Invalid authentication attempt from ${jid.split('@')[0]}: "${text}" - resending auth message`));
-       await sock.sendMessage(jid, { 
-         text: getMessage(session.language, 'auth_required')
-       });
+    if (session.currentStep === 'awaiting_authentication' && !session.apiKeys) {
+      if (text.trim() === '0') {
+        // User wants to go back to language selection
+        session.currentStep = 'awaiting_language';
+        saveJson(SESSIONS_FILE, sessions);
+        console.log(chalk.yellow(`🔄 User ${jid.split('@')[0]} going back to language selection from authentication`));
+        await sendImageWithMessage(sock, jid, 'welcome', getMessage('en', 'welcome'), 'en');
+        return;
+      } else if (!/^CODE:?\s+/i.test(text)) {
+        // Invalid input - resend authentication message
+        console.log(chalk.yellow(`⚠️ Invalid authentication attempt from ${jid.split('@')[0]}: "${text}" - resending auth message`));
+        await sendImageWithMessage(sock, jid, 'authentication', getMessage(session.language, 'auth_required'), session.language);
        return;
      }
      // If it's a CODE command, let it continue to the authentication logic below
@@ -4260,9 +4356,7 @@ async function handleMessage(sock, message) {
         session.currentStep = 'main_menu';
         saveJson(SESSIONS_FILE, sessions);
         
-        await sock.sendMessage(jid, { 
-          text: getMessage(session.language, 'main_menu')
-        });
+        await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
         return;
       } else if (text.trim() === '0') {
         // User wants to go back to main menu
@@ -4283,9 +4377,7 @@ async function handleMessage(sock, message) {
         });
         
         // Then resend language selection message
-        await sock.sendMessage(jid, { 
-          text: getMessage(session.language, 'language_selection')
-        });
+        await sendImageWithMessage(sock, jid, 'language', getMessage(session.language, 'language_selection'), session.language);
         return;
       }
     }
@@ -4294,7 +4386,7 @@ async function handleMessage(sock, message) {
     if (session.currentStep === 'main_menu' && session.apiKeys) {
       const menuChoice = parseInt(text);
       
-      if (menuChoice >= 1 && menuChoice <= 4) {
+      if (menuChoice >= 1 && menuChoice <= 5) {
         switch (menuChoice) {
           case 1: // START SCRAPER
             // Early trial check: block immediately if trial finished
@@ -4360,7 +4452,7 @@ async function handleMessage(sock, message) {
                 } else {
                   let msg = getMessage(session.language, 'trial_status_title');
                   msg += getMessage(session.language, 'trial_status_body', { triesUsed, maxTries, remaining });
-                  await sock.sendMessage(jid, { text: msg });
+                  await sendImageWithMessage(sock, jid, 'status', msg, session.language);
                 }
               } else if (stage === 'unpaid') {
                 await sock.sendMessage(jid, { text: getMessage(session.language, 'subscription_expired') });
@@ -4385,7 +4477,7 @@ async function handleMessage(sock, message) {
                   const expiresStr = expiresDate.toLocaleString();
                   message += getMessage(session.language, 'paid_status', { expires: expiresStr, remaining: remainingStr });
                 }
-                await sock.sendMessage(jid, { text: message });
+                await sendImageWithMessage(sock, jid, 'status', message, session.language);
               }
             } catch (error) {
               console.error(chalk.red(`❌ Error in STATUS command:`, error.message));
@@ -4394,28 +4486,26 @@ async function handleMessage(sock, message) {
               });
             }
             // Show main menu again
-            await sock.sendMessage(jid, { 
-              text: getMessage(session.language, 'main_menu')
-            });
+            await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
             return;
             
-          case 3: // CHANGE LANGUAGE
+          case 3: // USER GUIDE
+            await handleUserGuide(sock, jid, session);
+            return;
+            
+          case 4: // CHANGE LANGUAGE
             session.currentStep = 'awaiting_language';
             saveJson(SESSIONS_FILE, sessions);
-            await sock.sendMessage(jid, { 
-              text: getMessage(session.language, 'language_selection')
-            });
+            await sendImageWithMessage(sock, jid, 'language', getMessage(session.language, 'language_selection'), session.language);
             return;
             
-          case 4: // LOGOUT
+          case 5: // LOGOUT
             // Ask for logout confirmation
             session.currentStep = 'logout_confirmation';
             sessions[jid] = session;
             saveJson(SESSIONS_FILE, sessions);
             
-            await sock.sendMessage(jid, { 
-              text: getMessage(session.language, 'logout_confirmation')
-            });
+            await sendImageWithMessage(sock, jid, 'logout', getMessage(session.language, 'logout_confirmation'), session.language);
             return;
         }
       } else {
@@ -4982,9 +5072,7 @@ async function handleMessage(sock, message) {
             session.status = 'idle';
             saveJson(SESSIONS_FILE, sessions);
             
-            await sock.sendMessage(jid, { 
-              text: getMessage(session.language, 'main_menu')
-            });
+            await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
           } else {
                          // No active job found
              await sock.sendMessage(jid, { 
@@ -5005,9 +5093,7 @@ async function handleMessage(sock, message) {
           session.currentStep = 'main_menu';
           session.status = 'idle';
           saveJson(SESSIONS_FILE, sessions);
-          await sock.sendMessage(jid, { 
-            text: getMessage(session.language, 'main_menu')
-          });
+          await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
         }
         return;
       } else if (text.trim() === '0') {
@@ -5028,9 +5114,18 @@ async function handleMessage(sock, message) {
       }
     }
     
+    // Handle guide processing state - user sent message while guide is being processed
+    if (session.currentStep === 'guide_processing') {
+      // User sent a message while guide is being processed - tell them to wait
+      await sock.sendMessage(jid, { 
+        text: getMessage(session.language, 'guide_processing')
+      });
+      return;
+    }
+    
     // Handle logout confirmation state
     if (session.currentStep === 'logout_confirmation') {
-      if (text.trim() === '4') {
+      if (text.trim() === '5') {
         // User confirmed logout
         try {
           const userCode = session.code || 'unknown';
@@ -5065,9 +5160,7 @@ async function handleMessage(sock, message) {
         return;
       } else {
         // Invalid input - show logout confirmation again
-        await sock.sendMessage(jid, { 
-          text: getMessage(session.language, 'logout_confirmation')
-        });
+        await sendImageWithMessage(sock, jid, 'logout', getMessage(session.language, 'logout_confirmation'), session.language);
         return;
       }
     }
@@ -5166,9 +5259,7 @@ async function handleMessage(sock, message) {
               // Send appropriate welcome message based on current state
         if (session.currentStep === 'awaiting_language') {
           // User authenticated but needs to select language - show language selection
-        await sock.sendMessage(jid, { 
-          text: getMessage('en', 'welcome') // Always use English for welcome
-        });
+        await sendImageWithMessage(sock, jid, 'welcome', getMessage('en', 'welcome'), 'en');
         return;
       } else {
           // User is ready for main menu - show welcome and main menu
@@ -5193,28 +5284,26 @@ async function handleMessage(sock, message) {
             console.log(chalk.blue(`🎯 Sending welcome message in language: ${userLanguage}, stage: ${stage}`));
             
           if (stage === 'free_trial') {
-              await sock.sendMessage(jid, { text: getMessage(userLanguage, 'trial_welcome') });
+              await sendImageWithMessage(sock, jid, 'welcome', getMessage(userLanguage, 'trial_welcome'), userLanguage);
           } else if (stage === 'paid') {
-              await sock.sendMessage(jid, { text: getMessage(userLanguage, 'paid_welcome') });
+              await sendImageWithMessage(sock, jid, 'welcome', getMessage(userLanguage, 'paid_welcome'), userLanguage);
           } else if (stage === 'unpaid') {
               await sock.sendMessage(jid, { text: getMessage(userLanguage, 'subscription_expired') });
           } else {
             // Fallback welcome
-              await sock.sendMessage(jid, { text: getMessage(userLanguage, 'paid_welcome') });
+              await sendImageWithMessage(sock, jid, 'welcome', getMessage(userLanguage, 'paid_welcome'), userLanguage);
             }
           } catch (e) {
             // If any issue reading codes, fall back to normal welcome
             const userLanguage = session.language || 'en';
             console.log(chalk.yellow(`⚠️ Error reading codes, using fallback language: ${userLanguage}`));
-            await sock.sendMessage(jid, { text: getMessage(userLanguage, 'paid_welcome') });
+            await sendImageWithMessage(sock, jid, 'welcome', getMessage(userLanguage, 'paid_welcome'), userLanguage);
           }
           
           // Ensure main menu is also sent in the correct language
           const menuLanguage = session.language || 'en';
           console.log(chalk.blue(`🎯 Sending main menu in language: ${menuLanguage}`));
-        await sock.sendMessage(jid, { 
-            text: getMessage(menuLanguage, 'main_menu')
-        });
+        await sendImageWithMessage(sock, jid, 'main_menu', getMessage(menuLanguage, 'main_menu'), menuLanguage);
         return;
       }
     }
@@ -5426,7 +5515,7 @@ async function handleMessage(sock, message) {
             session.previousMessage = getMessage(session.language, 'select_source', {
               niche: session.pendingNiche
             });
-            await sock.sendMessage(jid, { text: session.previousMessage });
+            await sendImageWithMessage(sock, jid, 'results_type', session.previousMessage, session.language);
             saveJson(SESSIONS_FILE, sessions);
             return;
         } else {
@@ -5457,9 +5546,7 @@ async function handleMessage(sock, message) {
             await sock.sendMessage(jid, { 
                 text: getMessage(session.language, 'restart')
             });
-            await sock.sendMessage(jid, { 
-                text: getMessage(session.language, 'main_menu')
-            });
+            await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
             return;
         } else if (inputNumber === 0) {
             // Go back to niche input
@@ -5484,9 +5571,7 @@ async function handleMessage(sock, message) {
                 session.prefs.dataType = 'COMPLETE';
                 session.prefs.format = 'XLSX';
                 session.currentStep = 'ready_to_start';
-                session.previousMessage = getMessage(session.language, 'format_set', {
-                  format: session.prefs.format
-                });
+                session.previousMessage = getMessage(session.language, 'format_set');
                 await sock.sendMessage(jid, { text: session.previousMessage });
                 saveJson(SESSIONS_FILE, sessions);
                 return;
@@ -5532,9 +5617,7 @@ async function handleMessage(sock, message) {
             await sock.sendMessage(jid, { 
                 text: getMessage(session.language, 'restart')
             });
-            await sock.sendMessage(jid, { 
-                text: getMessage(session.language, 'main_menu')
-            });
+            await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
             return;
         } else if (inputNumber === 0) {
             // Go back to source selection
@@ -5543,9 +5626,7 @@ async function handleMessage(sock, message) {
             sessions[jid] = session;
             saveJson(SESSIONS_FILE, sessions);
             
-            await sock.sendMessage(jid, { 
-                text: session.previousMessage
-            });
+            await sendImageWithMessage(sock, jid, 'results_type', session.previousMessage, session.language);
             return;
         } else if (inputNumber >= 1 && inputNumber <= validTypes.length) {
             session.prefs.dataType = validTypes[inputNumber - 1];
@@ -5558,9 +5639,7 @@ async function handleMessage(sock, message) {
             }
             
             session.currentStep = 'ready_to_start';
-            session.previousMessage = getMessage(session.language, 'format_set', {
-              format: session.prefs.format
-            });
+            session.previousMessage = getMessage(session.language, 'format_set');
             await sock.sendMessage(jid, { text: session.previousMessage });
             saveJson(SESSIONS_FILE, sessions);
             return;
@@ -5591,9 +5670,7 @@ async function handleMessage(sock, message) {
             await sock.sendMessage(jid, { 
                 text: getMessage(session.language, 'restart')
             });
-            await sock.sendMessage(jid, { 
-                text: getMessage(session.language, 'main_menu')
-            });
+            await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
             return;
         } else if (text === '0') {
             // Go back to previous step based on source
@@ -5615,7 +5692,7 @@ async function handleMessage(sock, message) {
                 sessions[jid] = session;
                 saveJson(SESSIONS_FILE, sessions);
 
-                await sock.sendMessage(jid, { text: session.previousMessage });
+                await sendImageWithMessage(sock, jid, 'results_type', session.previousMessage, session.language);
             }
             return;
         } else if (text.toUpperCase() === 'START') {
@@ -5651,7 +5728,7 @@ async function handleMessage(sock, message) {
                 sessions[jid] = currentSession;
                 saveJson(SESSIONS_FILE, sessions);
                 // Show main menu
-                await sock.sendMessage(jid, { text: getMessage(currentSession.language, 'main_menu') });
+                await sendImageWithMessage(sock, jid, 'main_menu', getMessage(currentSession.language, 'main_menu'), currentSession.language);
                 return;
             }
             
@@ -5677,13 +5754,10 @@ async function handleMessage(sock, message) {
             // Start the scraping job
             console.log(chalk.cyan(`🔍 Job started: "${niche}" (${source}/${dataType}/${format}/${limit})`));
 
-            await sock.sendMessage(jid, { 
-                text: getMessage(currentSession.language, 'job_starting', {
+            await sendImageWithMessage(sock, jid, 'starting', getMessage(currentSession.language, 'job_starting', {
                   niche: niche,
-                  source: source,
-                  format: format
-                })
-            });
+                  source: source
+                }), currentSession.language);
             
             console.log(chalk.cyan(`🚀 Progress tracking initialized for ${jid}: 0%`));
             
@@ -5996,9 +6070,7 @@ async function handleMessage(sock, message) {
                 // File caption already contains all the information, no need for duplicate completion message
                 
                 // Show main menu after job completion
-                await sock.sendMessage(jid, { 
-                    text: getMessage(session.language, 'main_menu')
-                });
+                await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
 
                 console.log(chalk.green(`✅ Job completed: ${result.meta.totalResults} results`));
 
@@ -6135,9 +6207,7 @@ async function handleMessage(sock, message) {
                 await sock.sendMessage(jid, { text: errorMessage });
                 
                 // Show main menu after error
-                await sock.sendMessage(jid, { 
-                    text: getMessage(session.language, 'main_menu')
-                });
+                await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
             }
             };
 
@@ -6169,9 +6239,7 @@ async function handleMessage(sock, message) {
                 await sock.sendMessage(jid, { text: '🛑 **Job cancelled successfully.** You can send a new search query when ready.' });
                 
                 // Show main menu after job cancellation
-                await sock.sendMessage(jid, { 
-                    text: getMessage(session.language, 'main_menu')
-                });
+                await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
             } else {
                 await sock.sendMessage(jid, { text: '📊 No active job to cancel.' });
             }
@@ -6224,9 +6292,7 @@ async function handleMessage(sock, message) {
             });
             
             // Show main menu after reset
-            await sock.sendMessage(jid, { 
-                text: getMessage(session.language, 'main_menu')
-            });
+            await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
         }
         return;
     }
