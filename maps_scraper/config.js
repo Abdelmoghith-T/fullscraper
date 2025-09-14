@@ -40,11 +40,15 @@ module.exports = {
     format: 'json'
   },
 
-  // Gemini API settings
+  // Gemini API settings with rotation support
   gemini: {
-    // ❌ REMOVED: Hard-coded fallback API key
-    // ✅ NEW: Require environment variable or user session key
-    apiKey: process.env.GEMINI_API_KEY,
+    // Support multiple API keys for rotation
+    apiKeys: [
+      process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY,
+      process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY_3
+    ].filter(Boolean), // Remove undefined keys
+    currentKeyIndex: 0,
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
   }
 };

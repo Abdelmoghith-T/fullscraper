@@ -164,10 +164,14 @@ export class LinkedInScraper extends ScraperInterface {
         console.log(chalk.red(`   ❌ No Google Search API keys found in apiKeys:`, apiKeys));
       }
       
-      // Inject Gemini API key if available
+      // Inject Gemini API key if available (use first key, rotation handled by child process)
       if (apiKeys.geminiKeys && apiKeys.geminiKeys.length > 0) {
         childEnv.GEMINI_API_KEY = apiKeys.geminiKeys[0];
-        console.log(`   🤖 Injected Gemini API key into child process`);
+        // Also inject all keys for rotation
+        apiKeys.geminiKeys.forEach((key, index) => {
+          childEnv[`GEMINI_API_KEY_${index + 1}`] = key;
+        });
+        console.log(`   🤖 Injected ${apiKeys.geminiKeys.length} Gemini API keys into child process`);
       } else {
         console.log(chalk.red(`   ❌ No Gemini API keys found in apiKeys:`, apiKeys));
       }

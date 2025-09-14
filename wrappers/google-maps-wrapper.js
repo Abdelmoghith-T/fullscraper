@@ -156,8 +156,11 @@ export class GoogleMapsScraper extends ScraperInterface {
             FORCE_COLOR: '1',  // Enable colors in child process
             SESSION_ID: this.sessionId.toString(),  // Unique session ID
             SESSION_TIMESTAMP: this.sessionTimestamp,  // Human-readable timestamp
-            // Pass the user's Gemini API key from their session (with rotation)
-            GEMINI_API_KEY: this.getGeminiApiKey() || process.env.GEMINI_API_KEY
+            // Pass multiple Gemini API keys for rotation
+            GEMINI_API_KEY: this.getGeminiApiKey() || process.env.GEMINI_API_KEY,
+            GEMINI_API_KEY_1: this.apiKeys?.geminiKeys?.[0] || process.env.GEMINI_API_KEY_1,
+            GEMINI_API_KEY_2: this.apiKeys?.geminiKeys?.[1] || process.env.GEMINI_API_KEY_2,
+            GEMINI_API_KEY_3: this.apiKeys?.geminiKeys?.[2] || process.env.GEMINI_API_KEY_3
           }
         });
 

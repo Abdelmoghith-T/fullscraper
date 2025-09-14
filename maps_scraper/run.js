@@ -17,7 +17,7 @@ async function batchSelectAddressesWithGemini(businessDataArray) {
   try {
     if (!Array.isArray(businessDataArray) || businessDataArray.length === 0) return [];
 
-    const apiKey = process.env.GEMINI_API_KEY || config.gemini.apiKey; // Use config API key
+    const apiKey = getCurrentGeminiApiKey(); // Use rotation-aware API key
     const endpoint = config.gemini.endpoint; // Use config endpoint
 
     let instruction = `You are an expert address extraction AI. Your task is to process a list of business data, each containing a business name, its location context (city), and a list of address candidates extracted from Google Maps HTML.\n\nGOAL: For EACH business entry, return the single candidate string that is MOST LIKELY to be the FULL POSTAL ADDRESS.\n\nSTRICT RULES FOR EACH ADDRESS SELECTION:\n- Hard Exclusions (NEVER CHOOSE if a candidate contains any of these):\n  - Review/comment markers or first-person opinion text: "avis", "écrire un avis", "note", "commentaire", "réponse", "répondu", "J'ai", "Je recommande", "Très bon", "tbarkAllah", "merci", "expérience", "visité", "satisfait", "professionnel", emojis (⭐ 👍 ❤️)\n  - UI/controls: "Modifier le nom", "modifier l'adresse", "les horaires", "Suggérer une modification", "Signaler un problème", "Ajouter une photo", "Photos", "Voir les photos", "Directions", "Itinéraire", "Appeler", "Site Web", "Enregistrer", "Partager", "Questions-réponses", "Menu", "Ouvrir dans Google Maps"\n  - Status/metadata: "Ouvert", "Fermé", "Ferme à", "Horaires", "Heures", "Mis à jour", "il y a", "hier", "aujourd'hui", "mins", "heures", "jours"\n  - Arabic UI/reviews: "مفتوح", "مغلق", "اتجاهات", "موقع الويب", "اتصال", "مشاركة", "التعليقات", "المراجعات", "أضف صورة", "اقتراح تعديل", "زرت", "أنصح", "تجربة", "شكرا"\n  - Pure phone numbers, prices, categories only, single-word labels.\n\n- Positive Signals (a candidate is ADDRESS-LIKE if it satisfies BOTH):\n  A) Contains at least one address token, for example:\n     Rue, Avenue, Av., Blvd, Boulevard, Place, Lot, Lotissement, Résidence, Rés., Immeuble, Bloc, Appartement, App., Bureau, Zone, Route, Road, St, Rd, Quartier, Qrt, حي, شارع, إقامة, زنقة, رقم, n°/N°/No./n°, km\n  B) And at least one of:\n     - a street number (e.g., "12", "N° 5", "km 3"),\n     - the city/locality (match the provided context),\n     - a plausible 5-digit postal code (e.g., "30000", "10000"),\n     - country/region names (e.g., "Maroc", "Morocco").\n\n- Tie-Breaking / Partials:\n  - If one candidate has the street line and another has only city/postal, choose the STREET LINE (do NOT combine strings).\n  - Prefer candidates with multiple components separated by commas/newlines: street, locality/city, postal code, country.\n  - Prefer candidates that include a substring of the business name only if the string is still address-like per the rules above.\n  - Reject very short fragments (<12 chars) unless clearly a street+number.\n\nOUTPUT FORMAT:\nReturn a JSON array where each element is the selected address string for the corresponding business, or an empty string if no plausible address is found.\nExample: ["123 Main St, City", "", "Another Address, 10000"]\n\nBUSINESS DATA TO PROCESS:\n`;
@@ -76,18 +76,50 @@ async function batchSelectAddressesWithGemini(businessDataArray) {
   }
 }
 
-// Helper: Generate main search queries using Gemini
+// Helper: Get current API key with rotation support
+function getCurrentGeminiApiKey() {
+  if (!config.gemini.apiKeys || config.gemini.apiKeys.length === 0) {
+    return process.env.GEMINI_API_KEY;
+  }
+  return config.gemini.apiKeys[config.gemini.currentKeyIndex];
+}
+
+// Helper: Rotate to next API key when quota is exceeded
+function rotateGeminiApiKey() {
+  if (!config.gemini.apiKeys || config.gemini.apiKeys.length <= 1) {
+    return false; // No rotation possible
+  }
+  config.gemini.currentKeyIndex = (config.gemini.currentKeyIndex + 1) % config.gemini.apiKeys.length;
+  console.log(`🔄 Rotating to Gemini API key ${config.gemini.currentKeyIndex + 1}/${config.gemini.apiKeys.length}`);
+  return true;
+}
+
+// Helper: Generate main search queries using Gemini with API key rotation
 async function generateMainQueriesWithGemini(userQuery, locationContext) {
-  try {
-    const apiKey = process.env.GEMINI_API_KEY || config.gemini.apiKey;
+  const maxRetries = Math.max(config.gemini.apiKeys.length, 1);
+  const exhaustedKeys = new Set();
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    let apiKey = getCurrentGeminiApiKey(); // Declare outside try block
     
-    // ❌ REMOVED: Hard-coded fallback API key
-    // ✅ NEW: Require valid API key
-    if (!apiKey) {
-      throw new Error('No Gemini API key available. User must provide valid API key to proceed.');
-    }
-    
-    const endpoint = config.gemini.endpoint;
+    try {
+      // Check if current key is exhausted
+      if (exhaustedKeys.has(apiKey)) {
+        if (attempt < maxRetries - 1) {
+          if (!rotateGeminiApiKey()) {
+            break; // No more keys to rotate to
+          }
+          apiKey = getCurrentGeminiApiKey(); // Get new key after rotation
+          continue;
+        }
+        break;
+      }
+      
+      if (!apiKey) {
+        throw new Error('No Gemini API key available. User must provide valid API key to proceed.');
+      }
+      
+      const endpoint = config.gemini.endpoint;
 
     const prompt = `You are a helpful AI assistant. Given a user's search query for a business type and location (e.g., "dentist in fes"), your task is to generate 5 diverse and unique search queries that are highly likely to find more results for that business type in or around the specified location. 
 
@@ -115,50 +147,133 @@ Generated Queries:`;
 
     await require('./utils').wait(config.requestSettings.delayBetweenRequests);
 
-    const resp = await axios.post(endpoint, body, {
-      timeout: config.requestSettings.timeout,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-goog-api-key': apiKey // Corrected header: removed Bearer
-      }
-    });
+      const resp = await axios.post(endpoint, body, {
+        timeout: config.requestSettings.timeout,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-goog-api-key': apiKey // Corrected header: removed Bearer
+        }
+      });
 
-    const textResponse = ((resp && resp.data && resp.data.candidates && resp.data.candidates[0] && resp.data.candidates[0].content && resp.data.candidates[0].content.parts) || [])
-      .map(p => (p && p.text) ? String(p.text) : '')
-      .filter(Boolean)
-      .join(' ');
-    
-    // Attempt to parse the JSON array. Gemini sometimes wraps it in markdown.
-    const cleanedResponse = textResponse.replace(/^```json\n/g, '').replace(/\n```$/g, '').trim();
+      const textResponse = ((resp && resp.data && resp.data.candidates && resp.data.candidates[0] && resp.data.candidates[0].content && resp.data.candidates[0].content.parts) || [])
+        .map(p => (p && p.text) ? String(p.text) : '')
+        .filter(Boolean)
+        .join(' ');
+      
+      // Attempt to parse the JSON array. Gemini sometimes wraps it in markdown.
+      const cleanedResponse = textResponse.replace(/^```json\n/g, '').replace(/\n```$/g, '').trim();
 
-    try {
-      const parsed = JSON.parse(cleanedResponse);
-      if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
-        return parsed.slice(0, 5); // Ensure exactly 5 queries
+      try {
+        const parsed = JSON.parse(cleanedResponse);
+        if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
+          console.log(`✅ Successfully generated ${parsed.length} queries with Gemini API key ${config.gemini.currentKeyIndex + 1}`);
+          return parsed.slice(0, 5); // Ensure exactly 5 queries
+        }
+      } catch (parseError) {
+        console.error('Failed to parse Gemini main queries response as JSON:', parseError.message);
       }
-    } catch (parseError) {
-      console.error('Failed to parse Gemini main queries response as JSON:', parseError.message);
+
+      return []; // Return empty array if parsing fails or invalid format
+
+    } catch (error) {
+      // Handle API errors with rotation logic
+      if (error.response) {
+        const status = error.response.status;
+        const errorMessage = error.response.data?.error?.message || '';
+        
+        console.log(`🔍 DEBUG: Gemini API Error - Status: ${status}, Message: ${errorMessage}`);
+        
+        // Handle HTTP 429 - rate limiting or quota exceeded
+        if (status === 429) {
+          if (errorMessage.includes('quota') || errorMessage.includes('Quota') || errorMessage.includes('per day')) {
+            // Daily quota exceeded
+            console.log(`⚠️  Daily quota exceeded (429) for Gemini API key ${config.gemini.currentKeyIndex + 1}, marking as exhausted...`);
+            exhaustedKeys.add(apiKey);
+            
+            // Check if all keys are exhausted
+            if (exhaustedKeys.size >= config.gemini.apiKeys.length) {
+              console.log(`❌ All ${config.gemini.apiKeys.length} Gemini API keys have exceeded daily quota!`);
+              throw new Error(`ALL_GEMINI_API_KEYS_QUOTA_EXCEEDED: Daily quota exceeded for all ${config.gemini.apiKeys.length} Gemini API keys. Please try again tomorrow or add more API keys.`);
+            }
+            
+            if (rotateGeminiApiKey()) {
+              apiKey = getCurrentGeminiApiKey(); // Get new key after rotation
+              continue; // Try with next key
+            } else {
+              break; // No more keys to rotate to
+            }
+          } else {
+            // Genuine rate limiting - wait and retry
+            console.log(`⏳ Rate limited (429) for Gemini API key ${config.gemini.currentKeyIndex + 1}, waiting before retry...`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+            continue;
+          }
+        }
+        
+        // Handle 401 (unauthorized) - key might be invalid
+        if (status === 401) {
+          console.log(`🔑 Gemini API key ${config.gemini.currentKeyIndex + 1} unauthorized (401), rotating...`);
+          exhaustedKeys.add(apiKey);
+          
+          if (exhaustedKeys.size >= config.gemini.apiKeys.length) {
+            console.log(`❌ All ${config.gemini.apiKeys.length} Gemini API keys are invalid or unauthorized!`);
+            throw new Error(`ALL_GEMINI_API_KEYS_INVALID: All ${config.gemini.apiKeys.length} Gemini API keys are invalid or unauthorized. Please check your API key configuration.`);
+          }
+          
+          if (rotateGeminiApiKey()) {
+            apiKey = getCurrentGeminiApiKey(); // Get new key after rotation
+            continue; // Try with next key
+          } else {
+            break; // No more keys to rotate to
+          }
+        }
+      }
+      
+      // For other errors, log and try next key
+      console.error(`❌ Gemini API failed for query generation (attempt ${attempt + 1}):`, error.message);
+      
+      if (attempt < maxRetries - 1) {
+        if (rotateGeminiApiKey()) {
+          apiKey = getCurrentGeminiApiKey(); // Get new key after rotation
+          continue;
+        } else {
+          break;
+        }
+      }
     }
-
-    return []; // Return empty array if parsing fails or invalid format
-
-  } catch (e) {
-    console.error('Error in generateMainQueriesWithGemini:', e.message);
-    return [];
   }
+  
+  // If we get here, all keys are exhausted
+  console.error(`❌ All ${config.gemini.apiKeys.length} Gemini API keys exhausted for query generation`);
+  throw new Error(`ALL_GEMINI_API_KEYS_EXHAUSTED: All ${config.gemini.apiKeys.length} Gemini API keys have been exhausted. Please try again tomorrow or add more API keys.`);
 }
 
-// Helper: Generate sub-queries (neighborhoods/sub-cities) using Gemini
+// Helper: Generate sub-queries (neighborhoods/sub-cities) using Gemini with API key rotation
 async function generateSubQueriesWithGemini(mainQuery, locationContext) {
-  try {
-    const apiKey = process.env.GEMINI_API_KEY;
+  const maxRetries = Math.max(config.gemini.apiKeys.length, 1);
+  const exhaustedKeys = new Set();
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    let apiKey = getCurrentGeminiApiKey(); // Use rotation-aware API key
     
-    // ❌ REMOVED: Hard-coded fallback API key
-    // ✅ NEW: Require valid API key
-    if (!apiKey) {
-      throw new Error('No Gemini API key available. User must provide valid API key to proceed.');
-    }
-    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    try {
+      // Check if current key is exhausted
+      if (exhaustedKeys.has(apiKey)) {
+        if (attempt < maxRetries - 1) {
+          if (!rotateGeminiApiKey()) {
+            break; // No more keys to rotate to
+          }
+          apiKey = getCurrentGeminiApiKey(); // Get new key after rotation
+          continue;
+        }
+        break;
+      }
+      
+      if (!apiKey) {
+        throw new Error('No Gemini API key available. User must provide valid API key to proceed.');
+      }
+      
+      const endpoint = config.gemini.endpoint;
 
     const prompt = `You are a helpful AI assistant. Given a general business search query (e.g., "cabinet dentaire fes") and a location context (e.g., "Fes"), your task is to generate 10 highly specific sub-queries. Each sub-query should target a major neighborhood or a well-known smaller area within the given city/country, related to the business type.
 
@@ -186,12 +301,13 @@ Generated Sub-Queries:`;
 
     await require('./utils').wait(config.requestSettings.delayBetweenRequests);
 
-    const resp = await axios.post(endpoint, body, {
-      timeout: config.requestSettings.timeout,
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    });
+      const resp = await axios.post(endpoint, body, {
+        timeout: config.requestSettings.timeout,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-goog-api-key': apiKey
+        }
+      });
 
     const textResponse = ((resp && resp.data && resp.data.candidates && resp.data.candidates[0] && resp.data.candidates[0].content && resp.data.candidates[0].content.parts) || [])
       .map(p => (p && p.text) ? String(p.text) : '')
@@ -200,21 +316,89 @@ Generated Sub-Queries:`;
     
     const cleanedResponse = textResponse.replace(/^```json\n/g, '').replace(/\n```$/g, '').trim();
 
-    try {
-      const parsed = JSON.parse(cleanedResponse);
-      if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
-        return parsed.slice(0, 10); // Ensure exactly 10 queries
+      try {
+        const parsed = JSON.parse(cleanedResponse);
+        if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
+          console.log(`✅ Successfully generated ${parsed.length} sub-queries with Gemini API key ${config.gemini.currentKeyIndex + 1}`);
+          return parsed.slice(0, 10); // Ensure exactly 10 sub-queries
+        }
+      } catch (parseError) {
+        console.error('Failed to parse Gemini sub-queries response as JSON:', parseError.message);
       }
-    } catch (parseError) {
-      console.error('Failed to parse Gemini sub-queries response as JSON:', parseError.message);
+
+      return []; // Return empty array if parsing fails or invalid format
+
+    } catch (error) {
+      // Handle API errors with rotation logic
+      if (error.response) {
+        const status = error.response.status;
+        const errorMessage = error.response.data?.error?.message || '';
+        
+        console.log(`🔍 DEBUG: Gemini API Error (Sub-queries) - Status: ${status}, Message: ${errorMessage}`);
+        
+        // Handle HTTP 429 - rate limiting or quota exceeded
+        if (status === 429) {
+          if (errorMessage.includes('quota') || errorMessage.includes('Quota') || errorMessage.includes('per day')) {
+            // Daily quota exceeded
+            console.log(`⚠️  Daily quota exceeded (429) for Gemini API key ${config.gemini.currentKeyIndex + 1} (sub-queries), marking as exhausted...`);
+            exhaustedKeys.add(apiKey);
+            
+            // Check if all keys are exhausted
+            if (exhaustedKeys.size >= config.gemini.apiKeys.length) {
+              console.log(`❌ All ${config.gemini.apiKeys.length} Gemini API keys have exceeded daily quota!`);
+              throw new Error(`ALL_GEMINI_API_KEYS_QUOTA_EXCEEDED: Daily quota exceeded for all ${config.gemini.apiKeys.length} Gemini API keys. Please try again tomorrow or add more API keys.`);
+            }
+            
+            if (rotateGeminiApiKey()) {
+              apiKey = getCurrentGeminiApiKey(); // Get new key after rotation
+              continue; // Try with next key
+            } else {
+              break; // No more keys to rotate to
+            }
+          } else {
+            // Genuine rate limiting - wait and retry
+            console.log(`⏳ Rate limited (429) for Gemini API key ${config.gemini.currentKeyIndex + 1} (sub-queries), waiting before retry...`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+            continue;
+          }
+        }
+        
+        // Handle 401 (unauthorized) - key might be invalid
+        if (status === 401) {
+          console.log(`🔑 Gemini API key ${config.gemini.currentKeyIndex + 1} unauthorized (401) (sub-queries), rotating...`);
+          exhaustedKeys.add(apiKey);
+          
+          if (exhaustedKeys.size >= config.gemini.apiKeys.length) {
+            console.log(`❌ All ${config.gemini.apiKeys.length} Gemini API keys are invalid or unauthorized!`);
+            throw new Error(`ALL_GEMINI_API_KEYS_INVALID: All ${config.gemini.apiKeys.length} Gemini API keys are invalid or unauthorized. Please check your API key configuration.`);
+          }
+          
+          if (rotateGeminiApiKey()) {
+            apiKey = getCurrentGeminiApiKey(); // Get new key after rotation
+            continue; // Try with next key
+          } else {
+            break; // No more keys to rotate to
+          }
+        }
+      }
+      
+      // For other errors, log and try next key
+      console.error(`❌ Gemini API failed for sub-query generation (attempt ${attempt + 1}):`, error.message);
+      
+      if (attempt < maxRetries - 1) {
+        if (rotateGeminiApiKey()) {
+          apiKey = getCurrentGeminiApiKey(); // Get new key after rotation
+          continue;
+        } else {
+          break;
+        }
+      }
     }
-
-    return [];
-
-  } catch (e) {
-    console.error('Error in generateSubQueriesWithGemini:', e.message);
-    return [];
   }
+  
+  // If we get here, all keys are exhausted
+  console.error(`❌ All ${config.gemini.apiKeys.length} Gemini API keys exhausted for sub-query generation`);
+  throw new Error(`ALL_GEMINI_API_KEYS_EXHAUSTED: All ${config.gemini.apiKeys.length} Gemini API keys have been exhausted. Please try again tomorrow or add more API keys.`);
 }
 
 class FlexibleBusinessScraper {

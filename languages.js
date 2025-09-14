@@ -21,11 +21,14 @@ export const languages = {
     history_header: "📊 **Your Scraping History**\n\nHere are your recent scraping jobs:",
     
     // Search Flow
-    enter_niche: "🎯 **Enter your search query:**\n\n💬 **Examples:**\n• dentist casablanca\n• restaurant marrakech\n• web developer fes\n\n💡 **Tip:** Include location for better results\n\n0️⃣ **BACK TO MENU** - Return to main menu",
-    invalid_niche: "⚠️ **Invalid input.** Please enter your search query (e.g., \"dentist casablanca\") or send 0 to go back to main menu.",
+    enter_niche: "🎯 **What kind of business or service are you looking for?**\n\n💬 **Examples:**\n• dentist casablanca\n• restaurant morocco\n• web developer london\n• lawyer new york\n• accountant dubai\n• marketing agency paris\n\n💡 **Tip:** Include location for better results\n\n0️⃣ **BACK TO MENU** - Return to main menu",
+    invalid_niche: "⚠️ **Invalid input.** Please enter your business or service (e.g., \"dentist casablanca\") or send 0 to go back to main menu.",
+    
+    // Niche Validation Messages
+    niche_validation_error: "❌ **Invalid Business or Service**\n\n**Reason:** {reason}\n\n**💡 Try these examples instead:**\n{suggestions}\n\n**📝 How to write a good business or service:**\n• Include a business type (dentist, lawyer, developer, etc.)\n• Add a location (city, region, or country)\n• Be specific and clear\n\n**Example:** \"dentist casablanca\" or \"web developer fes\"\n\n0️⃣ **BACK TO MENU** - Return to main menu",
     
     // Source Selection
-    select_source: "🎯 **What type of results do you want for \"{niche}\"?**\n\n1️⃣ **Contacts** – Emails 📧 & Phone Numbers 📱\n2️⃣ **Profiles** – Names, LinkedIn URLs & Job Info 👤\n3️⃣ **Businesses** – Names, Phones, Emails, Location & Website 🏢\n\n0️⃣ **Back** – Go back to niche input\n0️⃣0️⃣ **Restart** – Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
+    select_source: "🎯 **What type of results do you want for \"{niche}\"?**\n\n1️⃣ **Contacts** – Emails 📧 & Phone Numbers 📱\n2️⃣ **Profiles** – Names, LinkedIn URLs & Job Info 👤\n3️⃣ **Businesses** – Names, Phones, Emails, Location & Website 🏢\n\n0️⃣ **Back** – Go back to business/service input\n0️⃣0️⃣ **Restart** – Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
     
     // Data Type Selection
     select_type_google: "📋 **Select Data Type for Google Search:**\n\n1️⃣ **EMAILS** - Extract email addresses only\n2️⃣ **PHONES** - Extract phone numbers only\n3️⃣ **CONTACTS** - Both emails and phones\n\n0️⃣ **BACK** - Go back to source selection\n0️⃣0️⃣ **RESTART** - Start a new search\n\n💬 **Reply with the number** corresponding to your choice.",
@@ -48,7 +51,7 @@ export const languages = {
     settings_updated: "✅ Settings updated successfully!",
     
     // Job Management
-    job_starting: "🔍 **Starting lead‑finding session...**\n\n📋 **Session Details:**\n• Niche: \"{niche}\"\n• Source: {source}\n\n⏱️ **Progress updates will be sent automatically.**",
+    job_starting: "🔍 **Starting lead‑finding session...**\n\n📋 **Session Details:**\n• Business/Service: \"{niche}\"\n\n⏱️ **Progress updates will be sent automatically.**",
     job_complete: "✅ **Lead Finding Complete!**\n\n📊 **Results Summary:**\n• Total Results: {total}\n• Emails: {emails}\n• Phones: {phones}\n• Websites: {websites}\n\n💾 **File ready for download** ⬇️",
     job_stopped: "🛑 **Lead‑finding session stopped.**",
     job_status: "📊 **Current Job Status:** {status}",
@@ -60,12 +63,12 @@ export const languages = {
     queued_waiting: "⏳ Many users are searching for leads right now. Your job will start as soon as possible. Please wait.",
     
     // Navigation
-    go_back: "↩️ Please enter your new search niche.",
+    go_back: "↩️ What kind of business or service are you looking for?",
     restart: "🔄 *Restarted!*",
     reset: "♻️ **Preferences reset to defaults.**",
     
     // Help
-    help: "📚 **Lead Finder Help**\n\n🔐 **CODE: <code>**\n   Authenticate with your access code\n   Example: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   Set data source: GOOGLE, LINKEDIN, MAPS\n\n📊 **STATUS**\n   Check current session status\n\n🛑 **STOP**\n   Cancel current lead‑finding session\n\n♻️ **RESET**\n   Reset all preferences\n\n🔄 **RESTART** (00)\n   Restart the entire process from niche selection\n\n❓ **HELP**\n   Show this help message\n\n💡 **Getting Started:**\n1. Get your access code from admin\n2. Send: CODE: your_code_here\n3. Send your search query (e.g., \"restaurant casablanca\")\n4. Follow the numbered prompts to configure source and type.\n5. Send: START to begin finding leads\n6. Receive real-time progress updates!\n\n**Navigation Tip:** At any numbered selection step, reply with `0` to go back to the previous step.",
+    help: "📚 **Lead Finder Help**\n\n🔐 **CODE: <code>**\n   Authenticate with your access code\n   Example: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   Set data source: GOOGLE, LINKEDIN, MAPS\n\n📊 **STATUS**\n   Check current session status\n\n🛑 **STOP**\n   Cancel current lead‑finding session\n\n♻️ **RESET**\n   Reset all preferences\n\n🔄 **RESTART** (00)\n   Restart the entire process from business/service selection\n\n❓ **HELP**\n   Show this help message\n\n💡 **Getting Started:**\n1. Get your access code from admin\n2. Send: CODE: your_code_here\n3. Send your business or service (e.g., \"restaurant casablanca\")\n4. Follow the numbered prompts to configure source and type.\n5. Send: START to begin finding leads\n6. Receive real-time progress updates!\n\n**Navigation Tip:** At any numbered selection step, reply with `0` to go back to the previous step.",
     
     // Progress Messages
     progress_update: "⏱️ **Progress Update:** {message}",
@@ -81,8 +84,8 @@ export const languages = {
     error_generic: "❌ An error occurred. Please try again.",
     error_no_results: "📈 **Results Summary:**\n\n📊 **Total Results: 0**\n\n💡 **No results to save** - try running longer or adjust search terms",
     invalid_selection: "⚠️ Invalid selection. Please choose a number between 1 and {max} or 0 to go back.",
-    error_generic_friendly: "❌ **Something went wrong.**\n\n💡 Please try again with a different niche. If the problem continues, contact support.",
-    error_invalid_niche_maps: "❌ **Invalid niche for Google Maps.**\n\nYour query should describe a business and a location.\n\nExamples:\n• dentist casablanca\n• restaurant marrakech\n• web developer fes\n\n💡 Please send a clearer niche including a city or region.",
+    error_generic_friendly: "❌ **Something went wrong.**\n\n💡 Please try again with a different business or service. If the problem continues, contact support.",
+    error_invalid_niche_maps: "❌ **Invalid business or service for Google Maps.**\n\nYour query should describe a business and a location.\n\nExamples:\n• dentist casablanca\n• restaurant marrakech\n• web developer fes\n\n💡 Please send a clearer business or service including a city or region.",
     trial_finished: "🧪 **Your free trial has ended.**\n\nYou used all 3 trial searches (20 results each).\n\n💳 Contact support to upgrade and continue.",
     subscription_expired: "⏳ **Subscription expired.**\n\nPlease contact support to renew your access.",
     trial_status_title: "🧪 **Free Trial Status**\n\n",
@@ -139,11 +142,14 @@ export const languages = {
     history_header: "📊 **Votre Historique de Scraping**\n\nVoici vos derniers jobs de scraping:",
     
     // Search Flow
-    enter_niche: "🎯 **Entrez votre requête de recherche:**\n\n💬 **Exemples:**\n• dentiste casablanca\n• restaurant marrakech\n• développeur web fes\n\n💡 **Conseil:** Incluez la localisation pour de meilleurs résultats\n\n0️⃣ **RETOUR AU MENU** - Retourner au menu principal",
-    invalid_niche: "⚠️ **Entrée invalide.** Veuillez entrer votre requête de recherche (ex: \"dentiste casablanca\") ou envoyez 0 pour retourner au menu principal.",
+    enter_niche: "🎯 **Quel type d'entreprise ou de service recherchez-vous?**\n\n💬 **Exemples:**\n• dentiste casablanca\n• restaurant maroc\n• développeur web paris\n• avocat montréal\n• comptable genève\n• agence marketing londres\n\n💡 **Conseil:** Incluez la localisation pour de meilleurs résultats\n\n0️⃣ **RETOUR AU MENU** - Retourner au menu principal",
+    invalid_niche: "⚠️ **Entrée invalide.** Veuillez entrer votre entreprise ou service (ex: \"dentiste casablanca\") ou envoyez 0 pour retourner au menu principal.",
+    
+    // Niche Validation Messages
+    niche_validation_error: "❌ **Entreprise ou Service Invalide**\n\n**Raison :** {reason}\n\n**💡 Essayez ces exemples à la place :**\n{suggestions}\n\n**📝 Comment écrire une bonne entreprise ou service :**\n• Incluez un type d'entreprise (dentiste, avocat, développeur, etc.)\n• Ajoutez un lieu (ville, région ou pays)\n• Soyez spécifique et clair\n\n**Exemple :** \"dentiste casablanca\" ou \"développeur web fes\"\n\n0️⃣ **RETOUR AU MENU** - Retour au menu principal",
     
     // Source Selection
-    select_source: "🎯 **Quel type de résultats voulez-vous pour \"{niche}\"?**\n\n1️⃣ **Contacts** – Emails 📧 & Numéros de Téléphone 📱\n2️⃣ **Profils** – Noms, URLs LinkedIn & Infos Professionnelles 👤\n3️⃣ **Entreprises** – Noms, Téléphones, Emails, Localisation & Site Web 🏢\n\n0️⃣ **Retour** – Retour à la saisie de niche\n0️⃣0️⃣ **Redémarrer** – Commencer une nouvelle recherche\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
+    select_source: "🎯 **Quel type de résultats voulez-vous pour \"{niche}\"?**\n\n1️⃣ **Contacts** – Emails 📧 & Numéros de Téléphone 📱\n2️⃣ **Profils** – Noms, URLs LinkedIn & Infos Professionnelles 👤\n3️⃣ **Entreprises** – Noms, Téléphones, Emails, Localisation & Site Web 🏢\n\n0️⃣ **Retour** – Retour à la saisie d'entreprise/service\n0️⃣0️⃣ **Redémarrer** – Commencer une nouvelle recherche\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
     
     // Data Type Selection
     select_type_google: "📋 **Sélectionnez le Type de Données pour Google Search:**\n\n1️⃣ **EMAILS** - Extraire uniquement les adresses email\n2️⃣ **PHONES** - Extraire uniquement les numéros de téléphone\n3️⃣ **CONTACTS** - Emails et téléphones\n\n0️⃣ **RETOUR** - Retour à la sélection de source\n0️⃣0️⃣ **REDÉMARRER** - Commencer une nouvelle recherche\n\n💬 **Répondez avec le numéro** correspondant à votre choix.",
@@ -166,7 +172,7 @@ export const languages = {
     settings_updated: "✅ Paramètres mis à jour avec succès!",
     
     // Job Management
-    job_starting: "🔍 **Démarrage de la session de recherche de prospects...**\n\n📋 **Détails de la session:**\n• Niche: \"{niche}\"\n• Source: {source}\n\n⏱️ **Mises à jour envoyées automatiquement.**",
+    job_starting: "🔍 **Démarrage de la session de recherche de prospects...**\n\n📋 **Détails de la session:**\n• Entreprise/Service: \"{niche}\"\n\n⏱️ **Mises à jour envoyées automatiquement.**",
     job_complete: "✅ **Recherche de prospects terminée!**\n\n📊 **Résumé des Résultats:**\n• Total: {total}\n• Emails: {emails}\n• Téléphones: {phones}\n• Sites Web: {websites}\n\n💾 **Fichier prêt au téléchargement** ⬇️",
     job_stopped: "🛑 **Session interrompue.**",
     job_status: "📊 **Statut Actuel du Job:** {status}",
@@ -178,12 +184,12 @@ export const languages = {
     queued_waiting: "⏳ De nombreux utilisateurs recherchent des prospects en ce moment. Votre tâche démarrera dès que possible. Merci de patienter.",
     
     // Navigation
-    go_back: "↩️ Veuillez entrer votre nouvelle niche de recherche.",
+    go_back: "↩️ Quel type d'entreprise ou de service recherchez-vous?",
     restart: "🔄 *Redémarré!*",
     reset: "♻️ **Préférences remises aux valeurs par défaut.**",
     
     // Help
-    help: "📚 **Aide – Localisateur de Prospects**\n\n🔐 **CODE: <code>**\n   Authentifiez-vous avec votre code d'accès\n   Exemple: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   Définir la source: GOOGLE, LINKEDIN, MAPS\n\n📊 **STATUT**\n   Vérifier le statut de la session\n\n🛑 **STOP**\n   Annuler la session en cours\n\n♻️ **RESET**\n   Réinitialiser les préférences\n\n🔄 **RESTART** (00)\n   Redémarrer depuis la sélection de niche\n\n❓ **HELP**\n   Afficher cette aide\n\n💡 **Pour Commencer:**\n1. Obtenez votre code d'accès\n2. Envoyez: CODE: votre_code_ici\n3. Envoyez votre requête (ex: \"restaurant casablanca\")\n4. Configurez source et type\n5. Envoyez: START pour commencer la recherche de prospects\n6. Suivez les mises à jour!\n\n**Astuce:** À chaque étape numérotée, répondez `0` pour revenir en arrière.",
+    help: "📚 **Aide – Localisateur de Prospects**\n\n🔐 **CODE: <code>**\n   Authentifiez-vous avec votre code d'accès\n   Exemple: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   Définir la source: GOOGLE, LINKEDIN, MAPS\n\n📊 **STATUT**\n   Vérifier le statut de la session\n\n🛑 **STOP**\n   Annuler la session en cours\n\n♻️ **RESET**\n   Réinitialiser les préférences\n\n🔄 **RESTART** (00)\n   Redémarrer depuis la sélection d'entreprise/service\n\n❓ **HELP**\n   Afficher cette aide\n\n💡 **Pour Commencer:**\n1. Obtenez votre code d'accès\n2. Envoyez: CODE: votre_code_ici\n3. Envoyez votre entreprise ou service (ex: \"restaurant casablanca\")\n4. Configurez source et type\n5. Envoyez: START pour commencer la recherche de prospects\n6. Suivez les mises à jour!\n\n**Astuce:** À chaque étape numérotée, répondez `0` pour revenir en arrière.",
     
     // Progress Messages
     progress_update: "⏱️ **Mise à Jour de Progression:** {message}",
@@ -199,8 +205,8 @@ export const languages = {
     error_generic: "❌ Une erreur s'est produite. Veuillez réessayer.",
     error_no_results: "📈 **Résumé des Résultats:**\n\n📊 **Total des Résultats: 0**\n\n💡 **Aucun résultat à sauvegarder** - essayez de lancer plus longtemps ou ajustez les termes de recherche",
     invalid_selection: "⚠️ Sélection invalide. Veuillez choisir un numéro entre 1 et {max} ou 0 pour revenir en arrière.",
-    error_generic_friendly: "❌ **Un problème est survenu.**\n\n💡 Veuillez réessayer avec une autre niche. Si le problème persiste, contactez le support.",
-    error_invalid_niche_maps: "❌ **Niche invalide pour Google Maps.**\n\nVotre requête doit décrire une activité et un lieu.\n\nExemples:\n• dentiste casablanca\n• restaurant marrakech\n• développeur web fes\n\n💡 Envoyez une niche plus claire incluant une ville ou une région.",
+    error_generic_friendly: "❌ **Un problème est survenu.**\n\n💡 Veuillez réessayer avec une autre entreprise ou service. Si le problème persiste, contactez le support.",
+    error_invalid_niche_maps: "❌ **Entreprise ou service invalide pour Google Maps.**\n\nVotre requête doit décrire une activité et un lieu.\n\nExemples:\n• dentiste casablanca\n• restaurant marrakech\n• développeur web fes\n\n💡 Envoyez une entreprise ou service plus claire incluant une ville ou une région.",
     trial_finished: "🧪 **Votre période d'essai est terminée.**\n\nVous avez utilisé les 3 recherches d'essai (20 résultats chacune).\n\n💳 Contactez le support pour passer à l'abonnement.",
     subscription_expired: "⏳ **Abonnement expiré.**\n\nVeuillez contacter le support pour renouveler votre accès.",
     trial_status_title: "🧪 **Statut de l'essai gratuit**\n\n",
@@ -257,11 +263,14 @@ export const languages = {
     history_header: "📊 **تاريخ استخراج البيانات الخاص بك**\n\nهذه هي آخر مهام استخراج البيانات الخاصة بك:",
     
     // Search Flow
-    enter_niche: "🎯 **أدخل استعلام البحث الخاص بك:**\n\n💬 **أمثلة:**\n• طبيب أسنان الدار البيضاء\n• مطعم مراكش\n• مطور ويب فاس\n\n💡 **نصيحة:** أضف الموقع للحصول على نتائج أفضل\n\n0️⃣ **العودة إلى القائمة** - العودة إلى القائمة الرئيسية",
-    invalid_niche: "⚠️ **إدخال غير صحيح.** يرجى إدخال استعلام البحث الخاص بك (مثال: \"طبيب أسنان الدار البيضاء\") أو أرسل 0 للعودة إلى القائمة الرئيسية.",
+    enter_niche: "🎯 **أي نوع من الشركات أو الخدمات تبحث عنه؟**\n\n💬 **أمثلة:**\n• طبيب أسنان الدار البيضاء\n• مطعم المغرب\n• مطور ويب لندن\n• محامي نيويورك\n• محاسب دبي\n• وكالة تسويق باريس\n\n💡 **نصيحة:** أضف الموقع للحصول على نتائج أفضل\n\n0️⃣ **العودة إلى القائمة** - العودة إلى القائمة الرئيسية",
+    invalid_niche: "⚠️ **إدخال غير صحيح.** يرجى إدخال شركتك أو خدمتك (مثال: \"طبيب أسنان الدار البيضاء\") أو أرسل 0 للعودة إلى القائمة الرئيسية.",
+    
+    // Niche Validation Messages
+    niche_validation_error: "❌ **شركة أو خدمة غير صالحة**\n\n**السبب:** {reason}\n\n**💡 جرب هذه الأمثلة بدلاً من ذلك:**\n{suggestions}\n\n**📝 كيفية كتابة شركة أو خدمة جيدة:**\n• أضف نوع عمل (طبيب أسنان، محامي، مطور، إلخ)\n• أضف موقع (مدينة، منطقة أو بلد)\n• كن محدداً وواضحاً\n\n**مثال:** \"طبيب أسنان الدار البيضاء\" أو \"مطور ويب فاس\"\n\n0️⃣ **العودة إلى القائمة** - العودة إلى القائمة الرئيسية",
     
     // Source Selection
-    select_source: "🎯 **ما نوع النتائج التي تريدها لـ \"{niche}\"؟**\n\n1️⃣ **جهات الاتصال** – الإيميلات 📧 & أرقام الهواتف 📱\n2️⃣ **الملفات الشخصية** – الأسماء، روابط LinkedIn & معلومات الوظيفة 👤\n3️⃣ **الشركات** – الأسماء، الهواتف، الإيميلات، الموقع & الموقع الإلكتروني 🏢\n\n0️⃣ **رجوع** – العودة لإدخال النيش\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
+    select_source: "🎯 **ما نوع النتائج التي تريدها لـ \"{niche}\"؟**\n\n1️⃣ **جهات الاتصال** – الإيميلات 📧 & أرقام الهواتف 📱\n2️⃣ **الملفات الشخصية** – الأسماء، روابط LinkedIn & معلومات الوظيفة 👤\n3️⃣ **الشركات** – الأسماء، الهواتف، الإيميلات، الموقع & الموقع الإلكتروني 🏢\n\n0️⃣ **رجوع** – العودة لإدخال الشركة/الخدمة\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
     
     // Data Type Selection
     select_type_google: "📋 **اختر نوع البيانات لبحث Google:**\n\n1️⃣ **EMAILS** - استخراج عناوين البريد الإلكتروني فقط\n2️⃣ **PHONES** - استخراج أرقام الهاتف فقط\n3️⃣ **CONTACTS** - البريد الإلكتروني والهاتف معاً\n\n0️⃣ **رجوع** - العودة لاختيار المصدر\n0️⃣0️⃣ **إعادة تشغيل** - بدء بحث جديد\n\n💬 **أرسل الرقم** المقابل لاختيارك.",
@@ -284,7 +293,7 @@ export const languages = {
     settings_updated: "✅ تم تحديث الإعدادات بنجاح!",
     
     // Job Management
-    job_starting: "🔍 **بدء جلسة البحث عن العملاء المحتملين...**\n\n📋 **تفاصيل الجلسة:**\n• النيش: \"{niche}\"\n• المصدر: {source}\n\n⏱️ **سيتم إرسال التحديثات تلقائياً.**",
+    job_starting: "🔍 **بدء جلسة البحث عن العملاء المحتملين...**\n\n📋 **تفاصيل الجلسة:**\n• الشركة/الخدمة: \"{niche}\"\n\n⏱️ **سيتم إرسال التحديثات تلقائياً.**",
     job_complete: "✅ **اكتملت عملية البحث!**\n\n📊 **ملخص النتائج:**\n• إجمالي النتائج: {total}\n• البريد الإلكتروني: {emails}\n• الهاتف: {phones}\n• مواقع الويب: {websites}\n\n💾 **الملف جاهز للتحميل** ⬇️",
     job_stopped: "🛑 **تم إيقاف الجلسة.**",
     job_status: "📊 **حالة المهمة الحالية:** {status}",
@@ -296,7 +305,7 @@ export const languages = {
     queued_waiting: "⏳ هناك عدد كبير من المستخدمين يبحثون عن عملاء محتملين الآن. ستبدأ مهمتك في أقرب وقت ممكن. يرجى الانتظار.",
     
     // Navigation
-    go_back: "↩️ يرجى إدخال نيش البحث الجديد الخاص بك.",
+    go_back: "↩️ أي نوع من الشركات أو الخدمات تبحث عنه؟",
     restart: "🔄 *تمت إعادة التشغيل!*",
     reset: "♻️ **تم إعادة تعيين التفضيلات إلى القيم الافتراضية.**",
     

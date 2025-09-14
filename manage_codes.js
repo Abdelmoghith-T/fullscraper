@@ -13,7 +13,7 @@ const CODES_FILE = path.join(__dirname, 'codes.json');
 /**
  * Admin CLI for managing WhatsApp scraper access codes
  * Usage:
- *   node manage_codes.js add <code> <google_key_1> <google_key_2> <gemini_key_1> <gemini_key_2>
+ *   node manage_codes.js add <code> <google_key_1> <google_key_2> <google_key_3> <gemini_key_1> <gemini_key_2> <gemini_key_3>
  *   node manage_codes.js list
  *   node manage_codes.js remove <code>
  *   node manage_codes.js info <code>
@@ -63,17 +63,17 @@ function maskApiKey(key) {
 
 // Command handlers
 function addCode(args) {
-  const [code, googleKey1, googleKey2, geminiKey1, geminiKey2] = args;
+  const [code, googleKey1, googleKey2, googleKey3, geminiKey1, geminiKey2, geminiKey3] = args;
   
   if (!code) {
     console.error('❌ Code is required');
-    console.log('Usage: node manage_codes.js add <code> <google_key_1> <google_key_2> <gemini_key_1> <gemini_key_2>');
+    console.log('Usage: node manage_codes.js add <code> <google_key_1> <google_key_2> <google_key_3> <gemini_key_1> <gemini_key_2> <gemini_key_3>');
     process.exit(1);
   }
 
-  if (!googleKey1 || !googleKey2 || !geminiKey1 || !geminiKey2) {
-    console.error('❌ All API keys are required: Google Key 1, Google Key 2, Gemini Key 1, Gemini Key 2');
-    console.log('Usage: node manage_codes.js add <code> <google_key_1> <google_key_2> <gemini_key_1> <gemini_key_2>');
+  if (!googleKey1 || !googleKey2 || !googleKey3 || !geminiKey1 || !geminiKey2 || !geminiKey3) {
+    console.error('❌ All API keys are required: Google Key 1, Google Key 2, Google Key 3, Gemini Key 1, Gemini Key 2, Gemini Key 3');
+    console.log('Usage: node manage_codes.js add <code> <google_key_1> <google_key_2> <google_key_3> <gemini_key_1> <gemini_key_2> <gemini_key_3>');
     process.exit(1);
   }
 
@@ -81,8 +81,10 @@ function addCode(args) {
     // Validate API keys
     const validatedGoogleKey1 = validateApiKey(googleKey1, 'Google Search Key 1');
     const validatedGoogleKey2 = validateApiKey(googleKey2, 'Google Search Key 2');
+    const validatedGoogleKey3 = validateApiKey(googleKey3, 'Google Search Key 3');
     const validatedGeminiKey1 = validateApiKey(geminiKey1, 'Gemini AI Key 1');
     const validatedGeminiKey2 = validateApiKey(geminiKey2, 'Gemini AI Key 2');
+    const validatedGeminiKey3 = validateApiKey(geminiKey3, 'Gemini AI Key 3');
 
     const codes = loadCodes();
     
@@ -92,8 +94,8 @@ function addCode(args) {
 
     codes[code] = {
       apiKeys: {
-        googleSearchKeys: [validatedGoogleKey1, validatedGoogleKey2],
-        geminiKeys: [validatedGeminiKey1, validatedGeminiKey2]
+        googleSearchKeys: [validatedGoogleKey1, validatedGoogleKey2, validatedGoogleKey3],
+        geminiKeys: [validatedGeminiKey1, validatedGeminiKey2, validatedGeminiKey3]
       },
       createdAt: new Date().toISOString(),
       expiresAt: null,
@@ -460,11 +462,11 @@ function showDailyLimitStatus(args) {
 }
 
 function generateCode(args) {
-  const [googleKey1, googleKey2, geminiKey1, geminiKey2] = args;
+  const [googleKey1, googleKey2, googleKey3, geminiKey1, geminiKey2, geminiKey3] = args;
   
-  if (!googleKey1 || !googleKey2 || !geminiKey1 || !geminiKey2) {
-    console.error('❌ All API keys are required: Google Key 1, Google Key 2, Gemini Key 1, Gemini Key 2');
-    console.log('Usage: node manage_codes.js generate <google_key_1> <google_key_2> <gemini_key_1> <gemini_key_2>');
+  if (!googleKey1 || !googleKey2 || !googleKey3 || !geminiKey1 || !geminiKey2 || !geminiKey3) {
+    console.error('❌ All API keys are required: Google Key 1, Google Key 2, Google Key 3, Gemini Key 1, Gemini Key 2, Gemini Key 3');
+    console.log('Usage: node manage_codes.js generate <google_key_1> <google_key_2> <google_key_3> <gemini_key_1> <gemini_key_2> <gemini_key_3>');
     process.exit(1);
   }
 
@@ -472,7 +474,7 @@ function generateCode(args) {
   console.log(`🎲 Generated random code: ${randomCode}`);
   console.log('Adding with generated code...\n');
   
-  addCode([randomCode, googleKey1, googleKey2, geminiKey1, geminiKey2]);
+  addCode([randomCode, googleKey1, googleKey2, googleKey3, geminiKey1, geminiKey2, geminiKey3]);
 }
 
 function showHelp() {
@@ -481,11 +483,11 @@ function showHelp() {
   console.log('');
   console.log('📋 Available Commands:');
   console.log('');
-  console.log('  add <code> <google_key_1> <google_key_2> <gemini_key_1> <gemini_key_2>');
-  console.log('    Add a new access code with API keys');
+  console.log('  add <code> <google_key_1> <google_key_2> <google_key_3> <gemini_key_1> <gemini_key_2> <gemini_key_3>');
+  console.log('    Add a new access code with 3 API keys for each service');
   console.log('');
-  console.log('  generate <google_key_1> <google_key_2> <gemini_key_1> <gemini_key_2>');
-  console.log('    Generate a random code and add it with API keys');
+  console.log('  generate <google_key_1> <google_key_2> <google_key_3> <gemini_key_1> <gemini_key_2> <gemini_key_3>');
+  console.log('    Generate a random code and add it with 3 API keys for each service');
   console.log('');
   console.log('  list');
   console.log('    List all existing codes (with masked keys)');

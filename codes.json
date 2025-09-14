@@ -3,186 +3,26 @@
     "apiKeys": {
       "googleSearchKeys": [
         "AIzaSyAx0lo-L-l2I6nto8RxbWC9Kbw7LhF2YSs",
-        "AIzaSyBevJeD3QDyHcB58_NyXb4DCCvElWf0ui4"
+        "AIzaSyCOKIAaUud2JQWXBLK7gsFPyjLRN1SOlMQ",
+        "AIzaSyDjHSV-G4YYcd7yd6FTZqNyX1CaSlr3UNg"
       ],
       "geminiKeys": [
-        "AIzaSyAx0lo-L-l2I6nto8RxbWC9Kbw7LhF2YSs",
-        "AIzaSyCEumkWOhrtddCuULj8xkH2zlMzuNi9Niw"
+        "AIzaSyAP0P8zu8gCTmtc3-09EcTm68CVUwhmrO8",
+        "AIzaSyC3Egy-17Y1HzIiK7E4gMkAGvC7iw1CII8",
+        "AIzaSyCmQczZtNsd-SzEPT-jCiEyTF-G8J5XPIg"
       ]
     },
-    "createdAt": "2025-08-29T04:40:52.438Z",
+    "createdAt": "2025-09-11T14:29:35.840Z",
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-09-10T17:22:25.124Z",
-      "useCount": 25
+      "lastUsed": "2025-09-14T00:23:19.849Z",
+      "useCount": 10
     },
     "dailyScraping": {
-      "date": "Wed Sep 10 2025",
-      "count": 4,
-      "lastReset": "2025-09-10T00:00:59.410Z"
-    },
-    "language": "fr",
-    "stage": "paid",
-    "trial": {
-      "triesUsed": 1,
-      "maxTries": 3
-    },
-    "paid": {
-      "grantedAt": "2025-08-29T04:53:38.925Z",
-      "expiresAt": "2025-09-29T17:26:00.000Z"
-    }
-  },
-  "user2": {
-    "apiKeys": {
-      "googleSearchKeys": [
-        "AIzaSyAx0lo-L-l2I6nto8RxbWC9Kbw7LhF2YSs",
-        "AIzaSyBevJeD3QDyHcB58_NyXb4DCCvElWf0ui4"
-      ],
-      "geminiKeys": [
-        "AIzaSyAx0lo-L-l2I6nto8RxbWC9Kbw7LhF2YSs",
-        "AIzaSyCEumkWOhrtddCuULj8xkH2zlMzuNi9Niw"
-      ]
-    },
-    "createdAt": "2025-08-29T04:40:52.438Z",
-    "expiresAt": null,
-    "meta": {
-      "issuedBy": "admin123",
-      "lastUsed": "2025-09-07T13:20:16.866Z",
-      "useCount": 9
-    },
-    "dailyScraping": {
-      "date": "Sun Sep 07 2025",
-      "count": 3,
-      "lastReset": "2025-09-07T13:20:24.956Z"
-    },
-    "language": "en",
-    "stage": "paid",
-    "trial": {
-      "triesUsed": 1,
-      "maxTries": 3
-    }
-  },
-  "user3": {
-    "apiKeys": {
-      "googleSearchKeys": [
-        "AIzaSyAx0lo-L-l2I6nto8RxbWC9Kbw7LhF2YSs",
-        "AIzaSyBevJeD3QDyHcB58_NyXb4DCCvElWf0ui4"
-      ],
-      "geminiKeys": [
-        "AIzaSyAx0lo-L-l2I6nto8RxbWC9Kbw7LhF2YSs",
-        "AIzaSyCEumkWOhrtddCuULj8xkH2zlMzuNi9Niw"
-      ]
-    },
-    "createdAt": "2025-08-29T04:40:52.438Z",
-    "expiresAt": null,
-    "meta": {
-      "issuedBy": "admin123",
-      "lastUsed": "2025-09-08T23:22:15.301Z",
-      "useCount": 8
-    },
-    "dailyScraping": {
-      "date": "Tue Sep 09 2025",
+      "date": "Sun Sep 14 2025",
       "count": 1,
-      "lastReset": "2025-09-08T23:22:32.498Z"
-    },
-    "language": "en",
-    "stage": "paid",
-    "trial": {
-      "triesUsed": 1,
-      "maxTries": 3
-    }
-  },
-  "user4": {
-    "apiKeys": {
-      "googleSearchKeys": [
-        "AIzaSyAx0lo-L-l2I6nto8RxbWC9Kbw7LhF2YSs",
-        "AIzaSyBevJeD3QDyHcB58_NyXb4DCCvElWf0ui4"
-      ],
-      "geminiKeys": [
-        "AIzaSyAx0lo-L-l2I6nto8RxbWC9Kbw7LhF2YSs",
-        "AIzaSyCEumkWOhrtddCuULj8xkH2zlMzuNi9Niw"
-      ]
-    },
-    "createdAt": "2025-08-29T04:40:52.438Z",
-    "expiresAt": null,
-    "meta": {
-      "issuedBy": "admin123",
-      "lastUsed": "2025-09-08T18:17:55.901Z",
-      "useCount": 11
-    },
-    "dailyScraping": {
-      "date": "Mon Sep 08 2025",
-      "count": 2,
-      "lastReset": "2025-09-08T18:18:02.736Z"
-    },
-    "language": "en",
-    "stage": "paid",
-    "trial": {
-      "triesUsed": 1,
-      "maxTries": 3
-    },
-    "paid": {
-      "grantedAt": "2025-08-29T04:53:38.925Z",
-      "expiresAt": "2025-09-29T17:26:00.000Z"
-    }
-  },
-  "user5": {
-    "apiKeys": {
-      "googleSearchKeys": [
-        "AIzaSyDjHSV-G4YYcd7yd6FTZqNyX1CaSlr3UNg",
-        "AIzaSyBevJeD3QDyHcB58_NyXb4DCCvElWf0ui4"
-      ],
-      "geminiKeys": [
-        "AIzaSyCmQczZtNsd-SzEPT-jCiEyTF-G8J5XPIg",
-        "AIzaSyCEumkWOhrtddCuULj8xkH2zlMzuNi9Niw"
-      ]
-    },
-    "createdAt": "2025-08-29T04:40:52.438Z",
-    "expiresAt": null,
-    "meta": {
-      "issuedBy": "admin123",
-      "lastUsed": "2025-09-08T21:27:11.562Z",
-      "useCount": 20
-    },
-    "dailyScraping": {
-      "date": "Tue Sep 09 2025",
-      "count": 1,
-      "lastReset": "2025-09-08T23:18:54.508Z"
-    },
-    "language": "en",
-    "stage": "paid",
-    "trial": {
-      "triesUsed": 1,
-      "maxTries": 3
-    },
-    "paid": {
-      "grantedAt": "2025-08-29T04:53:38.925Z",
-      "expiresAt": "2025-09-29T17:26:00.000Z"
-    }
-  },
-  "user6": {
-    "apiKeys": {
-      "googleSearchKeys": [
-        "AIzaSyBnGchXIMWD9FFk9ggsDXDGY-eRyEgs48E",
-        "AIzaSyCc3DAVg8_JMWMoXLZ8b_hXtSoGf82h-qo"
-      ],
-      "geminiKeys": [
-        "AIzaSyBnGchXIMWD9FFk9ggsDXDGY-eRyEgs48E",
-        "AIzaSyBq0DPKpULM37IwrpFstMLB6bBtj_kOj88"
-      ]
-    },
-    "createdAt": "2025-09-07T18:27:01.182Z",
-    "expiresAt": null,
-    "meta": {
-      "issuedBy": "admin123",
-      "lastUsed": "2025-09-08T20:50:04.588Z",
-      "useCount": 3
-    },
-    "dailyScraping": {
-      "date": "Mon Sep 08 2025",
-      "count": 0,
-      "lastReset": "2025-09-08T18:49:59.703Z"
+      "lastReset": "2025-09-14T00:26:14.114Z"
     },
     "language": "en",
     "stage": "paid",
@@ -191,110 +31,8 @@
       "maxTries": 3
     },
     "paid": {
-      "grantedAt": "2025-09-08T20:49:40.663Z",
-      "expiresAt": "2025-10-08T20:49:40.663Z"
-    }
-  },
-  "user7": {
-    "apiKeys": {
-      "googleSearchKeys": [
-        "AIzaSyAhDD94npK27Bzjaq5PWIqJVvdYZ-3BPRs",
-        "AIzaSyABaK4qdG-uuWBCALfS1Q3NJCmpolgqKyk"
-      ],
-      "geminiKeys": [
-        "AIzaSyBQVxX67nBfTY6pmEuL905jiKK15QXa7O0",
-        "AIzaSyBq0DPKpULM37IwrpFstMLB6bBtj_kOj88"
-      ]
-    },
-    "createdAt": "2025-09-07T18:51:46.267Z",
-    "expiresAt": null,
-    "meta": {
-      "issuedBy": "admin123",
-      "lastUsed": "2025-09-08T18:51:58.620Z",
-      "useCount": 3
-    },
-    "dailyScraping": {
-      "date": "Mon Sep 08 2025",
-      "count": 0,
-      "lastReset": "2025-09-08T16:57:03.448Z"
-    },
-    "language": "en",
-    "stage": "paid",
-    "trial": {
-      "triesUsed": 3,
-      "maxTries": 3
-    },
-    "paid": {
-      "grantedAt": "2025-09-07T20:19:17.202Z",
-      "expiresAt": "2025-10-07T20:19:17.202Z"
-    }
-  },
-  "user8": {
-    "apiKeys": {
-      "googleSearchKeys": [
-        "AIzaSyABxn4QBOAPscyZk1wOSmGxCmSlV-RCOR8",
-        "AIzaSyASZiwOfWDzzPpKndkzgkSTJtihAZnk4I8"
-      ],
-      "geminiKeys": [
-        "AIzaSyCNtecSAUJDTt-50HU01V_GuGbtxsEFntU",
-        "AIzaSyBXta8NHbk6sWckCxjXoGRPgRsU4FL4YnE"
-      ]
-    },
-    "createdAt": "2025-09-08T23:42:05.913Z",
-    "expiresAt": null,
-    "meta": {
-      "issuedBy": "admin123",
-      "lastUsed": "2025-09-08T23:42:34.389Z",
-      "useCount": 1
-    },
-    "dailyScraping": {
-      "date": "Tue Sep 09 2025",
-      "count": 2,
-      "lastReset": "2025-09-08T23:42:05.913Z"
-    },
-    "language": "en",
-    "stage": "paid",
-    "trial": {
-      "triesUsed": 0,
-      "maxTries": 3
-    },
-    "paid": {
-      "grantedAt": "2025-09-08T23:42:21.910Z",
-      "expiresAt": "2025-10-08T23:42:21.910Z"
-    }
-  },
-  "user9": {
-    "apiKeys": {
-      "googleSearchKeys": [
-        "AIzaSyCytCXfxuZ7N6fW20vsIZuddc2FtZs_bQI",
-        "AIzaSyCJ9bbQtVZYzqAQA451TSD91dX5guFiI-o"
-      ],
-      "geminiKeys": [
-        "AIzaSyAjW6Vt55REeBRJmDtRnVa-RZkCuBjqx_0",
-        "AIzaSyAddITIe67_8GI_iN1w4aUlgNyDBmWod2g$"
-      ]
-    },
-    "createdAt": "2025-09-09T01:28:18.752Z",
-    "expiresAt": null,
-    "meta": {
-      "issuedBy": "admin123",
-      "lastUsed": "2025-09-09T01:29:04.641Z",
-      "useCount": 1
-    },
-    "dailyScraping": {
-      "date": "Tue Sep 09 2025",
-      "count": 2,
-      "lastReset": "2025-09-09T01:28:18.752Z"
-    },
-    "language": "ar",
-    "stage": "paid",
-    "trial": {
-      "triesUsed": 0,
-      "maxTries": 3
-    },
-    "paid": {
-      "grantedAt": "2025-09-09T01:28:44.109Z",
-      "expiresAt": "2025-10-09T01:28:44.109Z"
+      "grantedAt": "2025-09-11T14:58:10.620Z",
+      "expiresAt": "2025-10-11T14:58:10.620Z"
     }
   }
 }

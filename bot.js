@@ -10,6 +10,7 @@ import { getMessage } from './languages.js';
 import http from 'http';
 
 import AdminManager from './lib/admin-manager.js';
+import { nicheValidator } from './lib/niche-validator.js';
 
 const require = createRequire(import.meta.url);
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('baileys');
@@ -19,7 +20,7 @@ const __dirname = path.dirname(__filename);
 
 // Image helper function
 // Helper function to send images with captions - optimized for mobile display
-async function sendImageWithMessage(sock, jid, imageName, text, language = 'en') {
+async function sendImageWithMessage(sock, jid, imageName, text, language = 'fr') {
   try {
     // Map language codes to directory names
     const languageMap = {
@@ -144,7 +145,7 @@ healthServer.listen(PORT, () => {
  * Progress Simulator - Creates realistic loading bar experience for WhatsApp
  */
 class ProgressSimulator {
-  constructor(language = 'en') {
+  constructor(language = 'fr') {
     this.currentProgress = 0;
     this.isComplete = false;
     this.isStarted = false;
@@ -402,7 +403,7 @@ async function handleExpiryNow(sock, userCode) {
         sessionsDb[jid] = sess;
         try {
           await sock.sendMessage(jid, { text: getMessage(lang, 'subscription_expired') });
-          await sock.sendMessage(jid, { text: getMessage(lang, 'main_menu') });
+          await sendImageWithMessage(sock, jid, 'main_menu', getMessage(lang, 'main_menu'), lang);
         } catch (e) {
           console.log(chalk.yellow(`⚠️ Failed to send expiry notice to ${jid}: ${e.message}`));
         }
@@ -457,7 +458,7 @@ async function runExpirySweep(sock) {
             sessionsDb[jid] = sess;
             try {
               await sock.sendMessage(jid, { text: getMessage(lang, 'subscription_expired') });
-              await sock.sendMessage(jid, { text: getMessage(lang, 'main_menu') });
+              await sendImageWithMessage(sock, jid, 'main_menu', getMessage(lang, 'main_menu'), lang);
             } catch (e) {
               console.log(chalk.yellow(`⚠️ Failed to send expiry notice to ${jid}: ${e.message}`));
             }
@@ -484,14 +485,14 @@ function resetSessionState(jid, sessions) {
   // Use serialized mutation to avoid overwriting concurrent updates
   mutateUserSession(jid, (s) => {
     const updated = { ...s };
-    updated.currentStep = 'awaiting_niche';
+    updated.currentStep = 'awaiting_business_service';
     updated.status = 'idle';
     updated.currentLoadingPercentage = 0;
     updated.lastLoadingUpdateTimestamp = 0;
     return updated;
   })
     .then(() => {
-    console.log(chalk.yellow(`🔧 Session state reset for ${jid}: currentStep -> 'awaiting_niche'`));
+    console.log(chalk.yellow(`🔧 Session state reset for ${jid}: currentStep -> 'awaiting_business_service'`));
     })
     .catch((e) => {
       console.log(chalk.yellow(`⚠️ Failed to reset session state for ${jid}: ${e.message}`));
@@ -630,7 +631,7 @@ function incrementDailyScrapingCount(jid, sessions) {
  * @param {string} language - User's language
  * @returns {string} - Formatted status message
  */
-function getDailyScrapingStatusMessage(limitInfo, language = 'en') {
+function getDailyScrapingStatusMessage(limitInfo, language = 'fr') {
   if (limitInfo.canScrape) {
     return getMessage(language, 'daily_status_ok', {
       remaining: limitInfo.remaining,
@@ -706,9 +707,9 @@ function loadJson(filePath, defaultValue = {}) {
 }
 
 /**
- * 🗑️ Helper function to extract base niche from filename for cleanup
- * @param {string} fileName - The filename to extract niche from
- * @returns {string} - The base niche (e.g., "dentist_casablanca" or "dentisterabat")
+ * 🗑️ Helper function to extract base business/service from filename for cleanup
+ * @param {string} fileName - The filename to extract business/service from
+ * @returns {string} - The base business/service (e.g., "dentist_casablanca" or "dentisterabat")
  */
 function extractBaseNicheFromFileName(fileName) {
   const fileNameWithoutExt = path.basename(fileName, path.extname(fileName));
@@ -733,9 +734,46 @@ function extractBaseNicheFromFileName(fileName) {
 }
 
 /**
- * 🗑️ Helper function to cleanup related files for a specific source and niche
+ * 🎯 Generate clean user-facing file name by removing source information
+ * @param {string} originalFileName - The original filename with source info
+ * @returns {string} - Clean filename without source information for user display
+ */
+function generateCleanUserFileName(originalFileName) {
+  const fileExt = path.extname(originalFileName);
+  const fileNameWithoutExt = path.basename(originalFileName, fileExt);
+  
+  // Remove source-specific information while preserving business/service and timestamp
+  let cleanName = fileNameWithoutExt
+    .replace(/_google_maps/g, '')           // Remove _google_maps
+    .replace(/_linkedin/g, '')              // Remove _linkedin  
+    .replace(/_google_search/g, '')         // Remove _google_search
+    .replace(/_all_sources/g, '')           // Remove _all_sources
+    .replace(/_results/g, '')               // Remove _results
+    .replace(/_complete/g, '')              // Remove _complete
+    .replace(/_autosave.*$/, '')            // Remove _autosave and session info
+    .replace(/_SESSION_.*$/, '')            // Remove _SESSION_ and session ID
+    .replace(/_{2,}/g, '_')                 // Replace multiple underscores with single
+    .replace(/^_|_$/g, '');                 // Remove leading/trailing underscores
+  
+  // Handle edge case where filename only contains source information
+  if (cleanName === 'google_maps' || cleanName === 'linkedin' || cleanName === 'google_search' || cleanName === 'all_sources' || 
+      cleanName.startsWith('google_maps_') || cleanName.startsWith('linkedin_') || cleanName.startsWith('google_search_') || cleanName.startsWith('all_sources_')) {
+    cleanName = '';
+  }
+  
+  // If the name becomes empty or too short, use a generic name
+  if (!cleanName || cleanName.length < 3) {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    cleanName = `leads_${timestamp}`;
+  }
+  
+  return cleanName + fileExt;
+}
+
+/**
+ * 🗑️ Helper function to cleanup related files for a specific source and business/service
  * @param {string} resultsDir - Directory to search in
- * @param {string} baseNiche - Base niche to match
+ * @param {string} baseNiche - Base business/service to match
  * @param {string} source - Source type (google_maps, linkedin, etc.)
  * @param {string} excludeFile - File to exclude from deletion (already being deleted)
  * @returns {number} - Number of files deleted
@@ -749,12 +787,12 @@ function cleanupRelatedFiles(resultsDir, baseNiche, source, excludeFile = null) 
   try {
     const files = fs.readdirSync(resultsDir);
     
-    // Find ALL files that match this niche and source
+    // Find ALL files that match this business/service and source
     // Use more flexible matching to handle different filename patterns
     const relatedFiles = files.filter(f => {
       // Must contain the source type (with special handling for Google Search)
       if (source === 'google_search') {
-        // Google Search files have pattern: niche_results.txt or niche_results_autosave_session_TIMESTAMP.txt
+        // Google Search files have pattern: business_service_results.txt or business_service_results_autosave_session_TIMESTAMP.txt
         if (!f.includes('_results') && !f.includes('results_')) return false;
       } else {
         if (!f.includes(source)) return false;
@@ -763,16 +801,16 @@ function cleanupRelatedFiles(resultsDir, baseNiche, source, excludeFile = null) 
       // Must be a result file
       if (!(f.endsWith('.json') || f.endsWith('.xlsx') || f.endsWith('.csv') || f.endsWith('.txt'))) return false;
       
-      // Extract the niche part from the filename for comparison
+      // Extract the business/service part from the filename for comparison
       const fileNiche = extractBaseNicheFromFileName(f);
       
-      // Check if this file belongs to the same niche (handle different patterns)
+      // Check if this file belongs to the same business/service (handle different patterns)
       // Examples:
       // - baseNiche: "dentiste_rabat", fileNiche: "dentisterabat" -> should match
       // - baseNiche: "dentisterabat", fileNiche: "dentiste_rabat" -> should match
       // - baseNiche: "dentiste rabat", fileNiche: "dentisterabat" -> should match
       
-      // Normalize both niches for comparison (remove spaces, underscores, convert to lowercase)
+      // Normalize both business/services for comparison (remove spaces, underscores, convert to lowercase)
       const normalizeNiche = (niche) => niche.toLowerCase().replace(/[\s_]/g, '');
       const normalizedBaseNiche = normalizeNiche(baseNiche);
       const normalizedFileNiche = normalizeNiche(fileNiche);
@@ -780,7 +818,7 @@ function cleanupRelatedFiles(resultsDir, baseNiche, source, excludeFile = null) 
       return normalizedBaseNiche === normalizedFileNiche;
     });
     
-    console.log(chalk.blue(`🔍 Found ${relatedFiles.length} related ${source} files with base niche: "${baseNiche}"`));
+    console.log(chalk.blue(`🔍 Found ${relatedFiles.length} related ${source} files with base business/service: "${baseNiche}"`));
     console.log(chalk.blue(`🔍 Files: ${relatedFiles.join(', ')}`));
     
     let deletedCount = 0;
@@ -844,7 +882,7 @@ function cleanupResultFile(filePath) {
         }
         
         const baseNiche = extractBaseNicheFromFileName(fileName);
-        console.log(chalk.blue(`🔍 Looking for ${sourceType} files with base niche: "${baseNiche}"`));
+        console.log(chalk.blue(`🔍 Looking for ${sourceType} files with base business/service: "${baseNiche}"`));
         
         const deletedCount = cleanupRelatedFiles(resultsDir, baseNiche, sourceType, filePath);
         console.log(chalk.blue(`🗑️ Cleaned up ${deletedCount} related ${sourceType} files`));
@@ -865,7 +903,7 @@ function cleanupResultFile(filePath) {
       if (sourceType && sourceType !== 'google_search') {
         const leadScraperDir = path.join(__dirname, 'google search + linkdin scraper', 'lead-scraper');
         const baseNiche = extractBaseNicheFromFileName(fileName);
-        console.log(chalk.blue(`🔍 Looking for ${sourceType} files in lead-scraper with base niche: "${baseNiche}"`));
+        console.log(chalk.blue(`🔍 Looking for ${sourceType} files in lead-scraper with base business/service: "${baseNiche}"`));
         
         const deletedCount = cleanupRelatedFiles(leadScraperDir, baseNiche, sourceType, leadScraperPath);
         console.log(chalk.blue(`🗑️ Cleaned up ${deletedCount} related ${sourceType} files from lead-scraper`));
@@ -899,7 +937,7 @@ function cleanupResultFile(filePath) {
       if (sourceType) {
         const mapsScraperDir = path.join(__dirname, 'maps_scraper', 'results');
         const baseNiche = extractBaseNicheFromFileName(fileName);
-        console.log(chalk.blue(`🔍 Looking for ${sourceType} files in maps_scraper with base niche: "${baseNiche}"`));
+        console.log(chalk.blue(`🔍 Looking for ${sourceType} files in maps_scraper with base business/service: "${baseNiche}"`));
         
         const deletedCount = cleanupRelatedFiles(mapsScraperDir, baseNiche, sourceType, mapsScraperPath);
         console.log(chalk.blue(`🗑️ Cleaned up ${deletedCount} related ${sourceType} files from maps_scraper`));
@@ -1087,7 +1125,7 @@ async function testConnection(sock) {
 // Handle user guide PDF sending
 async function handleUserGuide(sock, jid, session) {
   try {
-    const userLanguage = session.language || 'en';
+    const userLanguage = session.language || 'fr';
     
     // Map language codes to PDF filenames
     const guideFiles = {
@@ -1138,9 +1176,7 @@ async function handleUserGuide(sock, jid, session) {
       sessions[jid] = session;
       saveJson(SESSIONS_FILE, sessions);
       
-      await sock.sendMessage(jid, { 
-        text: getMessage(userLanguage, 'main_menu')
-      });
+      await sendImageWithMessage(sock, jid, 'main_menu', getMessage(userLanguage, 'main_menu'), userLanguage);
     } else {
       console.log(chalk.red(`❌ Failed to send user guide to ${jid.split('@')[0]}`));
       await sock.sendMessage(jid, { 
@@ -1232,11 +1268,15 @@ async function sendFile(sock, jid, filePath, caption = '', customFileName = null
       throw new Error('File not found');
     }
 
-    const fileName = customFileName || path.basename(filePath);
+    // Generate clean user-facing filename by removing source information
+    const originalFileName = path.basename(filePath);
+    const cleanFileName = generateCleanUserFileName(originalFileName);
+    const fileName = customFileName || cleanFileName;
     const fileData = fs.readFileSync(filePath);
     const fileExt = path.extname(fileName).toLowerCase();
     
-    console.log(chalk.blue(`🔍 sendFile: File name: ${fileName}`));
+    console.log(chalk.blue(`🔍 sendFile: Original file name: ${originalFileName}`));
+    console.log(chalk.blue(`🔍 sendFile: Clean user file name: ${fileName}`));
     console.log(chalk.blue(`🔍 sendFile: File size: ${fileData.length} bytes`));
     console.log(chalk.blue(`🔍 sendFile: File extension: ${fileExt}`));
     
@@ -1332,17 +1372,7 @@ async function sendResultsToUser(sock, jid, filePath, meta, userLanguage = 'en')
       : `${totalResultsText} ${getMessage(userLanguage, 'results')}`;
     
     caption += `📊 **${getMessage(userLanguage, 'summary')}:** ${summaryText}\n`;
-    caption += `🎯 **${getMessage(userLanguage, 'source')}:** ${meta.source || 'Unknown'}\n`;
     caption += `📋 **${getMessage(userLanguage, 'format')}:** ${meta.format || fileExtension.toUpperCase()}\n`;
-    
-    // Add source-specific information
-    if (meta.source === 'GOOGLE') {
-      caption += `🔍 **${getMessage(userLanguage, 'type')}:** ${getMessage(userLanguage, 'google_search_results')}\n`;
-    } else if (meta.source === 'LINKEDIN') {
-      caption += `💼 **${getMessage(userLanguage, 'type')}:** ${getMessage(userLanguage, 'linkedin_profiles')}\n`;
-    } else if (meta.source === 'MAPS') {
-      caption += `🗺️ **${getMessage(userLanguage, 'type')}:** ${getMessage(userLanguage, 'google_maps_businesses')}\n`;
-    }
     
     console.log(chalk.blue(`📤 Sending results to ${jid}: ${fileName}`));
     console.log(chalk.blue(`📤 Custom filename from meta: ${meta.customFilename || 'none'}`));
@@ -1424,8 +1454,7 @@ function formatResultSummary(results, meta) {
   let summary = `✅ **Scraping Complete!**\n\n`;
   summary += `📊 **Results Summary:**\n`;
   summary += `• Total Results: ${meta.totalResults}\n`;
-  summary += `• Source: ${meta.source}\n`;
-  summary += `• Niche: "${meta.niche}"\n`;
+  summary += `• Business/Service: "${meta.niche}"\n`;
   summary += `• Processed: ${new Date(meta.processedAt).toLocaleString()}\n\n`;
 
   if (results && results.length > 0) {
@@ -1471,8 +1500,8 @@ function getHelpMessage() {
           `📋 **Available Commands:**\n\n` +
           `🔐 **CODE: <your_code>**\n` +
           `   Authenticate with your access code\n\n` +
-          `🎯 **Search Query**\n` +
-          `   Send any text as a search niche\n` +
+          `🎯 **Business or Service**\n` +
+          `   Send any text as a business or service\n` +
           `   Example: "dentist casablanca"\n\n` +
           `📏 **LIMIT: <number>**\n` +
           `   Set max results (1-500). Default: 300\n\n` +
@@ -1483,7 +1512,7 @@ function getHelpMessage() {
           `♻️ **RESET**\n` +
           `   Reset all preferences\n\n` +
           `🔄 **RESTART** (00)\n` +
-          `   Restart the entire process from niche selection\n\n` +
+          `   Restart the entire process from business/service selection\n\n` +
           `❓ **HELP**\n` +
           `   Show this help message\n\n` +
           `📅 **Daily Limits:**\n` +
@@ -1554,7 +1583,7 @@ async function handleMessage(sock, message) {
         sessions[jid].status = 'idle';
         saveJson(SESSIONS_FILE, sessions);
         await sock.sendMessage(jid, { text: getMessage(lang, 'subscription_expired') });
-        await sock.sendMessage(jid, { text: getMessage(lang, 'main_menu') });
+        await sendImageWithMessage(sock, jid, 'main_menu', getMessage(lang, 'main_menu'), lang);
         return;
       }
     }
@@ -1574,11 +1603,11 @@ async function handleMessage(sock, message) {
       status: 'idle',
       currentStep: 'awaiting_language', // Start with language selection
       previousMessage: null, // Stores the previous message content for "go back" functionality
-      language: 'en', // Default language
+      language: 'fr', // Default language
       meta: {
         createdAt: new Date().toISOString(),
         totalJobs: 0,
-        lastNiche: null
+        lastBusinessService: null
       },
       security: {
         failedAuthAttempts: 0,
@@ -1596,7 +1625,7 @@ async function handleMessage(sock, message) {
     
     // Send language selection message for new users
     console.log(chalk.yellow(`🌐 New user ${jid.split('@')[0]} - sending language selection`));
-    await sendImageWithMessage(sock, jid, 'welcome', getMessage('en', 'welcome'), 'en');
+    await sendImageWithMessage(sock, jid, 'welcome', getMessage('fr', 'welcome'), 'fr');
     return;
   }
 
@@ -1609,7 +1638,7 @@ async function handleMessage(sock, message) {
 
   // FIX: Safety check to automatically fix stuck session states
   if (session.currentStep === 'scraping_in_progress' && !activeJobs.has(jid)) {
-    console.log(chalk.yellow(`🔧 Auto-fixing stuck session state for ${jid}: resetting from 'scraping_in_progress' to 'awaiting_niche'`));
+        console.log(chalk.yellow(`🔧 Auto-fixing stuck session state for ${jid}: resetting from 'scraping_in_progress' to 'awaiting_business_service'`));
     resetSessionState(jid, sessions);
   }
 
@@ -1851,7 +1880,7 @@ async function handleMessage(sock, message) {
         }
         
         if (permissions.includes('manage_users')) {
-          message += `• **ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>** - Add new user with API keys (any format)\n`;
+          message += `• **ADMIN ADD USER <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>** - Add new user with 3 API keys for each service\n`;
           message += `• **ADMIN REMOVE USER <code>** - Remove user code\n`;
           message += `• **ADMIN MODIFY CODE <old_code> <new_code>** - Change user's access code\n`;
           message += `• **ADMIN MODIFY KEYS <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>** - Update user's API keys\n`;
@@ -2038,7 +2067,7 @@ async function handleMessage(sock, message) {
           
         case 3: // Change Language
           await sock.sendMessage(jid, { 
-            text: `✏️ **Change Language**\n\n📝 **Current language:** ${selectedUser.language || 'en'}\n\n💬 **Available languages:**\n1️⃣ **en** - English\n2️⃣ **fr** - French\n3️⃣ **ar** - Arabic\n\n💬 **Send the language code** (en, fr, or ar)\n\n💡 **Example:** fr\n\n🔙 **To go back:** Send "0"`
+            text: `✏️ **Change Language**\n\n📝 **Current language:** ${selectedUser.language || 'fr'}\n\n💬 **Available languages:**\n1️⃣ **en** - English\n2️⃣ **fr** - French\n3️⃣ **ar** - Arabic\n\n💬 **Send the language code** (en, fr, or ar)\n\n💡 **Example:** fr\n\n🔙 **To go back:** Send "0"`
           });
           
           adminSession.currentMenu = 'modify_user_language';
@@ -2528,7 +2557,7 @@ async function handleMessage(sock, message) {
       if (permissions.includes('manage_users')) {
         if (choice === 3) {
           await sock.sendMessage(jid, { 
-            text: `➕ **Add New User**\n\n📝 **Usage:** ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>\n\n💡 **Example:** ADMIN ADD USER abc123 google_key1 google_key2 gemini_key1 gemini_key2\n\n⚠️ **Please provide:**\n• User code\n• 2 Google Search API keys\n• 2 Gemini API keys\n\n🔄 **Send the command above to add a user.**`
+            text: `➕ **Add New User**\n\n📝 **Usage:** ADMIN ADD USER <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>\n\n💡 **Example:** ADMIN ADD USER abc123 google_key1 google_key2 google_key3 gemini_key1 gemini_key2 gemini_key3\n\n⚠️ **Please provide:**\n• User code\n• 3 Google Search API keys\n• 3 Gemini API keys\n\n🔄 **Send the command above to add a user.**`
           });
           return;
         }
@@ -2848,7 +2877,7 @@ async function handleMessage(sock, message) {
           
         case 3: // Change Language
           await sock.sendMessage(jid, { 
-            text: `✏️ **Change Language**\n\n📝 **Current language:** ${selectedUser.language || 'en'}\n\n💬 **Available languages:**\n1️⃣ **en** - English\n2️⃣ **fr** - French\n3️⃣ **ar** - Arabic\n\n💬 **Send the language code** (en, fr, or ar)\n\n💡 **Example:** fr\n\n🔙 **To go back:** Send "0"`
+            text: `✏️ **Change Language**\n\n📝 **Current language:** ${selectedUser.language || 'fr'}\n\n💬 **Available languages:**\n1️⃣ **en** - English\n2️⃣ **fr** - French\n3️⃣ **ar** - Arabic\n\n💬 **Send the language code** (en, fr, or ar)\n\n💡 **Example:** fr\n\n🔙 **To go back:** Send "0"`
           });
           
           adminSession.currentMenu = 'modify_user_language';
@@ -3043,9 +3072,9 @@ async function handleMessage(sock, message) {
     // Admin command: Add user
     if (text.toUpperCase().startsWith('ADMIN ADD USER')) {
       const parts = text.split(' ');
-      if (parts.length < 7) {
+      if (parts.length < 9) {
         await sock.sendMessage(jid, { 
-          text: `❌ **Invalid Format!**\n\n📝 **Correct Usage:** ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>\n\n💡 **Example:** ADMIN ADD USER abc123 google_key1 google_key2 gemini_key1 gemini_key2\n\n⚠️ **Please provide:**\n• User code\n• 2 Google Search API keys\n• 2 Gemini API keys\n\n🔄 **Try again with the correct format!**`
+          text: `❌ **Invalid Format!**\n\n📝 **Correct Usage:** ADMIN ADD USER <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>\n\n💡 **Example:** ADMIN ADD USER abc123 google_key1 google_key2 google_key3 gemini_key1 gemini_key2 gemini_key3\n\n⚠️ **Please provide:**\n• User code\n• 3 Google Search API keys\n• 3 Gemini API keys\n\n🔄 **Try again with the correct format!**`
         });
         return;
       }
@@ -3053,36 +3082,41 @@ async function handleMessage(sock, message) {
       const userCode = parts[3];
       const googleKey1 = parts[4];
       const googleKey2 = parts[5];
-      const geminiKey1 = parts[6];
-      const geminiKey2 = parts[7];
+      const googleKey3 = parts[6];
+      const geminiKey1 = parts[7];
+      const geminiKey2 = parts[8];
+      const geminiKey3 = parts[9];
 
       // Validate that all keys are provided and not empty
-      if (!userCode || !googleKey1 || !googleKey2 || !geminiKey1 || !geminiKey2) {
+      if (!userCode || !googleKey1 || !googleKey2 || !googleKey3 || !geminiKey1 || !geminiKey2 || !geminiKey3) {
         await sock.sendMessage(jid, { 
-          text: `❌ **Missing Required Information!**\n\n📝 **You provided:**\n• Code: ${userCode || '❌ MISSING'}\n• Google Key 1: ${formatApiKey(googleKey1)}\n• Google Key 2: ${formatApiKey(googleKey2)}\n• Gemini Key 1: ${formatApiKey(geminiKey1)}\n• Gemini Key 2: ${formatApiKey(geminiKey2)}\n\n💡 **Please provide all 5 required fields and try again!**`
+          text: `❌ **Missing Required Information!**\n\n📝 **You provided:**\n• Code: ${userCode || '❌ MISSING'}\n• Google Key 1: ${formatApiKey(googleKey1)}\n• Google Key 2: ${formatApiKey(googleKey2)}\n• Google Key 3: ${formatApiKey(googleKey3)}\n• Gemini Key 1: ${formatApiKey(geminiKey1)}\n• Gemini Key 2: ${formatApiKey(geminiKey2)}\n• Gemini Key 3: ${formatApiKey(geminiKey3)}\n\n💡 **Please provide all 7 required fields and try again!**`
         });
         return;
       }
 
-      // Validate key formats (basic validation)
-      if (googleKey1 === googleKey2) {
+      // Validate key formats (basic validation) - check for duplicates
+      const googleKeys = [googleKey1, googleKey2, googleKey3];
+      const geminiKeys = [geminiKey1, geminiKey2, geminiKey3];
+      
+      if (new Set(googleKeys).size !== 3) {
         await sock.sendMessage(jid, { 
-          text: `❌ **Duplicate Google Keys!**\n\n⚠️ Google Key 1 and Google Key 2 must be different.\n\n🔄 **Please provide different Google API keys and try again!**`
+          text: `❌ **Duplicate Google Keys!**\n\n⚠️ All 3 Google Search API keys must be different.\n\n🔄 **Please provide 3 unique Google API keys and try again!**`
         });
         return;
       }
 
-      if (geminiKey1 === geminiKey2) {
+      if (new Set(geminiKeys).size !== 3) {
         await sock.sendMessage(jid, { 
-          text: `❌ **Duplicate Gemini Keys!**\n\n⚠️ Gemini Key 1 and Gemini Key 2 must be different.\n\n🔄 **Please provide different Gemini API keys and try again!**`
+          text: `❌ **Duplicate Gemini Keys!**\n\n⚠️ All 3 Gemini API keys must be different.\n\n🔄 **Please provide 3 unique Gemini API keys and try again!**`
         });
         return;
       }
 
       // Basic validation: ensure keys are not empty strings
-      if (googleKey1.trim() === '' || googleKey2.trim() === '' || geminiKey1.trim() === '' || geminiKey2.trim() === '') {
+      if (googleKey1.trim() === '' || googleKey2.trim() === '' || googleKey3.trim() === '' || geminiKey1.trim() === '' || geminiKey2.trim() === '' || geminiKey3.trim() === '') {
         await sock.sendMessage(jid, { 
-          text: `❌ **Empty Keys Not Allowed!**\n\n⚠️ All API keys must contain actual values.\n\n🔍 **Your keys:**\n• Google Key 1: ${formatApiKey(googleKey1)}\n• Google Key 2: ${formatApiKey(googleKey2)}\n• Gemini Key 1: ${formatApiKey(geminiKey1)}\n• Gemini Key 2: ${formatApiKey(geminiKey2)}\n\n🔄 **Please provide non-empty keys and try again!**`
+          text: `❌ **Empty Keys Not Allowed!**\n\n⚠️ All API keys must contain actual values.\n\n🔍 **Your keys:**\n• Google Key 1: ${formatApiKey(googleKey1)}\n• Google Key 2: ${formatApiKey(googleKey2)}\n• Google Key 3: ${formatApiKey(googleKey3)}\n• Gemini Key 1: ${formatApiKey(geminiKey1)}\n• Gemini Key 2: ${formatApiKey(geminiKey2)}\n• Gemini Key 3: ${formatApiKey(geminiKey3)}\n\n🔄 **Please provide non-empty keys and try again!**`
         });
         return;
       }
@@ -3097,8 +3131,8 @@ async function handleMessage(sock, message) {
       }
 
       const apiKeys = {
-        googleSearchKeys: [googleKey1, googleKey2],
-        geminiKeys: [geminiKey1, geminiKey2]
+        googleSearchKeys: [googleKey1, googleKey2, googleKey3],
+        geminiKeys: [geminiKey1, geminiKey2, geminiKey3]
       };
 
       const result = adminManager.addUser(adminSession.adminCode, userCode, apiKeys);
@@ -3116,10 +3150,12 @@ async function handleMessage(sock, message) {
           successMessage += `👑 **Issued by:** ${userDetails.meta?.issuedBy || 'unknown'}\n\n`;
           successMessage += `🔑 **Google Search API Keys:**\n`;
           successMessage += `   • Key 1: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[0])}\n`;
-          successMessage += `   • Key 2: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[1])}\n\n`;
+          successMessage += `   • Key 2: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[1])}\n`;
+          successMessage += `   • Key 3: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[2])}\n\n`;
           successMessage += `🤖 **Gemini API Keys:**\n`;
           successMessage += `   • Key 1: ${formatApiKey(userDetails.apiKeys.geminiKeys[0])}\n`;
-          successMessage += `   • Key 2: ${formatApiKey(userDetails.apiKeys.geminiKeys[1])}\n\n`;
+          successMessage += `   • Key 2: ${formatApiKey(userDetails.apiKeys.geminiKeys[1])}\n`;
+          successMessage += `   • Key 3: ${formatApiKey(userDetails.apiKeys.geminiKeys[2])}\n\n`;
           successMessage += `📊 **Status:** Active\n`;
           successMessage += `⏰ **Expires:** Never\n`;
           successMessage += `🔄 **Use Count:** 0\n\n`;
@@ -3286,7 +3322,7 @@ async function handleMessage(sock, message) {
       }
       
       if (permissions.includes('manage_users')) {
-        message += `• **ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>** - Add new user with API keys (any format)\n`;
+        message += `• **ADMIN ADD USER <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>** - Add new user with 3 API keys for each service\n`;
         message += `• **ADMIN REMOVE USER <code>** - Remove user code\n`;
       }
       
@@ -4232,7 +4268,7 @@ async function handleMessage(sock, message) {
 
       if (!isValidCommand) {
         await sock.sendMessage(jid, { 
-          text: `❌ **Invalid Admin Command!**\n\n⚠️ The command "${text}" is not recognized.\n\n💡 **Available Commands:**\n• ADMIN USERS - List all users\n• ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>\n• ADMIN REMOVE USER <code>\n• ADMIN ADMINS - List all admins\n• ADMIN STATUS - System status\n• ADMIN HELP - Show detailed help\n• ADMIN LOGOUT - Switch to user mode\n\n🔄 **Try again with a valid command!**`
+          text: `❌ **Invalid Admin Command!**\n\n⚠️ The command "${text}" is not recognized.\n\n💡 **Available Commands:**\n• ADMIN USERS - List all users\n• ADMIN ADD USER <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>\n• ADMIN REMOVE USER <code>\n• ADMIN ADMINS - List all admins\n• ADMIN STATUS - System status\n• ADMIN HELP - Show detailed help\n• ADMIN LOGOUT - Switch to user mode\n\n🔄 **Try again with a valid command!**`
         });
         return;
       }
@@ -4264,12 +4300,12 @@ async function handleMessage(sock, message) {
      } else if (text.trim() === '0') {
        // For unauthenticated users, "0" should resend the welcome message (no main menu to go back to)
        console.log(chalk.yellow(`⚠️ User ${jid.split('@')[0]} pressed 0 during language selection - resending welcome message`));
-       await sendImageWithMessage(sock, jid, 'welcome', getMessage('en', 'welcome'), 'en');
+       await sendImageWithMessage(sock, jid, 'welcome', getMessage('fr', 'welcome'), 'fr');
        return;
      } else {
        // Invalid selection - resend language selection message
        console.log(chalk.yellow(`⚠️ Invalid language selection from ${jid.split('@')[0]}: "${text}" - resending language selection`));
-       await sendImageWithMessage(sock, jid, 'welcome', getMessage('en', 'welcome'), 'en');
+       await sendImageWithMessage(sock, jid, 'welcome', getMessage('fr', 'welcome'), 'fr');
        return;
      }
    }
@@ -4281,7 +4317,7 @@ async function handleMessage(sock, message) {
         session.currentStep = 'awaiting_language';
         saveJson(SESSIONS_FILE, sessions);
         console.log(chalk.yellow(`🔄 User ${jid.split('@')[0]} going back to language selection from authentication`));
-        await sendImageWithMessage(sock, jid, 'welcome', getMessage('en', 'welcome'), 'en');
+        await sendImageWithMessage(sock, jid, 'welcome', getMessage('fr', 'welcome'), 'fr');
         return;
       } else if (!/^CODE:?\s+/i.test(text)) {
         // Invalid input - resend authentication message
@@ -4363,9 +4399,7 @@ async function handleMessage(sock, message) {
         session.currentStep = 'main_menu';
         saveJson(SESSIONS_FILE, sessions);
         
-        await sock.sendMessage(jid, { 
-          text: getMessage(session.language, 'main_menu')
-        });
+        await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
         return;
       } else {
         // Invalid selection - send invalid selection error message and resend language selection
@@ -4398,21 +4432,21 @@ async function handleMessage(sock, message) {
               // Block unpaid users immediately with expiry message
               if (stageNow === 'unpaid') {
                 await sock.sendMessage(jid, { text: getMessage(session.language, 'subscription_expired') });
-                await sock.sendMessage(jid, { text: getMessage(session.language, 'main_menu') });
+                await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
                 return;
               }
               const trialNow = entry.trial || { triesUsed: 0, maxTries: 3 };
               if (stageNow === 'free_trial' && (trialNow.triesUsed || 0) >= (trialNow.maxTries || 3)) {
                 await sock.sendMessage(jid, { text: getMessage(session.language, 'trial_finished') });
                 // Stay in main menu
-                await sock.sendMessage(jid, { text: getMessage(session.language, 'main_menu') });
+                await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
                 return;
               }
             } catch (e) {
               // If any issue reading codes, fall back to normal flow
             }
             
-            // Check daily scraping limit before allowing user to enter niche
+            // Check daily scraping limit before allowing user to enter business/service
             const limitInfo = checkDailyScrapingLimit(jid, sessions);
             console.log(chalk.yellow(`🔍 Daily limit check for ${jid.split('@')[0]} (main menu): ${JSON.stringify(limitInfo)}`));
             
@@ -4422,13 +4456,13 @@ async function handleMessage(sock, message) {
               await sock.sendMessage(jid, { text: limitMessage });
               
               // Stay in main menu
-              await sock.sendMessage(jid, { text: getMessage(session.language, 'main_menu') });
+              await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
               return;
             }
             
             console.log(chalk.green(`✅ User ${jid.split('@')[0]} can start scraper: ${limitInfo.remaining}/${DAILY_SCRAPING_LIMIT} remaining`));
             
-            session.currentStep = 'awaiting_niche';
+            session.currentStep = 'awaiting_business_service';
             saveJson(SESSIONS_FILE, sessions);
             await sock.sendMessage(jid, { 
               text: getMessage(session.language, 'enter_niche')
@@ -4510,9 +4544,7 @@ async function handleMessage(sock, message) {
         }
       } else {
         // Invalid selection - show main menu again
-        await sock.sendMessage(jid, { 
-          text: getMessage(session.language, 'main_menu')
-        });
+        await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
         return;
       }
     }
@@ -4572,7 +4604,7 @@ async function handleMessage(sock, message) {
                   const files = fs.readdirSync(resultsDir);
                   
                   // Look for autosaved files for this session ONLY
-                  const currentNiche = session.meta?.lastNiche || session.niche || 'unknown';
+                  const currentNiche = session.meta?.lastNiche || session.meta?.lastBusinessService || session.niche || 'unknown';
                   const currentSource = session.meta?.lastSource || 'unknown';
                   const sessionStartTime = session.meta?.jobStartTime || Date.now();
                   const maxFileAge = 10 * 60 * 1000; // 10 minutes - files older than this are not from current session
@@ -4580,7 +4612,7 @@ async function handleMessage(sock, message) {
                   // If no job start time is recorded, use a very recent time to ensure we only get current session files
                   const effectiveStartTime = sessionStartTime === Date.now() ? Date.now() - (5 * 60 * 1000) : sessionStartTime;
                   
-                  console.log(chalk.blue(`🔍 Looking for autosaved files for niche: "${currentNiche}" and source: "${currentSource}"`));
+                  console.log(chalk.blue(`🔍 Looking for autosaved files for business/service: "${currentNiche}" and source: "${currentSource}"`));
                   console.log(chalk.blue(`⏰ Session started at: ${new Date(sessionStartTime).toLocaleString()}`));
                   console.log(chalk.blue(`⏰ Effective start time: ${new Date(effectiveStartTime).toLocaleString()}`));
                   console.log(chalk.blue(`⏰ Max file age: ${Math.round(maxFileAge / 1000 / 60)} minutes`));
@@ -4591,7 +4623,7 @@ async function handleMessage(sock, message) {
                   let searchDirectory = resultsDir; // Default to results directory
                   
                   if (currentSource === 'MAPS' || currentSource === 'google_maps') {
-                    // Google Maps creates .json files with pattern: niche_google_maps_autosave_SESSION_ID.json
+                    // Google Maps creates .json files with pattern: business_service_google_maps_autosave_SESSION_ID.json
                     fileExtensions = ['.json'];
                     filePatterns.push('google_maps_autosave');
                     searchDirectory = resultsDir; // Look in results directory
@@ -4620,7 +4652,7 @@ async function handleMessage(sock, message) {
                   
                   // STRICT filtering: Only look for files that are:
                   // 1. From the current session (created after session start)
-                  // 2. Match the current niche exactly
+                  // 2. Match the current business/service exactly
                   // 3. Match the current source type
                   // 4. Are actually autosaved (not completed files)
                   let autosaveFiles = searchDirectoryFiles.filter(file => {
@@ -4632,7 +4664,7 @@ async function handleMessage(sock, message) {
                                                                    // Check if file is from current session (created AFTER session started, within 10 minutes)
                       const isFromCurrentSession = fileCreationTime >= effectiveStartTime && (fileCreationTime - effectiveStartTime) <= maxFileAge;
                       
-                      // Check if file matches current niche exactly
+                      // Check if file matches current business/service exactly
                       // Handle multiple naming formats: with underscores, without spaces, with spaces
                       const nicheWithUnderscores = currentNiche.toLowerCase().replace(/\s+/g, '_');
                       const nicheWithoutSpaces = currentNiche.toLowerCase().replace(/\s+/g, '');
@@ -4640,10 +4672,10 @@ async function handleMessage(sock, message) {
                                             file.toLowerCase().includes(nicheWithoutSpaces) ||
                                             file.toLowerCase().includes(currentNiche.toLowerCase());
                       
-                      // Debug logging for niche matching
+                      // Debug logging for business/service matching
                       if (currentSource === 'MAPS' || currentSource === 'google_maps') {
-                        console.log(chalk.gray(`   🔍 Niche matching for "${file}":`));
-                        console.log(chalk.gray(`      - Current niche: "${currentNiche}"`));
+                        console.log(chalk.gray(`   🔍 Business/service matching for "${file}":`));
+                        console.log(chalk.gray(`      - Current business/service: "${currentNiche}"`));
                         console.log(chalk.gray(`      - With underscores: "${nicheWithUnderscores}"`));
                         console.log(chalk.gray(`      - Without spaces: "${nicheWithoutSpaces}"`));
                         console.log(chalk.gray(`      - Matches: ${hasCorrectNiche}`));
@@ -4729,50 +4761,25 @@ async function handleMessage(sock, message) {
                     if (currentSource === 'MAPS' || currentSource === 'google_maps') {
                       // Google Maps files: niche_google_maps_autosave_SESSION_ID.json
                       if (cleanFilename.includes('_google_maps_autosave')) {
-                        // Remove session ID part to get clean filename
-                        const googleMapsPattern = /_google_maps_autosave(_SESSION_[A-Z0-9]+)?\.json$/;
-                        cleanFilename = cleanFilename.replace(googleMapsPattern, '_google_maps_autosave.json');
+                        // Use our clean filename generator to remove source information
+                        cleanFilename = generateCleanUserFileName(cleanFilename);
                         console.log(chalk.blue(`🗺️ Google Maps Pattern: ${mostRecentFile} → ${cleanFilename}`));
                         cleaned = true;
                       }
                     } else if (currentSource === 'LINKEDIN' || currentSource === 'linkedin') {
                       // LinkedIn files: handle autosave patterns
-                      if (cleanFilename.includes('_autosave_SESSION_') && cleanFilename.endsWith('.xlsx')) {
-                        const sessionPattern = /_autosave_SESSION_[A-Z0-9]+\.xlsx$/;
-                        if (sessionPattern.test(cleanFilename)) {
-                          cleanFilename = cleanFilename.replace(sessionPattern, '.xlsx');
-                          console.log(chalk.blue(`📝 LinkedIn Pattern 1 match: ${mostRecentFile} → ${cleanFilename}`));
-                          cleaned = true;
-                        }
-                      }
-                      
-                      if (!cleaned && cleanFilename.includes('_autosave_') && cleanFilename.endsWith('.xlsx')) {
-                        const autosavePattern = /_autosave_[A-Z0-9]+\.xlsx$/;
-                        if (autosavePattern.test(cleanFilename)) {
-                          cleanFilename = cleanFilename.replace(autosavePattern, '.xlsx');
-                          console.log(chalk.blue(`📝 LinkedIn Pattern 2 match: ${mostRecentFile} → ${cleanFilename}`));
-                          cleaned = true;
-                        }
-                      }
-                      
-                      if (!cleaned && cleanFilename.includes('_autosave') && cleanFilename.endsWith('.xlsx')) {
-                        const fallbackPattern = /_autosave.*?\.xlsx$/;
-                        cleanFilename = cleanFilename.replace(fallbackPattern, '.xlsx');
-                        console.log(chalk.blue(`📝 LinkedIn Pattern 3 fallback: ${mostRecentFile} → ${cleanFilename}`));
+                      if (cleanFilename.includes('_autosave') || cleanFilename.includes('_linkedin')) {
+                        // Use our clean filename generator to remove source information
+                        cleanFilename = generateCleanUserFileName(cleanFilename);
+                        console.log(chalk.blue(`📝 LinkedIn Pattern: ${mostRecentFile} → ${cleanFilename}`));
                         cleaned = true;
                       }
                     } else if (currentSource === 'GOOGLE' || currentSource === 'google_search') {
-                      // Google Search files: remove session part like LinkedIn
-                      // Pattern: niche_results_autosave_session_TIMESTAMP.txt → niche_results.txt
-                      if (cleanFilename.includes('_autosave_session_')) {
-                        const googleSearchPattern = /_autosave_session_\d+\.txt$/;
-                        cleanFilename = cleanFilename.replace(googleSearchPattern, '.txt');
-                        console.log(chalk.blue(`🌐 Google Search Pattern 1: ${mostRecentFile} → ${cleanFilename}`));
-                        cleaned = true;
-                      } else if (cleanFilename.includes('_autosave') && cleanFilename.endsWith('.txt')) {
-                        const fallbackPattern = /_autosave.*?\.txt$/;
-                        cleanFilename = cleanFilename.replace(fallbackPattern, '.txt');
-                        console.log(chalk.blue(`🌐 Google Search Pattern 2 fallback: ${mostRecentFile} → ${cleanFilename}`));
+                      // Google Search files: remove session part and source information
+                      if (cleanFilename.includes('_autosave') || cleanFilename.includes('_google_search') || cleanFilename.includes('_results')) {
+                        // Use our clean filename generator to remove source information
+                        cleanFilename = generateCleanUserFileName(cleanFilename);
+                        console.log(chalk.blue(`🌐 Google Search Pattern: ${mostRecentFile} → ${cleanFilename}`));
                         cleaned = true;
                       }
                     }
@@ -5003,8 +5010,36 @@ async function handleMessage(sock, message) {
                               return processedResult;
                             });
                             
-                            // Convert processed results to worksheet
-                            const worksheet = XLSX.utils.json_to_sheet(processedResults);
+                            // Create custom worksheet with specific column order and no Source column
+                            const customResults = processedResults.map(result => {
+                              // Create new object with desired column order and no Source column
+                              const customResult = {};
+                              
+                              // Column order: Business Name -> Phone -> Address -> Website -> Emails
+                              if (result.name) customResult['Business Name'] = result.name;
+                              if (result.phone) customResult['Phone'] = result.phone;
+                              if (result.address) customResult['Address'] = result.address;
+                              if (result.website) customResult['Website'] = result.website;
+                              if (result.emails) customResult['Emails'] = result.emails;
+                              
+                              return customResult;
+                            });
+                            
+                            const worksheet = XLSX.utils.json_to_sheet(customResults);
+                            
+                            // Auto-size columns for better readability
+                            const cols = [];
+                            if (customResults.length > 0) {
+                              Object.keys(customResults[0]).forEach(key => {
+                                const maxLength = Math.max(
+                                  key.length,
+                                  ...customResults.map(row => String(row[key] || '').length)
+                                );
+                                cols.push({ width: Math.min(maxLength + 2, 50) });
+                              });
+                            }
+                            worksheet['!cols'] = cols;
+                            
                             XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
                             
                             // Create Excel filename with session ID to prevent overwriting
@@ -5081,9 +5116,7 @@ async function handleMessage(sock, message) {
              session.currentStep = 'main_menu';
              session.status = 'idle';
              saveJson(SESSIONS_FILE, sessions);
-             await sock.sendMessage(jid, { 
-               text: getMessage(session.language, 'main_menu')
-             });
+             await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
           }
         } catch (error) {
           console.error(chalk.red(`❌ Error stopping job:`, error.message));
@@ -5154,9 +5187,7 @@ async function handleMessage(sock, message) {
         sessions[jid] = session;
         saveJson(SESSIONS_FILE, sessions);
         
-        await sock.sendMessage(jid, { 
-          text: getMessage(session.language, 'main_menu')
-        });
+        await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
         return;
       } else {
         // Invalid input - show logout confirmation again
@@ -5259,7 +5290,7 @@ async function handleMessage(sock, message) {
               // Send appropriate welcome message based on current state
         if (session.currentStep === 'awaiting_language') {
           // User authenticated but needs to select language - show language selection
-        await sendImageWithMessage(sock, jid, 'welcome', getMessage('en', 'welcome'), 'en');
+        await sendImageWithMessage(sock, jid, 'welcome', getMessage('fr', 'welcome'), 'fr');
         return;
       } else {
           // User is ready for main menu - show welcome and main menu
@@ -5278,7 +5309,7 @@ async function handleMessage(sock, message) {
           const stage = entry.stage || 'free_trial';
             
                   // Use the session language (which should be set from the user's selection)
-      const userLanguage = session.language || 'en';
+      const userLanguage = session.language || 'fr';
       console.log(chalk.blue(`🎯 Using language for welcome message: ${userLanguage}`));
             
             console.log(chalk.blue(`🎯 Sending welcome message in language: ${userLanguage}, stage: ${stage}`));
@@ -5295,7 +5326,7 @@ async function handleMessage(sock, message) {
             }
           } catch (e) {
             // If any issue reading codes, fall back to normal welcome
-            const userLanguage = session.language || 'en';
+            const userLanguage = session.language || 'fr';
             console.log(chalk.yellow(`⚠️ Error reading codes, using fallback language: ${userLanguage}`));
             await sendImageWithMessage(sock, jid, 'welcome', getMessage(userLanguage, 'paid_welcome'), userLanguage);
           }
@@ -5496,7 +5527,7 @@ async function handleMessage(sock, message) {
 
 
     // Handle messages based on current conversation step
-    if (session.currentStep === 'awaiting_niche') {
+    if (session.currentStep === 'awaiting_business_service') {
         if (text === '0') {
             // User wants to go back to main menu
             session.currentStep = 'main_menu';
@@ -5505,11 +5536,36 @@ async function handleMessage(sock, message) {
             sessions[jid] = session; // Update the sessions object
             saveJson(SESSIONS_FILE, sessions);
 
-            await sock.sendMessage(jid, {
-                text: getMessage(session.language, 'main_menu')
-            });
+            await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
             return;
-        } else if (isNaN(inputNumber)) { // Treat non-numeric input as niche
+        } else if (isNaN(inputNumber)) { // Treat non-numeric input as business/service
+            // Initialize business/service validator with user's Gemini API key
+            if (session.apiKeys && session.apiKeys.geminiKeys && session.apiKeys.geminiKeys.length > 0) {
+                nicheValidator.initialize(session.apiKeys.geminiKeys[0]);
+            }
+            
+            // Validate the business/service using Gemini AI
+            const validation = await nicheValidator.validateNiche(text, session.language);
+            
+            if (!validation.isValid) {
+                // Send validation error message using language-specific template
+                let suggestionsText = '';
+                if (validation.suggestions && validation.suggestions.length > 0) {
+                    validation.suggestions.forEach((suggestion, index) => {
+                        suggestionsText += `${index + 1}. ${suggestion}\n`;
+                    });
+                }
+                
+                const errorMessage = getMessage(session.language, 'niche_validation_error', {
+                    reason: validation.reason,
+                    suggestions: suggestionsText
+                });
+                
+                await sock.sendMessage(jid, { text: errorMessage });
+            return;
+            }
+            
+            // Business/service is valid, proceed with normal flow
             session.pendingNiche = text;
             session.currentStep = 'awaiting_source';
             session.previousMessage = getMessage(session.language, 'select_source', {
@@ -5521,7 +5577,7 @@ async function handleMessage(sock, message) {
         } else {
             // User sent a number - guide them back to search flow
             await sock.sendMessage(jid, { 
-                text: '⚠️ **Invalid input.** Please enter your search query (e.g., "dentist casablanca") or send 0 to go back to main menu.'
+                text: '⚠️ **Invalid input.** Please enter your business or service (e.g., "dentist casablanca") or send 0 to go back to main menu.'
             });
             // Resend the enter_niche message to guide them
             await sock.sendMessage(jid, { 
@@ -5549,8 +5605,8 @@ async function handleMessage(sock, message) {
             await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
             return;
         } else if (inputNumber === 0) {
-            // Go back to niche input
-            session.currentStep = 'awaiting_niche';
+            // Go back to business/service input
+            session.currentStep = 'awaiting_business_service';
             session.previousMessage = null;
             sessions[jid] = session;
             saveJson(SESSIONS_FILE, sessions);
@@ -5755,8 +5811,7 @@ async function handleMessage(sock, message) {
             console.log(chalk.cyan(`🔍 Job started: "${niche}" (${source}/${dataType}/${format}/${limit})`));
 
             await sendImageWithMessage(sock, jid, 'starting', getMessage(currentSession.language, 'job_starting', {
-                  niche: niche,
-                  source: source
+                  niche: niche
                 }), currentSession.language);
             
             console.log(chalk.cyan(`🚀 Progress tracking initialized for ${jid}: 0%`));
@@ -5951,7 +6006,7 @@ async function handleMessage(sock, message) {
                             // Clean up the job
                             activeJobs.delete(jid);
                             session.status = 'idle';
-                            session.currentStep = 'awaiting_niche';
+                            session.currentStep = 'awaiting_business_service';
                             sessions[jid] = session;
                             saveJson(SESSIONS_FILE, sessions);
                         }
@@ -6282,7 +6337,7 @@ async function handleMessage(sock, message) {
     } else if (session.currentStep === 'scraping_in_progress' && !activeJobs.has(jid)) {
         // FIX: If session step is 'scraping_in_progress' but no active job exists,
         // reset the session state to prevent stuck state
-        console.log(chalk.yellow(`🔧 Fixing stuck session state for ${jid}: resetting from 'scraping_in_progress' to 'awaiting_niche'`));
+        console.log(chalk.yellow(`🔧 Fixing stuck session state for ${jid}: resetting from 'scraping_in_progress' to 'awaiting_business_service'`));
         resetSessionState(jid, sessions);
         
         // Send message to user about the reset
@@ -6340,8 +6395,8 @@ async function handleMessage(sock, message) {
     }
 
     // Fallback for unhandled messages when not in a specific conversational step
-    if (!activeJobs.has(jid) && session.currentStep !== 'awaiting_niche' && isNaN(inputNumber) && text.toUpperCase() !== 'START') {
-        // If not in awaiting_niche and no job running, re-send the previous prompt for numerical input
+    if (!activeJobs.has(jid) && session.currentStep !== 'awaiting_business_service' && isNaN(inputNumber) && text.toUpperCase() !== 'START') {
+        // If not in awaiting_business_service and no job running, re-send the previous prompt for numerical input
         if (session.previousMessage) {
             await sock.sendMessage(jid, { text: '⚠️ Invalid input. Please choose a number from the list, or 0 to go back.' });
             await sock.sendMessage(jid, { text: session.previousMessage });
@@ -6349,10 +6404,10 @@ async function handleMessage(sock, message) {
             // This case should ideally not be reached if previousMessage is correctly managed
             await sock.sendMessage(jid, { text: getMessage(session.language, 'error_generic') });
         }
-    } else if (!activeJobs.has(jid) && session.currentStep === 'awaiting_niche' && !isNaN(inputNumber)) {
-        // User sent a number in awaiting_niche state - guide them back to search flow
+    } else if (!activeJobs.has(jid) && session.currentStep === 'awaiting_business_service' && !isNaN(inputNumber)) {
+        // User sent a number in awaiting_business_service state - guide them back to search flow
         await sock.sendMessage(jid, { 
-            text: '⚠️ **Invalid input.** Please enter your search query (e.g., "dentist casablanca") or send 0 to go back to main menu.'
+            text: '⚠️ **Invalid input.** Please enter your business or service (e.g., "dentist casablanca") or send 0 to go back to main menu.'
         });
         // Resend the enter_niche message to guide them
         await sock.sendMessage(jid, { 

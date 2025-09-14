@@ -305,29 +305,48 @@ export class ResultProcessor {
   async exportToExcel(results, filepath, source) {
     const workbook = XLSX.utils.book_new();
     
-    // Prepare data based on result structure
-    const worksheetData = results.map(result => {
-      const row = {};
-      
-      // Common fields
-      if (result.source) row['Source'] = result.source;
-      if (result.email) row['Email'] = result.email;
-      if (result.emails) row['Emails'] = result.emails;
-      if (result.phone) row['Phone'] = result.phone;
-      
-      // LinkedIn specific
-      if (result.name) row['Name'] = result.name;
-      if (result.profileUrl) row['LinkedIn URL'] = result.profileUrl;
-      if (result.bio) row['Bio'] = result.bio;
-      if (result.isCompanyPage !== undefined) row['Is Company'] = result.isCompanyPage ? 'Yes' : 'No';
-      
-      // Google Maps specific
-      if (result.businessName) row['Business Name'] = result.businessName;
-      if (result.address) row['Address'] = result.address;
-      if (result.website) row['Website'] = result.website;
-      
-      return row;
-    });
+    // Prepare data based on result structure and source type
+    let worksheetData;
+    
+    if (source === 'google_maps' || source === 'MAPS') {
+      // Google Maps specific format: Business Name -> Phone -> Address -> Website -> Emails (no Source column)
+      worksheetData = results.map(result => {
+        const row = {};
+        
+        // Column order: Business Name -> Phone -> Address -> Website -> Emails
+        if (result.name || result.businessName) row['Business Name'] = result.name || result.businessName;
+        if (result.phone) row['Phone'] = result.phone;
+        if (result.address) row['Address'] = result.address;
+        if (result.website) row['Website'] = result.website;
+        if (result.emails) row['Emails'] = result.emails;
+        
+        return row;
+      });
+    } else {
+      // Other sources: keep original format with Source column
+      worksheetData = results.map(result => {
+        const row = {};
+        
+        // Common fields
+        if (result.source) row['Source'] = result.source;
+        if (result.email) row['Email'] = result.email;
+        if (result.emails) row['Emails'] = result.emails;
+        if (result.phone) row['Phone'] = result.phone;
+        
+        // LinkedIn specific
+        if (result.name) row['Name'] = result.name;
+        if (result.profileUrl) row['LinkedIn URL'] = result.profileUrl;
+        if (result.bio) row['Bio'] = result.bio;
+        if (result.isCompanyPage !== undefined) row['Is Company'] = result.isCompanyPage ? 'Yes' : 'No';
+        
+        // Google Maps specific (for other sources that might have this data)
+        if (result.businessName) row['Business Name'] = result.businessName;
+        if (result.address) row['Address'] = result.address;
+        if (result.website) row['Website'] = result.website;
+        
+        return row;
+      });
+    }
     
     const worksheet = XLSX.utils.json_to_sheet(worksheetData);
     
