@@ -8,11 +8,12 @@ import { ResultProcessor } from './result-processor.js';
  * Maintains separate workflows while providing unified interface
  */
 export class SourceManager {
-  constructor() {
+  constructor(errorHandler = null) {
     this.scrapers = new Map();
     this.resultProcessor = new ResultProcessor();
     this.isProcessing = false;
     this.currentSource = null;
+    this.errorHandler = errorHandler;
   }
 
   /**
@@ -90,6 +91,9 @@ export class SourceManager {
               await onResult(result);
             } catch (error) {
               console.error('onResult callback error:', error.message);
+              if (this.errorHandler) {
+                await this.errorHandler(error, 'onResult_callback', { result });
+              }
             }
           }
           
@@ -104,6 +108,13 @@ export class SourceManager {
               });
             } catch (error) {
               console.error('onProgress callback error:', error.message);
+              if (this.errorHandler) {
+                await this.errorHandler(error, 'onProgress_callback', { 
+                  processed: processedCount, 
+                  total: results.length, 
+                  phase: 'scraping' 
+                });
+              }
             }
           }
         }
@@ -119,6 +130,12 @@ export class SourceManager {
             await onBatch([...finalForBatch]);
           } catch (error) {
             console.error('onBatch callback error:', error.message);
+            if (this.errorHandler) {
+              await this.errorHandler(error, 'onBatch_callback', { 
+                batchSize: finalForBatch.length,
+                totalResults: allResults.length 
+              });
+            }
           }
         }
         
@@ -174,6 +191,18 @@ export class SourceManager {
     } catch (error) {
       this.isProcessing = false;
       console.error(chalk.red(`\n❌ ${this.getSourceDisplayName(source)} scraping failed: ${error.message}`));
+      
+      // Use centralized error handler if available
+      if (this.errorHandler) {
+        await this.errorHandler(error, `${source}_scraping`, {
+          niche,
+          dataType,
+          format,
+          source,
+          currentSource: this.currentSource
+        });
+      }
+      
       throw error;
     }
   }
@@ -230,6 +259,12 @@ export class SourceManager {
       
     } catch (error) {
       spinner.fail(`Failed to load ${this.getSourceDisplayName(source)} scraper`);
+      
+      // Use centralized error handler if available
+      if (this.errorHandler) {
+        await this.errorHandler(error, 'scraper_load', { source });
+      }
+      
       throw new Error(`Could not load scraper for ${source}: ${error.message}`);
     }
   }

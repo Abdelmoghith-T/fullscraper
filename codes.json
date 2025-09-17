@@ -16,13 +16,13 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-09-14T00:23:19.849Z",
-      "useCount": 10
+      "lastUsed": "2025-09-17T06:40:41.408Z",
+      "useCount": 16
     },
     "dailyScraping": {
-      "date": "Sun Sep 14 2025",
-      "count": 1,
-      "lastReset": "2025-09-14T00:26:14.114Z"
+      "date": "Wed Sep 17 2025",
+      "count": 2,
+      "lastReset": "2025-09-17T06:05:38.592Z"
     },
     "language": "en",
     "stage": "paid",
@@ -33,6 +33,42 @@
     "paid": {
       "grantedAt": "2025-09-11T14:58:10.620Z",
       "expiresAt": "2025-10-11T14:58:10.620Z"
+    }
+  },
+  "user2": {
+    "apiKeys": {
+      "googleSearchKeys": [
+        "AIzaSyAsJbx4lQ_XSAHK1NiJzdYNp8Tg6BgT2tI",
+        "AIzaSyDftApgqM4dIF9soHHh-y65hGrAunuWzA0",
+        "AIzaSyBevJeD3QDyHcB58_NyXb4DCCvElWf0ui4"
+      ],
+      "geminiKeys": [
+        "AIzaSyDftApgqM4dIF9soHHh-y65hGrAunuWzA0",
+        "AIzaSyCNYHtuPviX4MxnfIcxJYaFP66X7Bs84xU",
+        "AIzaSyCEumkWOhrtddCuULj8xkH2zlMzuNi9Niw"
+      ]
+    },
+    "createdAt": "2025-09-15T00:52:07.723Z",
+    "expiresAt": null,
+    "meta": {
+      "issuedBy": "admin123",
+      "lastUsed": "2025-09-15T15:02:21.652Z",
+      "useCount": 3
+    },
+    "dailyScraping": {
+      "date": "Mon Sep 15 2025",
+      "count": 2,
+      "lastReset": "2025-09-15T00:52:07.723Z"
+    },
+    "language": "en",
+    "stage": "paid",
+    "trial": {
+      "triesUsed": 3,
+      "maxTries": 3
+    },
+    "paid": {
+      "grantedAt": "2025-09-15T01:22:00.618Z",
+      "expiresAt": "2025-10-15T01:22:00.618Z"
     }
   }
 }

@@ -27,6 +27,7 @@
     "test:format-removal": "node test-format-removal.js",
     "test:linkedin-fix": "node test-linkedin-fix.js",
     "test:session-code": "node test-session-code.js",
+    "test:ai-decision": "node test/test-ai-decision.js",
 
     "demo:progress": "node test/demo-progress.js",
     "lint": "eslint .",

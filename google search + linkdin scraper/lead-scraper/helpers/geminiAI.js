@@ -134,6 +134,17 @@ export async function generateQueriesWithGemini(niche, source = 'google_search',
       throw new Error('GEMINI_API_RATE_LIMITED: Rate limit exceeded for user Gemini API key. Please wait a few minutes or add more API keys.');
     }
     
+    // ✅ ENHANCED: Check for service unavailable (503)
+    if (error.response && error.response.status === 503) {
+      console.error(chalk.red(`🚨 GEMINI API SERVICE UNAVAILABLE!`));
+      console.error(chalk.yellow(`💡 Google's Gemini service is temporarily down or overloaded.`));
+      console.error(chalk.yellow(`💡 Please wait a few minutes and try again.`));
+      console.error(chalk.red(`🛑 Stopping scraping operation - service unavailable.`));
+      
+      // ✅ NEW: Throw specific error to stop scraping
+      throw new Error('GEMINI_API_SERVICE_UNAVAILABLE: Gemini API service is temporarily unavailable (503). Please wait a few minutes and try again.');
+    }
+    
     // ✅ ENHANCED: Check for invalid API key
     if (error.response && error.response.status === 400) {
       const errorMessage = error.response.data?.error?.message || '';

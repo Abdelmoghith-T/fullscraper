@@ -10,7 +10,8 @@ import { getMessage } from './languages.js';
 import http from 'http';
 
 import AdminManager from './lib/admin-manager.js';
-import { nicheValidator } from './lib/niche-validator.js';
+import { nicheValidator, setNicheValidatorErrorHandler } from './lib/niche-validator.js';
+import { NicheSuggester } from './lib/niche-suggester.js';
 
 const require = createRequire(import.meta.url);
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('baileys');
@@ -50,7 +51,7 @@ async function sendImageWithMessage(sock, jid, imageName, text, language = 'fr')
       await sock.sendMessage(jid, { text });
     }
   } catch (error) {
-    console.error(chalk.red(`❌ Error sending image ${imageName}:`, error.message));
+    await handleError(error, 'image_send', { imageName, jid: jid.split('@')[0] });
     // Fallback to text only
     await sock.sendMessage(jid, { text });
   }
@@ -571,7 +572,7 @@ function checkDailyScrapingLimit(jid, sessions) {
  * @param {Object} sessions - Current sessions data
  * @returns {boolean} - Success status
  */
-function incrementDailyScrapingCount(jid, sessions) {
+async function incrementDailyScrapingCount(jid, sessions) {
   try {
     const session = sessions[jid];
     if (!session || !session.code) {
@@ -620,7 +621,7 @@ function incrementDailyScrapingCount(jid, sessions) {
     console.log(chalk.blue(`💾 Access codes saved for ${userCode} with daily count: ${userAccess.dailyScraping.count}`));
     return true;
   } catch (error) {
-    console.error(chalk.red(`❌ Error updating daily scraping count for ${jid}:`, error.message));
+    await handleError(error, 'daily_limit_update', { jid: jid.split('@')[0] });
     return false;
   }
 }
@@ -646,7 +647,7 @@ function getDailyScrapingStatusMessage(limitInfo, language = 'fr') {
 }
 
 // Load admin sessions from disk
-function loadAdminSessions() {
+async function loadAdminSessions() {
   try {
     const adminSessionsFile = path.join(__dirname, 'admin_sessions.json');
     if (fs.existsSync(adminSessionsFile)) {
@@ -664,13 +665,13 @@ function loadAdminSessions() {
       console.log(chalk.blue(`📱 No admin sessions file found, starting with empty sessions`));
     }
   } catch (error) {
-    console.error('❌ Failed to load admin sessions:', error.message);
+    await handleError(error, 'admin_sessions_load', {});
     console.log(chalk.blue(`📱 Starting with empty admin sessions`));
   }
 }
 
 // Save admin sessions to disk
-function saveAdminSessions() {
+async function saveAdminSessions() {
   try {
     const adminSessionsFile = path.join(__dirname, 'admin_sessions.json');
     const data = {};
@@ -680,7 +681,7 @@ function saveAdminSessions() {
     fs.writeFileSync(adminSessionsFile, JSON.stringify(data, null, 2));
     console.log(chalk.blue(`💾 Admin sessions saved to disk`));
   } catch (error) {
-    console.error('❌ Failed to save admin sessions:', error.message);
+    await handleError(error, 'admin_sessions_save', {});
   }
 }
 
@@ -692,6 +693,154 @@ const RECONNECT_DELAY = 5000; // 5 seconds
 
 // Offline job completion tracking
 const completedJobs = new Map(); // jid -> { filePath: string, meta: any, completedAt: Date }
+
+// Error logging and notification system
+const errorLog = [];
+const MAX_ERROR_LOG_SIZE = 100; // Keep last 100 errors
+
+/**
+ * Centralized error handler that logs errors and notifies admins
+ * @param {Error} error - The error object
+ * @param {string} context - Context where the error occurred
+ * @param {Object} additionalData - Additional data to include in the error report
+ */
+async function handleError(error, context = 'Unknown', additionalData = {}) {
+  try {
+    const timestamp = new Date().toISOString();
+    const errorId = `ERR_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Create error entry
+    const errorEntry = {
+      id: errorId,
+      timestamp,
+      context,
+      message: error.message,
+      stack: error.stack,
+      additionalData,
+      severity: determineErrorSeverity(error, context)
+    };
+    
+    // Add to error log
+    errorLog.push(errorEntry);
+    
+    // Keep only the last MAX_ERROR_LOG_SIZE errors
+    if (errorLog.length > MAX_ERROR_LOG_SIZE) {
+      errorLog.shift();
+    }
+    
+    // Log to console
+    console.error(chalk.red(`🚨 [${errorId}] Error in ${context}:`), error.message);
+    if (error.stack) {
+      console.error(chalk.gray(error.stack));
+    }
+    
+    // Notify admins if the error is severe enough
+    if (errorEntry.severity >= 2) { // Only notify for medium and high severity errors
+      await notifyAdminsOfError(errorEntry);
+    }
+    
+    return errorId;
+  } catch (notificationError) {
+    console.error(chalk.red('❌ Failed to handle error notification:'), notificationError.message);
+  }
+}
+
+/**
+ * Determine error severity level
+ * @param {Error} error - The error object
+ * @param {string} context - Context where the error occurred
+ * @returns {number} Severity level (1=low, 2=medium, 3=high, 4=critical)
+ */
+function determineErrorSeverity(error, context) {
+  const message = error.message.toLowerCase();
+  const stack = error.stack ? error.stack.toLowerCase() : '';
+  
+  // Critical errors
+  if (message.includes('uncaught') || 
+      message.includes('fatal') || 
+      message.includes('memory') ||
+      message.includes('connection lost') ||
+      context.includes('startup') ||
+      context.includes('authentication')) {
+    return 4;
+  }
+  
+  // High severity errors
+  if (message.includes('failed to send') ||
+      message.includes('scraping failed') ||
+      message.includes('api key') ||
+      message.includes('quota exceeded') ||
+      context.includes('scraping') ||
+      context.includes('file_send')) {
+    return 3;
+  }
+  
+  // Medium severity errors
+  if (message.includes('timeout') ||
+      message.includes('network') ||
+      message.includes('retry') ||
+      context.includes('connection') ||
+      context.includes('session')) {
+    return 2;
+  }
+  
+  // Low severity errors (default)
+  return 1;
+}
+
+/**
+ * Notify all active admins about an error
+ * @param {Object} errorEntry - The error entry object
+ */
+async function notifyAdminsOfError(errorEntry) {
+  if (!sock || adminSessions.size === 0) {
+    return;
+  }
+  
+  try {
+    const severityEmoji = {
+      1: '🟡', // Low
+      2: '🟠', // Medium  
+      3: '🔴', // High
+      4: '🚨'  // Critical
+    };
+    
+    const severityText = {
+      1: 'LOW',
+      2: 'MEDIUM',
+      3: 'HIGH', 
+      4: 'CRITICAL'
+    };
+    
+    const emoji = severityEmoji[errorEntry.severity] || '🟡';
+    const severity = severityText[errorEntry.severity] || 'LOW';
+    
+    const errorMessage = `${emoji} **Bot Error Alert**\n\n` +
+      `🆔 **Error ID:** \`${errorEntry.id}\`\n` +
+      `⏰ **Time:** ${new Date(errorEntry.timestamp).toLocaleString()}\n` +
+      `📍 **Context:** ${errorEntry.context}\n` +
+      `⚠️ **Severity:** ${severity}\n` +
+      `💬 **Message:** ${errorEntry.message}\n\n` +
+      `🔧 **Additional Data:**\n${JSON.stringify(errorEntry.additionalData, null, 2)}\n\n` +
+      `📊 **Total Errors Today:** ${errorLog.length}\n` +
+      `🛠️ **Use ADMIN ERROR LOG to see all errors**`;
+    
+    // Send to all active admins
+    for (const [adminJid, adminSession] of adminSessions.entries()) {
+      try {
+        await sock.sendMessage(adminJid, { text: errorMessage });
+        console.log(chalk.blue(`📤 Error notification sent to admin ${adminJid.split('@')[0]}`));
+      } catch (sendError) {
+        console.error(chalk.red(`❌ Failed to send error notification to admin ${adminJid.split('@')[0]}:`), sendError.message);
+      }
+    }
+  } catch (error) {
+    console.error(chalk.red('❌ Failed to notify admins of error:'), error.message);
+  }
+}
+
+// Set error handler for niche validator after handleError is defined
+setNicheValidatorErrorHandler(handleError);
 
 // Helper functions
 function loadJson(filePath, defaultValue = {}) {
@@ -1669,7 +1818,7 @@ async function handleMessage(sock, message) {
       });
 
       // Save admin sessions to disk
-      saveAdminSessions();
+      await saveAdminSessions();
 
       console.log(chalk.green(`🔓 Admin access granted to ${jid.split('@')[0]} with role: ${authResult.admin.role}`));
       console.log(chalk.blue(`📊 Admin sessions Map now contains ${adminSessions.size} sessions:`, Array.from(adminSessions.keys()).map(k => k.split('@')[0])));
@@ -1679,7 +1828,7 @@ async function handleMessage(sock, message) {
       });
 
       // Save admin sessions to disk
-      saveAdminSessions();
+      await saveAdminSessions();
       
       console.log(chalk.blue(`🔍 Admin session initialized for ${jid.split('@')[0]}: currentMenu=main_admin_menu, menuOptions=10`));
       return;
@@ -1704,7 +1853,7 @@ async function handleMessage(sock, message) {
       adminSession.currentMenu = 'main_admin_menu';
       adminSession.menuOptions = 10;
       adminSessions.set(jid, adminSession);
-      saveAdminSessions();
+      await saveAdminSessions();
       console.log(chalk.blue(`🔍 Fixed admin session: set currentMenu = "${adminSession.currentMenu}"`));
     }
     
@@ -1918,7 +2067,7 @@ async function handleMessage(sock, message) {
         adminSession.currentMenu = 'main_admin_menu';
         adminSession.modifyUserData = null;
         adminSessions.set(jid, adminSession);
-        saveAdminSessions();
+        await saveAdminSessions();
         
         // Show main menu again
         const permissions = adminSession.permissions;
@@ -1998,7 +2147,7 @@ async function handleMessage(sock, message) {
         adminSession.currentMenu = 'modify_user_type';
         adminSession.modifyUserData.selectedUser = selectedUser;
         adminSessions.set(jid, adminSession);
-        saveAdminSessions();
+        await saveAdminSessions();
         
         await sock.sendMessage(jid, { text: message });
         return;
@@ -2017,7 +2166,7 @@ async function handleMessage(sock, message) {
         adminSession.currentMenu = 'modify_user_select';
         adminSession.modifyUserData.selectedUser = null;
         adminSessions.set(jid, adminSession);
-        saveAdminSessions();
+        await saveAdminSessions();
         
         // Show user list again
         let message = `✏️ **Modify User - Select User**\n\n📋 **Available users to modify:**\n\n`;
@@ -2052,7 +2201,7 @@ async function handleMessage(sock, message) {
           
           adminSession.currentMenu = 'modify_user_code';
           adminSessions.set(jid, adminSession);
-          saveAdminSessions();
+          await saveAdminSessions();
           return;
           
         case 2: // Update API Keys
@@ -2062,7 +2211,7 @@ async function handleMessage(sock, message) {
           
           adminSession.currentMenu = 'modify_user_keys';
           adminSessions.set(jid, adminSession);
-          saveAdminSessions();
+          await saveAdminSessions();
           return;
           
         case 3: // Change Language
@@ -2072,7 +2221,7 @@ async function handleMessage(sock, message) {
           
           adminSession.currentMenu = 'modify_user_language';
           adminSessions.set(jid, adminSession);
-          saveAdminSessions();
+          await saveAdminSessions();
           return;
           
         case 4: // Reset Daily Scraping Count
@@ -2082,7 +2231,7 @@ async function handleMessage(sock, message) {
           
           adminSession.currentMenu = 'modify_user_reset_count';
           adminSessions.set(jid, adminSession);
-          saveAdminSessions();
+          await saveAdminSessions();
           return;
           
         case 5: // Add Daily Limit
@@ -2092,7 +2241,7 @@ async function handleMessage(sock, message) {
           
           adminSession.currentMenu = 'modify_user_add_limit';
           adminSessions.set(jid, adminSession);
-          saveAdminSessions();
+          await saveAdminSessions();
           return;
           
         default:
@@ -2109,7 +2258,7 @@ async function handleMessage(sock, message) {
         // Go back to modification type selection
         adminSession.currentMenu = 'modify_user_type';
         adminSessions.set(jid, adminSession);
-        saveAdminSessions();
+        await saveAdminSessions();
         
         const selectedUser = adminSession.modifyUserData.selectedUser;
         let message = `✏️ **Modify User: ${selectedUser.code}**\n\n📋 **Current user information:**\n`;
@@ -2167,7 +2316,7 @@ async function handleMessage(sock, message) {
       adminSession.currentMenu = 'main_admin_menu';
       adminSession.modifyUserData = null;
       adminSessions.set(jid, adminSession);
-      saveAdminSessions();
+      await saveAdminSessions();
       
       // Show main menu
       const permissions = adminSession.permissions;
@@ -2222,7 +2371,7 @@ async function handleMessage(sock, message) {
         // Go back to modification type selection
         adminSession.currentMenu = 'modify_user_type';
         adminSessions.set(jid, adminSession);
-        saveAdminSessions();
+        await saveAdminSessions();
         
         const selectedUser = adminSession.modifyUserData.selectedUser;
         let message = `✏️ **Modify User: ${selectedUser.code}**\n\n📋 **Current user information:**\n`;
@@ -2274,7 +2423,7 @@ async function handleMessage(sock, message) {
         adminSession.currentMenu = 'main_admin_menu';
         adminSession.modifyUserData = null;
         adminSessions.set(jid, adminSession);
-        saveAdminSessions();
+        await saveAdminSessions();
         
         // Show main menu
         const permissions = adminSession.permissions;
@@ -2335,7 +2484,7 @@ async function handleMessage(sock, message) {
         // Go back to modification type selection
         adminSession.currentMenu = 'modify_user_type';
         adminSessions.set(jid, adminSession);
-        saveAdminSessions();
+        await saveAdminSessions();
         
         const selectedUser = adminSession.modifyUserData.selectedUser;
         let message = `✏️ **Modify User: ${selectedUser.code}**\n\n📋 **Current user information:**\n`;
@@ -2394,7 +2543,7 @@ async function handleMessage(sock, message) {
       adminSession.currentMenu = 'main_admin_menu';
       adminSession.modifyUserData = null;
       adminSessions.set(jid, adminSession);
-      saveAdminSessions();
+      await saveAdminSessions();
       
       // Show main menu
       const permissions = adminSession.permissions;
@@ -2590,7 +2739,7 @@ async function handleMessage(sock, message) {
               adminSession.currentMenu = 'modify_user_select';
               adminSession.modifyUserData = { users: result.users };
               adminSessions.set(jid, adminSession);
-              saveAdminSessions();
+              await saveAdminSessions();
               
               await sock.sendMessage(jid, { text: message });
             } else {
@@ -2704,7 +2853,7 @@ async function handleMessage(sock, message) {
           
           // Clear the admin session
           adminSessions.delete(jid);
-          saveAdminSessions();
+          await saveAdminSessions();
           
           await sock.sendMessage(jid, { 
             text: `🔓 **Admin Logout Successful!**\n\n✅ You have been logged out of your admin session.\n\n💡 **To log back in:**\n• Send ADMIN: <admin_code> to start a new admin session\n• Example: ADMIN: admin123\n\n💡 **To become user:**\n• Send CODE: <user_code> to start a user session\n• Example: CODE: user1`
@@ -2728,7 +2877,7 @@ async function handleMessage(sock, message) {
         adminSession.currentMenu = 'main_admin_menu';
         adminSession.modifyUserData = null;
         adminSessions.set(jid, adminSession);
-        saveAdminSessions();
+        await saveAdminSessions();
         
         // Show main menu again
         const permissions = adminSession.permissions;
@@ -2808,7 +2957,7 @@ async function handleMessage(sock, message) {
         adminSession.currentMenu = 'modify_user_type';
         adminSession.modifyUserData.selectedUser = selectedUser;
         adminSessions.set(jid, adminSession);
-        saveAdminSessions();
+        await saveAdminSessions();
         
         await sock.sendMessage(jid, { text: message });
         return;
@@ -2827,7 +2976,7 @@ async function handleMessage(sock, message) {
         adminSession.currentMenu = 'modify_user_select';
         adminSession.modifyUserData.selectedUser = null;
         adminSessions.set(jid, adminSession);
-        saveAdminSessions();
+        await saveAdminSessions();
         
         // Show user list again
         let message = `✏️ **Modify User - Select User**\n\n📋 **Available users to modify:**\n\n`;
@@ -2862,7 +3011,7 @@ async function handleMessage(sock, message) {
           
           adminSession.currentMenu = 'modify_user_code';
           adminSessions.set(jid, adminSession);
-          saveAdminSessions();
+          await saveAdminSessions();
           return;
           
         case 2: // Update API Keys
@@ -2872,7 +3021,7 @@ async function handleMessage(sock, message) {
           
           adminSession.currentMenu = 'modify_user_keys';
           adminSessions.set(jid, adminSession);
-          saveAdminSessions();
+          await saveAdminSessions();
           return;
           
         case 3: // Change Language
@@ -2882,7 +3031,7 @@ async function handleMessage(sock, message) {
           
           adminSession.currentMenu = 'modify_user_language';
           adminSessions.set(jid, adminSession);
-          saveAdminSessions();
+          await saveAdminSessions();
           return;
           
         case 4: // Reset Daily Scraping Count
@@ -2892,7 +3041,7 @@ async function handleMessage(sock, message) {
           
           adminSession.currentMenu = 'modify_user_reset_count';
           adminSessions.set(jid, adminSession);
-          saveAdminSessions();
+          await saveAdminSessions();
           return;
           
         case 5: // Add Daily Limit
@@ -2902,7 +3051,7 @@ async function handleMessage(sock, message) {
           
           adminSession.currentMenu = 'modify_user_add_limit';
           adminSessions.set(jid, adminSession);
-          saveAdminSessions();
+          await saveAdminSessions();
           return;
           
         default:
@@ -2919,7 +3068,7 @@ async function handleMessage(sock, message) {
         // Go back to modification type selection
         adminSession.currentMenu = 'modify_user_type';
         adminSessions.set(jid, adminSession);
-        saveAdminSessions();
+        await saveAdminSessions();
         
         const selectedUser = adminSession.modifyUserData.selectedUser;
         let message = `✏️ **Modify User: ${selectedUser.code}**\n\n📋 **Current user information:**\n`;
@@ -2977,7 +3126,7 @@ async function handleMessage(sock, message) {
       adminSession.currentMenu = 'main_admin_menu';
       adminSession.modifyUserData = null;
       adminSessions.set(jid, adminSession);
-      saveAdminSessions();
+      await saveAdminSessions();
       
       // Show main menu
       const permissions = adminSession.permissions;
@@ -3360,7 +3509,13 @@ async function handleMessage(sock, message) {
         message += `• **ADMIN RELOAD** - Reload admin manager completely\n`;
         message += `• **ADMIN CONFIG** - Show admin configuration details\n`;
         message += `• **ADMIN CODES** - Show all user codes\n`;
-        message += `• **ADMIN SESSIONS** - Show all user sessions\n\n`;
+        message += `• **ADMIN SESSIONS** - Show all user sessions\n`;
+        message += `• **ADMIN SEND FILES** - Send sessions.json and codes.json files as attachments\n`;
+        message += `• **ADMIN ERROR LOG** - Show recent error log\n`;
+        message += `• **ADMIN ERROR DETAILS <error_id>** - Show detailed error information\n`;
+        message += `• **ADMIN TEST ERROR** - Test the error logging system\n`;
+        message += `• **ADMIN TEST SCRAPER ERROR** - Test scraper error logging\n`;
+        message += `• **ADMIN CLEAR ERROR LOG** - Clear all errors from the error log\n\n`;
         
         message += `📅 **Daily Scraping Limits:** Each user can perform ${DAILY_SCRAPING_LIMIT} scraping jobs per day. Limits reset at midnight.\n\n`;
         message += `💡 **Note:** You can only use commands that match your permissions.`;
@@ -3399,7 +3554,7 @@ async function handleMessage(sock, message) {
         adminManager.sessions = adminManager.loadSessions();
         
         // Reload admin sessions from disk
-        loadAdminSessions();
+        await loadAdminSessions();
         
         await sock.sendMessage(jid, { 
           text: `🔄 **Admin Data Refreshed**\n\n✅ Admin configuration reloaded\n✅ User codes reloaded\n✅ User sessions reloaded\n✅ Admin sessions reloaded\n\n📊 Current admin sessions: ${adminSessions.size}`
@@ -4031,7 +4186,7 @@ async function handleMessage(sock, message) {
         Object.assign(adminManager, newAdminManager);
         
         // Reload admin sessions from disk
-        loadAdminSessions();
+        await loadAdminSessions();
         
         await sock.sendMessage(jid, { 
           text: `🔄 **Admin Manager Reloaded**\n\n✅ Admin manager recreated\n✅ All data reloaded from disk\n✅ Admin sessions refreshed\n\n📊 Current admin sessions: ${adminSessions.size}`
@@ -4176,7 +4331,7 @@ async function handleMessage(sock, message) {
           });
 
           // Save admin sessions to disk
-          saveAdminSessions();
+          await saveAdminSessions();
 
           await sock.sendMessage(jid, { 
             text: `🔐 **Admin Re-authentication Successful!**\n\n👑 **Role:** ${authResult.admin.role}\n📝 **Description:** ${authResult.admin.roleDescription}\n🔑 **Permissions:** ${authResult.admin.permissions.join(', ')}\n\n✅ Your admin session has been refreshed.`
@@ -4200,7 +4355,7 @@ async function handleMessage(sock, message) {
         try {
           const adminCode = adminSessions.get(jid)?.adminCode;
           adminSessions.delete(jid);
-          saveAdminSessions();
+          await saveAdminSessions();
           
           await sock.sendMessage(jid, { 
             text: `🔓 **Admin Logout Successful!**\n\n✅ You have been logged out of your admin session.\n\n💡 **To log back in:**\n• Send ADMIN: <admin_code> to authenticate again\n• Example: ADMIN: admin123\n\n💡 **To use as regular user:**\n• Send CODE: <user_code> to start a user session\n• Example: CODE: user1`
@@ -4221,7 +4376,7 @@ async function handleMessage(sock, message) {
       try {
         const sessionCount = adminSessions.size;
         adminSessions.clear();
-        saveAdminSessions();
+        await saveAdminSessions();
         
         await sock.sendMessage(jid, { 
           text: `🧹 **Admin Sessions Cleared**\n\n✅ Cleared ${sessionCount} admin sessions\n✅ All admins will need to re-authenticate\n\n💡 Use ADMIN REFRESH to reload data from disk`
@@ -4230,6 +4385,292 @@ async function handleMessage(sock, message) {
         console.error(chalk.red(`❌ Error clearing admin sessions:`, error.message));
         await sock.sendMessage(jid, { 
           text: `❌ **Error clearing admin sessions:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show error log
+    if (text.toUpperCase() === 'ADMIN ERROR LOG') {
+      try {
+        console.log(chalk.blue(`📋 Admin ${jid.split('@')[0]} requested error log`));
+        
+        if (errorLog.length === 0) {
+          await sock.sendMessage(jid, { 
+            text: `📋 **Error Log**\n\n✅ No errors recorded yet!\n\n🎉 The bot is running smoothly with no issues.`
+          });
+          return;
+        }
+        
+        let message = `📋 **Error Log** (Last ${Math.min(errorLog.length, 20)} errors)\n\n`;
+        
+        // Show recent errors (last 20)
+        const recentErrors = errorLog.slice(-20).reverse();
+        
+        for (const error of recentErrors) {
+          const severityEmoji = {
+            1: '🟡', // Low
+            2: '🟠', // Medium  
+            3: '🔴', // High
+            4: '🚨'  // Critical
+          };
+          
+          const severityText = {
+            1: 'LOW',
+            2: 'MEDIUM',
+            3: 'HIGH', 
+            4: 'CRITICAL'
+          };
+          
+          const emoji = severityEmoji[error.severity] || '🟡';
+          const severity = severityText[error.severity] || 'LOW';
+          const time = new Date(error.timestamp).toLocaleString();
+          
+          message += `${emoji} **${error.id}**\n`;
+          message += `⏰ ${time}\n`;
+          message += `📍 ${error.context}\n`;
+          message += `⚠️ ${severity} - ${error.message}\n\n`;
+        }
+        
+        message += `📊 **Total Errors:** ${errorLog.length}\n`;
+        message += `🕒 **Log Period:** ${errorLog.length > 0 ? new Date(errorLog[0].timestamp).toLocaleString() + ' to ' + new Date(errorLog[errorLog.length - 1].timestamp).toLocaleString() : 'N/A'}\n\n`;
+        message += `💡 **Use ADMIN ERROR DETAILS <error_id> to see full error details**`;
+        
+        await sock.sendMessage(jid, { text: message });
+        
+        console.log(chalk.green(`📋 Error log sent to admin ${jid.split('@')[0]} (${errorLog.length} errors)`));
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN ERROR LOG command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show detailed error information
+    if (text.toUpperCase().startsWith('ADMIN ERROR DETAILS ')) {
+      try {
+        const errorId = text.substring('ADMIN ERROR DETAILS '.length).trim();
+        console.log(chalk.blue(`🔍 Admin ${jid.split('@')[0]} requested error details for: ${errorId}`));
+        
+        const error = errorLog.find(e => e.id === errorId);
+        
+        if (!error) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Error Not Found**\n\nError ID \`${errorId}\` not found in the error log.\n\n💡 Use **ADMIN ERROR LOG** to see available error IDs.`
+          });
+          return;
+        }
+        
+        const severityEmoji = {
+          1: '🟡', // Low
+          2: '🟠', // Medium  
+          3: '🔴', // High
+          4: '🚨'  // Critical
+        };
+        
+        const severityText = {
+          1: 'LOW',
+          2: 'MEDIUM',
+          3: 'HIGH', 
+          4: 'CRITICAL'
+        };
+        
+        const emoji = severityEmoji[error.severity] || '🟡';
+        const severity = severityText[error.severity] || 'LOW';
+        const time = new Date(error.timestamp).toLocaleString();
+        
+        let message = `${emoji} **Error Details**\n\n`;
+        message += `🆔 **Error ID:** \`${error.id}\`\n`;
+        message += `⏰ **Time:** ${time}\n`;
+        message += `📍 **Context:** ${error.context}\n`;
+        message += `⚠️ **Severity:** ${severity}\n`;
+        message += `💬 **Message:** ${error.message}\n\n`;
+        
+        if (error.stack) {
+          message += `📚 **Stack Trace:**\n\`\`\`\n${error.stack}\n\`\`\`\n\n`;
+        }
+        
+        if (error.additionalData && Object.keys(error.additionalData).length > 0) {
+          message += `🔧 **Additional Data:**\n\`\`\`json\n${JSON.stringify(error.additionalData, null, 2)}\n\`\`\`\n\n`;
+        }
+        
+        message += `📊 **Error #${errorLog.indexOf(error) + 1} of ${errorLog.length}**`;
+        
+        await sock.sendMessage(jid, { text: message });
+        
+        console.log(chalk.green(`🔍 Error details sent to admin ${jid.split('@')[0]} for error ${errorId}`));
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN ERROR DETAILS command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Test error logging system
+    if (text.toUpperCase() === 'ADMIN TEST ERROR') {
+      try {
+        console.log(chalk.blue(`🧪 Admin ${jid.split('@')[0]} requested error test`));
+        
+        // Create a test error
+        const testError = new Error('This is a test error to verify the error logging system');
+        testError.stack = 'TestError: This is a test error to verify the error logging system\n    at testFunction (test.js:1:1)\n    at adminCommand (bot.js:1234:5)';
+        
+        await handleError(testError, 'admin_test', { 
+          requestedBy: jid.split('@')[0],
+          testType: 'manual_test',
+          timestamp: new Date().toISOString()
+        });
+        
+        await sock.sendMessage(jid, { 
+          text: `🧪 **Error Test Completed**\n\n✅ Test error has been generated and logged\n📤 Error notification should be sent to all admins\n\n💡 Use **ADMIN ERROR LOG** to see the test error\n💡 Use **ADMIN ERROR DETAILS <error_id>** to see full details`
+        });
+        
+        console.log(chalk.green(`🧪 Error test completed for admin ${jid.split('@')[0]}`));
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN TEST ERROR command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Test scraper error logging
+    if (text.toUpperCase() === 'ADMIN TEST SCRAPER ERROR') {
+      try {
+        console.log(chalk.blue(`🧪 Admin ${jid.split('@')[0]} requested scraper error test`));
+        
+        // Create a test scraper error that simulates the Gemini API error
+        const testError = new Error('GEMINI_API_SERVICE_UNAVAILABLE: Gemini API service is temporarily unavailable (503). Please wait a few minutes and try again.');
+        testError.stack = 'Error: GEMINI_API_SERVICE_UNAVAILABLE: Gemini API service is temporarily unavailable (503). Please wait a few minutes and try again.\n    at main (file:///C:/Users/Hp/Downloads/fullscraper-1/google%20search%20+%20linkdin%20scraper/lead-scraper/scraper.js:1097:13)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)';
+        
+        await handleError(testError, 'google_search_scraping', { 
+          requestedBy: jid.split('@')[0],
+          testType: 'scraper_error_test',
+          niche: 'test niche',
+          dataType: 'contacts',
+          format: 'xlsx',
+          source: 'google_search',
+          timestamp: new Date().toISOString()
+        });
+        
+        await sock.sendMessage(jid, { 
+          text: `🧪 **Scraper Error Test Completed**\n\n✅ Test scraper error has been generated and logged\n📤 Error notification should be sent to all admins\n\n💡 This simulates the Gemini API error you saw earlier\n💡 Use **ADMIN ERROR LOG** to see the test error\n💡 Use **ADMIN ERROR DETAILS <error_id>** to see full details`
+        });
+        
+        console.log(chalk.green(`🧪 Scraper error test completed for admin ${jid.split('@')[0]}`));
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN TEST SCRAPER ERROR command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Clear error log
+    if (text.toUpperCase() === 'ADMIN CLEAR ERROR LOG') {
+      try {
+        console.log(chalk.blue(`🗑️ Admin ${jid.split('@')[0]} requested to clear error log`));
+        
+        const errorCount = errorLog.length;
+        
+        if (errorCount === 0) {
+          await sock.sendMessage(jid, { 
+            text: `📋 **Error Log Clear**\n\n✅ Error log is already empty.\n\n📊 **Status:** No errors to clear`
+          });
+          return;
+        }
+        
+        // Clear the error log
+        errorLog.length = 0;
+        
+        await sock.sendMessage(jid, { 
+          text: `🗑️ **Error Log Cleared**\n\n✅ Successfully cleared all errors from the log.\n\n📊 **Cleared:** ${errorCount} error(s)\n📋 **Status:** Error log is now empty\n\n🔄 **Note:** New errors will continue to be logged as they occur.`
+        });
+        
+        console.log(chalk.green(`🗑️ Admin ${jid.split('@')[0]} cleared ${errorCount} errors from the log`));
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN CLEAR ERROR LOG command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Clear Error Log Failed:** ${error.message}` 
+        });
+      }
+      return;
+    }
+
+    // Admin command: Send session.json and codes.json files
+    if (text.toUpperCase() === 'ADMIN SEND FILES') {
+      try {
+        console.log(chalk.blue(`📤 Admin ${jid.split('@')[0]} requested to send system files`));
+        
+        const sessionsFile = path.join(__dirname, 'sessions.json');
+        const codesFile = path.join(__dirname, 'codes.json');
+        
+        let filesSent = 0;
+        let message = `📁 **System Files Sent**\n\n`;
+        
+        // Send sessions.json file
+        if (fs.existsSync(sessionsFile)) {
+          try {
+            const sessionsData = fs.readFileSync(sessionsFile);
+            const sessionsSize = (sessionsData.length / 1024).toFixed(2);
+            
+            await sock.sendMessage(jid, {
+              document: sessionsData,
+              fileName: 'sessions.json',
+              mimetype: 'application/json',
+              caption: `📄 **Sessions File**\n\n📁 File: sessions.json\n📏 Size: ${sessionsSize} KB\n📱 Sessions: ${Object.keys(JSON.parse(sessionsData.toString())).length}\n\n🔐 Contains user session data and daily limits`
+            });
+            
+            filesSent++;
+            message += `✅ **sessions.json** sent (${sessionsSize} KB)\n`;
+            console.log(chalk.green(`✅ Sessions file sent to admin ${jid.split('@')[0]}`));
+          } catch (error) {
+            console.log(chalk.red(`❌ Failed to send sessions file: ${error.message}`));
+            message += `❌ **sessions.json** failed to send: ${error.message}\n`;
+          }
+        } else {
+          message += `❌ **sessions.json** not found\n`;
+        }
+        
+        // Send codes.json file
+        if (fs.existsSync(codesFile)) {
+          try {
+            const codesData = fs.readFileSync(codesFile);
+            const codesSize = (codesData.length / 1024).toFixed(2);
+            
+            await sock.sendMessage(jid, {
+              document: codesData,
+              fileName: 'codes.json',
+              mimetype: 'application/json',
+              caption: `📄 **Codes File**\n\n📁 File: codes.json\n📏 Size: ${codesSize} KB\n🔑 Codes: ${Object.keys(JSON.parse(codesData.toString())).length}\n\n🔐 Contains user access codes and API keys`
+            });
+            
+            filesSent++;
+            message += `✅ **codes.json** sent (${codesSize} KB)\n`;
+            console.log(chalk.green(`✅ Codes file sent to admin ${jid.split('@')[0]}`));
+          } catch (error) {
+            console.log(chalk.red(`❌ Failed to send codes file: ${error.message}`));
+            message += `❌ **codes.json** failed to send: ${error.message}\n`;
+          }
+        } else {
+          message += `❌ **codes.json** not found\n`;
+        }
+        
+        message += `\n📊 **Summary:** ${filesSent}/2 files sent successfully`;
+        
+        await sock.sendMessage(jid, { text: message });
+        
+        console.log(chalk.green(`📤 Admin ${jid.split('@')[0]} received ${filesSent}/2 system files`));
+      } catch (error) {
+        console.error(chalk.red(`❌ Error in ADMIN SEND FILES command:`, error.message));
+        await sock.sendMessage(jid, { 
+          text: `❌ **Internal Error:** ${error.message}` 
         });
       }
       return;
@@ -4255,7 +4696,8 @@ async function handleMessage(sock, message) {
         'ADMIN USERSESSIONSFILE', 'ADMIN FILES', 'ADMIN DEBUG', 'ADMIN LOG',
         'ADMIN SESSIONSFILE', 'ADMIN RESET', 'ADMIN CONFIGFILE', 'ADMIN CODESFILE',
         'ADMIN CLEAR', 'ADMIN AUTH', 'ADMIN LOGOUT', 'ADMIN ME', 'ADMIN INFO', 'ADMIN TEST',
-        'ADMIN RELOAD', 'ADMIN CONFIG', 'ADMIN CODES', 'ADMIN SESSIONS', 'ADMIN GRANT'
+        'ADMIN RELOAD', 'ADMIN CONFIG', 'ADMIN CODES', 'ADMIN SESSIONS', 'ADMIN GRANT',
+        'ADMIN SEND FILES', 'ADMIN ERROR LOG', 'ADMIN ERROR DETAILS', 'ADMIN TEST ERROR', 'ADMIN TEST SCRAPER ERROR', 'ADMIN CLEAR ERROR LOG'
       ];
 
       let isValidCommand = false;
@@ -4849,20 +5291,17 @@ async function handleMessage(sock, message) {
                         let foundHeader = false;
                         
                         for (const line of lines) {
-                          // Look for the header line with total counts
-                          if (line.includes('Total Emails:') && line.includes('Total Phone Numbers:')) {
-                            console.log(chalk.blue(`📊 Found header line: ${line}`));
+                          // Look for the "Total Contacts:" line which contains the correct total
+                          if (line.includes('Total Contacts:')) {
+                            console.log(chalk.blue(`📊 Found Total Contacts line: ${line}`));
                             foundHeader = true;
                             
-                            // Parse: "Total Emails: 185 | Total Phone Numbers: 37"
-                            const emailMatch = line.match(/Total Emails:\s*(\d+)/);
-                            const phoneMatch = line.match(/Total Phone Numbers:\s*(\d+)/);
+                            // Parse: "Total Contacts: 208"
+                            const totalMatch = line.match(/Total Contacts:\s*(\d+)/);
                             
-                            if (emailMatch && phoneMatch) {
-                              const emailCount = parseInt(emailMatch[1]);
-                              const phoneCount = parseInt(phoneMatch[1]);
-                              headerCount = emailCount + phoneCount;
-                              console.log(chalk.green(`📊 Parsed header counts: ${emailCount} emails + ${phoneCount} phones = ${headerCount} total`));
+                            if (totalMatch) {
+                              headerCount = parseInt(totalMatch[1]);
+                              console.log(chalk.green(`📊 Parsed total contacts: ${headerCount} total`));
                             }
                             break;
                           }
@@ -4882,7 +5321,8 @@ async function handleMessage(sock, message) {
                                            line.includes('Timestamp:') ||
                                            line.includes('Generated on:') ||
                                            line.includes('Total Emails:') ||
-                                           line.includes('Total Phone Numbers:') ||
+                                           line.includes('Total Phones:') ||
+                                           line.includes('Total Contacts:') ||
                                            line.includes('─') ||
                                            line.includes('=') ||
                                            line.includes('📧') ||
@@ -5527,7 +5967,15 @@ async function handleMessage(sock, message) {
 
 
     // Handle messages based on current conversation step
-    if (session.currentStep === 'awaiting_business_service') {
+    if (session.currentStep === 'validating_niche') {
+        // User sent a message while validation is in progress - resend validation message
+        if (session.validatingNiche) {
+            await sock.sendMessage(jid, {
+                text: getMessage(session.language, 'niche_validating', { niche: session.validatingNiche })
+            });
+        }
+        return;
+    } else if (session.currentStep === 'awaiting_business_service') {
         if (text === '0') {
             // User wants to go back to main menu
             session.currentStep = 'main_menu';
@@ -5538,7 +5986,27 @@ async function handleMessage(sock, message) {
 
             await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
             return;
+        } else if (text === '1') {
+            // User wants AI niche suggestions
+            session.currentStep = 'niche_suggestion_intro';
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'niche_suggestion_intro')
+            });
+            return;
         } else if (isNaN(inputNumber)) { // Treat non-numeric input as business/service
+            // Set validation state and store the niche being validated
+            session.currentStep = 'validating_niche';
+            session.validatingNiche = text;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            // Send validation message to inform user
+            await sock.sendMessage(jid, {
+                text: getMessage(session.language, 'niche_validating', { niche: text })
+            });
+            
             // Initialize business/service validator with user's Gemini API key
             if (session.apiKeys && session.apiKeys.geminiKeys && session.apiKeys.geminiKeys.length > 0) {
                 nicheValidator.initialize(session.apiKeys.geminiKeys[0]);
@@ -5548,6 +6016,11 @@ async function handleMessage(sock, message) {
             const validation = await nicheValidator.validateNiche(text, session.language);
             
             if (!validation.isValid) {
+                // Clear validation state
+                session.currentStep = 'awaiting_business_service';
+                session.validatingNiche = null;
+                saveJson(SESSIONS_FILE, sessions);
+                
                 // Send validation error message using language-specific template
                 let suggestionsText = '';
                 if (validation.suggestions && validation.suggestions.length > 0) {
@@ -5568,6 +6041,7 @@ async function handleMessage(sock, message) {
             // Business/service is valid, proceed with normal flow
             session.pendingNiche = text;
             session.currentStep = 'awaiting_source';
+            session.validatingNiche = null; // Clear validation state
             session.previousMessage = getMessage(session.language, 'select_source', {
               niche: session.pendingNiche
             });
@@ -5585,8 +6059,383 @@ async function handleMessage(sock, message) {
             });
             return;
         }
+    } else if (session.currentStep === 'niche_suggestion_intro') {
+        // Handle niche suggestion intro
+        if (text === '0') {
+            // Go back to niche input
+            session.currentStep = 'awaiting_business_service';
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'enter_niche')
+            });
+            return;
+        } else if (text === '00') {
+            // Go back to main menu
+            session.currentStep = 'main_menu';
+            session.pendingNiche = null;
+            session.previousMessage = null;
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
+            return;
+        } else if (inputNumber === 1) {
+            // Start niche suggestion questions
+            session.currentStep = 'niche_suggestion_questions';
+            session.nicheSuggestionAnswers = {};
+            session.nicheSuggestionStep = 0;
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            const nicheSuggester = new NicheSuggester(handleError);
+            const questionData = nicheSuggester.getNextQuestion(session.language, 0);
+            
+            if (questionData) {
+                await sock.sendMessage(jid, { 
+                    text: questionData.question.question
+                });
+            }
+            return;
+        } else {
+            // Invalid input
+            await sock.sendMessage(jid, { 
+                text: '⚠️ **Invalid input.** Please choose 1 to start, 0 to go back, or 00 to return to main menu.'
+            });
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'niche_suggestion_intro')
+            });
+            return;
+        }
+    } else if (session.currentStep === 'niche_suggestion_questions') {
+        // Handle niche suggestion questions
+        if (text === '0') {
+            // Go back to niche input
+            session.currentStep = 'awaiting_business_service';
+            session.nicheSuggestionAnswers = {};
+            session.nicheSuggestionStep = 0;
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'enter_niche')
+            });
+            return;
+        } else if (text === '00') {
+            // Go back to main menu
+            session.currentStep = 'main_menu';
+            session.pendingNiche = null;
+            session.previousMessage = null;
+            session.nicheSuggestionAnswers = {};
+            session.nicheSuggestionStep = 0;
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
+            return;
+        }
+        
+        const nicheSuggester = new NicheSuggester(handleError);
+        const currentQuestion = nicheSuggester.getNextQuestion(session.language, session.nicheSuggestionStep);
+        
+        if (!currentQuestion) {
+            // All questions completed, generate suggestions
+            session.currentStep = 'niche_suggestion_processing';
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'niche_suggestion_processing')
+            });
+            
+            try {
+                // Generate niche suggestions
+                const suggestions = await nicheSuggester.generateNicheSuggestions(
+                    session.nicheSuggestionAnswers, 
+                    session.apiKeys?.geminiKeys?.[0], 
+                    session.language
+                );
+                
+                // Store suggestions and show them
+                session.nicheSuggestions = suggestions;
+                session.currentStep = 'niche_suggestion_results';
+                sessions[jid] = session;
+                saveJson(SESSIONS_FILE, sessions);
+                
+                const formattedSuggestions = nicheSuggester.formatSuggestions(suggestions, session.language);
+                await sock.sendMessage(jid, { 
+                    text: formattedSuggestions
+                });
+                
+            } catch (error) {
+                console.error('Error generating niche suggestions:', error);
+                session.currentStep = 'awaiting_business_service';
+                session.nicheSuggestionAnswers = {};
+                session.nicheSuggestionStep = 0;
+                sessions[jid] = session;
+                saveJson(SESSIONS_FILE, sessions);
+                
+                await sock.sendMessage(jid, { 
+                    text: getMessage(session.language, 'niche_suggestion_error')
+                });
+            }
+            return;
+        }
+        
+        // Store answer and move to next question
+        const question = currentQuestion.question;
+        let answer = text;
+        let isValidInput = true;
+        
+        // Handle single choice questions
+        if (question.type === 'single_choice') {
+            if (isNaN(inputNumber)) {
+                // Invalid input - not a number
+                isValidInput = false;
+            } else {
+                // Get the number of choices from the question text by counting emoji numbers
+                const choiceCount = (question.question.match(/[1-9]️⃣/g) || []).length;
+                const choiceIndex = inputNumber - 1;
+                if (choiceIndex < 0 || choiceIndex >= choiceCount) {
+                    // Invalid input - number out of range
+                    isValidInput = false;
+                } else {
+                    // Map the choice index to the corresponding choice value
+                    const choiceMapping = {
+                        'business_goal': ['lead_generation', 'market_research', 'partnership_building', 'recruitment', 'sales_prospecting'],
+                        'target_audience': ['b2b_professionals', 'b2c_consumers', 'local_businesses', 'enterprise_companies', 'mixed'],
+                        'industry_interest': ['technology', 'healthcare', 'finance', 'real_estate', 'retail_ecommerce', 'professional_services', 'other'],
+                        'geographic_focus': ['local', 'national', 'international', 'global'],
+                        'budget_range': ['low', 'medium', 'high', 'enterprise', 'mixed']
+                    };
+                    
+                    const choices = choiceMapping[question.id] || [];
+                    if (choiceIndex < choices.length) {
+                        answer = choices[choiceIndex];
+                    } else {
+                        isValidInput = false;
+                    }
+                }
+            }
+        } else if (question.type === 'text_input') {
+            // Validate text input
+            if (!text || text.trim().length < 2) {
+                isValidInput = false;
+            } else {
+                answer = text.trim();
+            }
+        }
+        
+        if (!isValidInput) {
+            // Show error message and resend current question
+            let errorMessage = '';
+            if (question.type === 'single_choice') {
+                // Get the number of choices from the question text
+                const choiceCount = (question.question.match(/[1-9]️⃣/g) || []).length;
+                errorMessage = getMessage(session.language, 'niche_suggestion_invalid_choice', { max_choices: choiceCount });
+            } else if (question.type === 'text_input') {
+                errorMessage = getMessage(session.language, 'niche_suggestion_invalid_text');
+            } else {
+                errorMessage = `⚠️ **Invalid input.** Please try again.`;
+            }
+            
+            await sock.sendMessage(jid, { 
+                text: `${errorMessage}\n\n${question.question}`
+            });
+            return;
+        }
+        
+        session.nicheSuggestionAnswers[question.id] = answer;
+        session.nicheSuggestionStep = currentQuestion.stepIndex + 1;
+        sessions[jid] = session;
+        saveJson(SESSIONS_FILE, sessions);
+        
+        // Get next question
+        const nextQuestion = nicheSuggester.getNextQuestion(session.language, session.nicheSuggestionStep);
+        if (nextQuestion) {
+            await sock.sendMessage(jid, { 
+                text: nextQuestion.question.question
+            });
+        } else {
+            // All questions completed, generate suggestions
+            session.currentStep = 'niche_suggestion_processing';
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'niche_suggestion_processing')
+            });
+            
+            try {
+                const suggestions = await nicheSuggester.generateNicheSuggestions(
+                    session.nicheSuggestionAnswers, 
+                    session.apiKeys?.geminiKeys?.[0], 
+                    session.language
+                );
+                
+                session.nicheSuggestions = suggestions;
+                session.currentStep = 'niche_suggestion_results';
+                sessions[jid] = session;
+                saveJson(SESSIONS_FILE, sessions);
+                
+                const formattedSuggestions = nicheSuggester.formatSuggestions(suggestions, session.language);
+                await sock.sendMessage(jid, { 
+                    text: formattedSuggestions
+                });
+                
+            } catch (error) {
+                console.error('Error generating niche suggestions:', error);
+                session.currentStep = 'awaiting_business_service';
+                session.nicheSuggestionAnswers = {};
+                session.nicheSuggestionStep = 0;
+                sessions[jid] = session;
+                saveJson(SESSIONS_FILE, sessions);
+                
+                await sock.sendMessage(jid, { 
+                    text: getMessage(session.language, 'niche_suggestion_error')
+                });
+            }
+        }
+        return;
+    } else if (session.currentStep === 'niche_suggestion_results') {
+        // Handle niche suggestion results
+        if (text === '0') {
+            // Start over with new questions
+            session.currentStep = 'niche_suggestion_intro';
+            session.nicheSuggestionAnswers = {};
+            session.nicheSuggestionStep = 0;
+            session.nicheSuggestions = null;
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'niche_suggestion_intro')
+            });
+            return;
+        } else if (text === '00') {
+            // Go back to main menu
+            session.currentStep = 'main_menu';
+            session.pendingNiche = null;
+            session.previousMessage = null;
+            session.nicheSuggestionAnswers = {};
+            session.nicheSuggestionStep = 0;
+            session.nicheSuggestions = null;
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
+            return;
+        } else if (!isNaN(inputNumber) && inputNumber >= 1 && inputNumber <= (session.nicheSuggestions?.suggestions?.length || 0)) {
+            // User selected a suggested niche
+            const selectedNiche = session.nicheSuggestions.suggestions[inputNumber - 1].niche;
+            session.pendingNiche = selectedNiche;
+            session.currentStep = 'awaiting_source';
+            session.nicheSuggestionAnswers = {};
+            session.nicheSuggestionStep = 0;
+            session.nicheSuggestions = null;
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'niche_suggestion_selected', { niche: selectedNiche })
+            });
+            
+            // Proceed to source selection
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'select_source', { niche: selectedNiche })
+            });
+            return;
+        } else if (isNaN(inputNumber)) {
+            // User entered a custom niche - validate it first
+            session.pendingNiche = text;
+            session.currentStep = 'validating_niche';
+            session.validatingNiche = text; // Set the validating niche property
+            // Store the suggestions before clearing them
+            const currentSuggestions = session.nicheSuggestions;
+            session.nicheSuggestionAnswers = {};
+            session.nicheSuggestionStep = 0;
+            session.nicheSuggestions = null;
+            sessions[jid] = session;
+            saveJson(SESSIONS_FILE, sessions);
+            
+            // Start niche validation
+            await sock.sendMessage(jid, { 
+                text: getMessage(session.language, 'niche_validating', { niche: text })
+            });
+            
+            try {
+                console.log(chalk.blue(`🤖 Starting niche validation for custom input: "${text}"`));
+                console.log(chalk.blue(`🔑 API Key available: ${session.apiKeys?.geminiKeys?.[0] ? 'Yes' : 'No'}`));
+                console.log(chalk.blue(`🌐 Language: ${session.language}`));
+                
+                // Initialize business/service validator with user's Gemini API key
+                if (session.apiKeys && session.apiKeys.geminiKeys && session.apiKeys.geminiKeys.length > 0) {
+                    nicheValidator.initialize(session.apiKeys.geminiKeys[0]);
+                }
+                
+                const validationResult = await nicheValidator.validateNiche(text, session.language);
+                
+                console.log(chalk.blue(`✅ Validation result:`, validationResult));
+                
+                if (validationResult.isValid) {
+                    // Niche is valid, proceed to source selection
+                    session.currentStep = 'awaiting_source';
+                    session.validatingNiche = null;
+                    sessions[jid] = session;
+                    saveJson(SESSIONS_FILE, sessions);
+                    
+                    await sock.sendMessage(jid, { 
+                        text: getMessage(session.language, 'niche_suggestion_custom', { niche: text })
+                    });
+                    
+                    // Proceed to source selection
+                    await sock.sendMessage(jid, { 
+                        text: getMessage(session.language, 'select_source', { niche: text })
+                    });
+                } else {
+                    // Niche is invalid, show error and go back to niche suggestion results
+                    session.currentStep = 'niche_suggestion_results';
+                    session.validatingNiche = null;
+                    session.nicheSuggestions = currentSuggestions; // Restore suggestions
+                    sessions[jid] = session;
+                    saveJson(SESSIONS_FILE, sessions);
+                    
+                    await sock.sendMessage(jid, { 
+                        text: getMessage(session.language, 'niche_validation_error', { 
+                            reason: validationResult.reason,
+                            suggestions: validationResult.suggestions 
+                        })
+                    });
+                }
+            } catch (error) {
+                console.error('❌ Error validating custom niche:', error);
+                console.log(chalk.red(`🚨 Validation failed, proceeding anyway to avoid blocking user`));
+                // On validation error, proceed anyway to avoid blocking the user
+                session.currentStep = 'awaiting_source';
+                session.validatingNiche = null;
+                sessions[jid] = session;
+                saveJson(SESSIONS_FILE, sessions);
+                
+                await sock.sendMessage(jid, { 
+                    text: getMessage(session.language, 'niche_suggestion_custom', { niche: text })
+                });
+                
+                // Proceed to source selection
+                await sock.sendMessage(jid, { 
+                    text: getMessage(session.language, 'select_source', { niche: text })
+                });
+            }
+            return;
+        } else {
+            // Invalid input
+            await sock.sendMessage(jid, { 
+                text: '⚠️ **Invalid input.** Please choose a number from the suggestions, enter your own niche, or use 0/00 to navigate.'
+            });
+            return;
+        }
     } else if (session.currentStep === 'awaiting_source') {
-        const sourceOptions = ['GOOGLE', 'LINKEDIN', 'MAPS'];
+        const sourceOptions = ['GOOGLE', 'LINKEDIN', 'MAPS', 'AI_DECIDE'];
         if (text === '00') {
             const activeJob = activeJobs.get(jid);
             if (activeJob && activeJob.abort) {
@@ -5616,6 +6465,88 @@ async function handleMessage(sock, message) {
             });
             return;
         } else if (inputNumber >= 1 && inputNumber <= sourceOptions.length) {
+            // Handle AI decision option
+            if (inputNumber === 4) { // AI_DECIDE option
+                // Show AI analyzing message
+                await sock.sendMessage(jid, { 
+                    text: getMessage(session.language, 'ai_analyzing', { niche: session.pendingNiche })
+                });
+                
+                try {
+                    // Import AI source decider
+                    const { decideBestSource, getSourceDisplayName } = await import('./lib/ai-source-decider.js');
+                    
+                    // Get user's API keys from codes
+                    const codes = loadJson(ACCESS_CODES_FILE, {});
+                    const userCode = session.code;
+                    const userData = codes[userCode];
+                    
+                    if (!userData || !userData.apiKeys || !userData.apiKeys.geminiKeys || userData.apiKeys.geminiKeys.length === 0) {
+                        throw new Error('No Gemini API keys available for AI decision');
+                    }
+                    
+                    // Use the first available Gemini key
+                    const geminiKey = userData.apiKeys.geminiKeys[0];
+                    
+                    // Get AI recommendation
+                    const recommendation = await decideBestSource(session.pendingNiche, geminiKey, session.language);
+                    
+                    // Set the recommended source
+                    session.prefs.source = recommendation.source;
+                    
+                    // Track the selected source in session metadata for STOP functionality
+                    if (!session.meta) session.meta = {};
+                    session.meta.lastSource = session.prefs.source;
+                    session.meta.aiRecommended = true;
+                    session.meta.aiReason = recommendation.reason;
+                    
+                    // Show AI recommendation
+                    const sourceDisplayName = getSourceDisplayName(recommendation.source, session.language);
+                    await sock.sendMessage(jid, { 
+                        text: getMessage(session.language, 'ai_recommendation', { 
+                            niche: session.pendingNiche,
+                            recommended_source: sourceDisplayName,
+                            reason: recommendation.reason
+                        })
+                    });
+                    
+                    // For LinkedIn and Google Maps, automatically set dataType to 'COMPLETE' and format to 'XLSX', skip to ready_to_start
+                    if (session.prefs.source === 'LINKEDIN' || session.prefs.source === 'MAPS') {
+                        session.prefs.dataType = 'COMPLETE';
+                        session.prefs.format = 'XLSX';
+                        session.currentStep = 'ready_to_start';
+                        session.previousMessage = getMessage(session.language, 'format_set');
+                        await sock.sendMessage(jid, { text: session.previousMessage });
+                        saveJson(SESSIONS_FILE, sessions);
+                        return;
+                    }
+                    
+                    // For Google, show data type options as before
+                    session.currentStep = 'awaiting_type';
+                    let dataTypeChoices = getMessage(session.language, 'select_type_google');
+                    session.previousMessage = dataTypeChoices;
+                    await sock.sendMessage(jid, { text: dataTypeChoices });
+                    saveJson(SESSIONS_FILE, sessions);
+                    return;
+                    
+                } catch (error) {
+                    console.error('AI Decision Error:', error.message);
+                    // Fallback to Google Search if AI fails
+                    session.prefs.source = 'GOOGLE';
+                    session.prefs.dataType = 'CONTACTS';
+                    session.prefs.format = 'TXT';
+                    session.currentStep = 'ready_to_start';
+                    session.previousMessage = getMessage(session.language, 'format_set');
+                    
+                    await sock.sendMessage(jid, { 
+                        text: `⚠️ **AI analysis failed. Using Google Search as fallback.**\n\n${getMessage(session.language, 'format_set')}`
+                    });
+                    saveJson(SESSIONS_FILE, sessions);
+                    return;
+                }
+            }
+            
+            // Handle regular source selection (1-3)
             session.prefs.source = sourceOptions[inputNumber - 1];
             
             // Track the selected source in session metadata for STOP functionality
@@ -5854,6 +6785,7 @@ async function handleMessage(sock, message) {
                     dataType: dataType.toLowerCase(), // Convert to lowercase for internal use
                     format,
                     apiKeys: session.apiKeys,
+                    errorHandler: handleError,
                     options: {
                         abortSignal: abortController.signal,
                         debug: false,
@@ -6385,7 +7317,7 @@ async function handleMessage(sock, message) {
         });
       } else {
         // Only inform if not already in a specific state and not a common command
-        if (!['awaiting_niche', 'awaiting_source', 'awaiting_type', 'ready_to_start', 'scraping_in_progress'].includes(session.currentStep) &&
+        if (!['awaiting_niche', 'awaiting_source', 'awaiting_type', 'validating_niche', 'ready_to_start', 'scraping_in_progress', 'niche_suggestion_intro', 'niche_suggestion_questions', 'niche_suggestion_processing', 'niche_suggestion_results'].includes(session.currentStep) &&
             !['START'].some(cmd => text.toUpperCase().startsWith(cmd))) {
             await sock.sendMessage(jid, { 
                 text: `📎 **You have pending results.** Reply \`SEND\` to receive them, or \`SKIP\` to discard. Continuing with your new message...`
@@ -6461,7 +7393,7 @@ async function startBot() {
     }
     
     // Load admin sessions from disk
-    loadAdminSessions();
+    await await loadAdminSessions();
     
     // Create socket
     const sock = makeWASocket({
@@ -6631,9 +7563,15 @@ async function startBot() {
       // activeJobs.clear() is not needed here as the process is terminating
     });
 
-    process.on('uncaughtException', (error) => {
+    process.on('uncaughtException', async (error) => {
       console.error(chalk.red('\n❌ Uncaught Exception:'), error);
       console.log(chalk.yellow('🛑 Bot shutting down due to uncaught exception...'));
+      
+      // Log the critical error
+      await handleError(error, 'uncaught_exception', { 
+        activeJobs: activeJobs.size,
+        adminSessions: adminSessions.size 
+      });
       
       // Clear connection check interval
       if (connectionCheckInterval) {
@@ -6653,6 +7591,7 @@ async function startBot() {
 
   } catch (error) {
     console.error(chalk.red('❌ Failed to start bot:'), error.message);
+    await handleError(error, 'bot_startup', {});
     process.exit(1);
   }
 }
