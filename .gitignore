@@ -87,6 +87,8 @@ results/
 !codes.json
 !languages.js
 !railway.json
+!auth_info/
+!auth_info/*.json
 
 
 
