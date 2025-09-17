@@ -52,13 +52,13 @@
     "expiresAt": null,
     "meta": {
       "issuedBy": "admin123",
-      "lastUsed": "2025-09-15T15:02:21.652Z",
-      "useCount": 3
+      "lastUsed": "2025-09-17T10:35:14.914Z",
+      "useCount": 5
     },
     "dailyScraping": {
-      "date": "Mon Sep 15 2025",
-      "count": 2,
-      "lastReset": "2025-09-15T00:52:07.723Z"
+      "date": "Wed Sep 17 2025",
+      "count": 0,
+      "lastReset": "2025-09-17T09:01:16.270Z"
     },
     "language": "en",
     "stage": "paid",

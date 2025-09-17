@@ -78,7 +78,6 @@ public
 
 
 # Results and data
-results/
 *.xlsx
 *.csv
 *.json

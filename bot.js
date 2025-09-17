@@ -5291,9 +5291,54 @@ async function handleMessage(sock, message) {
                         let foundHeader = false;
                         
                         for (const line of lines) {
-                          // Look for the "Total Contacts:" line which contains the correct total
-                          if (line.includes('Total Contacts:')) {
-                            console.log(chalk.blue(`📊 Found Total Contacts line: ${line}`));
+                          // Look for the "Total Emails: X | Total Phone Numbers: Y" line which contains both counts
+                          if (line.includes('Total Emails:') && line.includes('Total Phone Numbers:')) {
+                            console.log(chalk.blue(`📊 Found Total Emails/Phones line: ${line}`));
+                            foundHeader = true;
+                            
+                            // Parse: "Total Emails: 45 | Total Phone Numbers: 38"
+                            const emailMatch = line.match(/Total Emails:\s*(\d+)/);
+                            const phoneMatch = line.match(/Total Phone Numbers:\s*(\d+)/);
+                            
+                            if (emailMatch && phoneMatch) {
+                              const emailCount = parseInt(emailMatch[1]);
+                              const phoneCount = parseInt(phoneMatch[1]);
+                              headerCount = emailCount + phoneCount; // Sum both counts for total contacts
+                              console.log(chalk.green(`📊 Parsed email count: ${emailCount}, phone count: ${phoneCount}, total contacts: ${headerCount}`));
+                            }
+                            break;
+                          }
+                          // Handle case where only emails are present
+                          else if (line.includes('Total Emails:') && !line.includes('Total Phone Numbers:')) {
+                            console.log(chalk.blue(`📊 Found Total Emails only line: ${line}`));
+                            foundHeader = true;
+                            
+                            // Parse: "Total Emails: 45"
+                            const emailMatch = line.match(/Total Emails:\s*(\d+)/);
+                            
+                            if (emailMatch) {
+                              headerCount = parseInt(emailMatch[1]);
+                              console.log(chalk.green(`📊 Parsed email count only: ${headerCount} total`));
+                            }
+                            break;
+                          }
+                          // Handle case where only phones are present
+                          else if (line.includes('Total Phone Numbers:') && !line.includes('Total Emails:')) {
+                            console.log(chalk.blue(`📊 Found Total Phone Numbers only line: ${line}`));
+                            foundHeader = true;
+                            
+                            // Parse: "Total Phone Numbers: 38"
+                            const phoneMatch = line.match(/Total Phone Numbers:\s*(\d+)/);
+                            
+                            if (phoneMatch) {
+                              headerCount = parseInt(phoneMatch[1]);
+                              console.log(chalk.green(`📊 Parsed phone count only: ${headerCount} total`));
+                            }
+                            break;
+                          }
+                          // Fallback: Look for the old "Total Contacts:" line format (for backward compatibility)
+                          else if (line.includes('Total Contacts:')) {
+                            console.log(chalk.blue(`📊 Found Total Contacts line (legacy): ${line}`));
                             foundHeader = true;
                             
                             // Parse: "Total Contacts: 208"
@@ -5301,7 +5346,7 @@ async function handleMessage(sock, message) {
                             
                             if (totalMatch) {
                               headerCount = parseInt(totalMatch[1]);
-                              console.log(chalk.green(`📊 Parsed total contacts: ${headerCount} total`));
+                              console.log(chalk.green(`📊 Parsed total contacts (legacy): ${headerCount} total`));
                             }
                             break;
                           }
@@ -7023,7 +7068,8 @@ async function handleMessage(sock, message) {
                     // Try to find the file in the results directory as fallback
                     if (result.meta && result.meta.niche && result.meta.source) {
                         const resultsDir = path.join(process.cwd(), 'results');
-                        const searchPattern = `${result.meta.niche.replace(/[^a-zA-Z0-9]/g, '_')}_${result.meta.source.toLowerCase()}`;
+                        // Preserve Arabic and other Unicode characters, only replace problematic path characters
+                        const searchPattern = `${result.meta.niche.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_')}_${result.meta.source.toLowerCase()}`;
                         
                         try {
                             const files = fs.readdirSync(resultsDir);

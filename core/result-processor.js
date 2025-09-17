@@ -275,7 +275,8 @@ export class ResultProcessor {
     await fs.mkdir(this.outputDir, { recursive: true });
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    const sanitizedNiche = niche.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').toLowerCase();
+    // Preserve Arabic and other Unicode characters, only remove problematic path characters
+    const sanitizedNiche = niche.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_').toLowerCase();
     const filename = `${sanitizedNiche}_${source}_${dataType}_${timestamp}.${format}`;
     const filepath = path.join(this.outputDir, filename);
     

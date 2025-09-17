@@ -760,7 +760,11 @@ class FlexibleBusinessScraper {
           fs.mkdirSync(unifiedResultsDir, { recursive: true });
         }
         
-        const niche = `${businessType}_${location}`.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').toLowerCase();
+        // Preserve Arabic and other Unicode characters, only remove problematic path characters
+        const niche = `${businessType}_${location}`
+          .replace(/[<>:"/\\|?*]/g, '_') // Replace only problematic path characters
+          .replace(/\s+/g, '_') // Replace spaces with underscores
+          .toLowerCase();
         
         let unifiedFilename;
         if (isAutoSave) {

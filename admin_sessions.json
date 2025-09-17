@@ -1,16 +1,1 @@
-{
-  "212617881167@s.whatsapp.net": {
-    "adminCode": "admin123",
-    "role": "super_admin",
-    "permissions": [
-      "manage_users",
-      "manage_admins",
-      "view_logs",
-      "system_control",
-      "view_sessions"
-    ],
-    "authenticatedAt": "2025-09-17T07:45:41.738Z",
-    "currentMenu": "main_admin_menu",
-    "menuOptions": 10
-  }
-}
+{}

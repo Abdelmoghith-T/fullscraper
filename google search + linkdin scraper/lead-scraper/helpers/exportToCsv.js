@@ -389,8 +389,9 @@ export async function exportLinkedInToExcel(results, niche, providedFilename = n
       console.log(`🔍 Debug: Using provided filename: ${providedFilename}`);
     } else {
       // Generate filename from niche
+      // Preserve Arabic and other Unicode characters, only remove problematic path characters
       const cleanNiche = niche
-        .replace(/[^a-zA-Z0-9\s]/g, '') // Remove special characters but keep spaces
+        .replace(/[<>:"/\\|?*]/g, '_') // Replace only problematic path characters
         .replace(/\s+/g, '_') // Replace spaces with underscores
         .substring(0, 50); // Limit length to avoid path issues
       

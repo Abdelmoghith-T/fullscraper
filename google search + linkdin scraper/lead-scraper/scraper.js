@@ -320,7 +320,8 @@ async function saveResults(allResults, niche, isInterrupted = false, dataType = 
     
           if (isLinkedInData) {
         // For LinkedIn data, use Excel format by default
-        const filename = niche ? `${niche.replace(/[^a-zA-Z0-9]/g, '_')}_linkedin_results.xlsx` : `linkedin_results_${Date.now()}.xlsx`;
+        // Preserve Arabic and other Unicode characters, only remove problematic path characters
+        const filename = niche ? `${niche.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_')}_linkedin_results.xlsx` : `linkedin_results_${Date.now()}.xlsx`;
         const finalFilename = isInterrupted ? filename.replace('.xlsx', `_partial_${Date.now()}.xlsx`) : filename;
         
         console.log(chalk.gray(`📁 Saving to: ${finalFilename}`));
@@ -423,7 +424,8 @@ async function saveResults(allResults, niche, isInterrupted = false, dataType = 
     const uniquePhones = new Set(deduplicatedResults.filter(r => r.phone).map(r => r.phone));
 
     // Generate filename
-    const filename = niche ? `${niche.replace(/[^a-zA-Z0-9]/g, '_')}_results.txt` : `results_${Date.now()}.txt`;
+    // Preserve Arabic and other Unicode characters, only remove problematic path characters
+    const filename = niche ? `${niche.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_')}_results.txt` : `results_${Date.now()}.txt`;
     
     // Add timestamp if interrupted
     const finalFilename = isInterrupted ? filename.replace('.txt', `_partial_${Date.now()}.txt`) : filename;
@@ -499,7 +501,8 @@ async function saveGoogleMapsResults(allResults, niche) {
     console.log(chalk.blue(`💾 Processing ${allResults.length} Google Maps results...`));
     
     // Create filename for Google Maps results
-    const filename = niche ? `${niche.replace(/[^a-zA-Z0-9]/g, '_')}_google_maps_results.xlsx` : `google_maps_results_${Date.now()}.xlsx`;
+    // Preserve Arabic and other Unicode characters, only remove problematic path characters
+    const filename = niche ? `${niche.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_')}_google_maps_results.xlsx` : `google_maps_results_${Date.now()}.xlsx`;
     
     console.log(chalk.gray(`📁 Saving to: ${filename}`));
     
@@ -1141,7 +1144,8 @@ async function main() {
         console.log(chalk.gray(`   • Unique phones: ${uniquePhones.size}`));
         
         // Save results without AI filtering
-        const filename = `${niche.replace(/[^a-zA-Z0-9]/g, '_')}_results_no_ai_filtering.txt`;
+        // Preserve Arabic and other Unicode characters, only remove problematic path characters
+        const filename = `${niche.replace(/[<>:"/\\|?*]/g, '_').replace(/\s+/g, '_')}_results_no_ai_filtering.txt`;
         await exportResults(finalResults, 'txt', filename, niche);
         console.log(chalk.green(`✅ Results saved to: ${filename}`));
         
