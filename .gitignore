@@ -84,6 +84,7 @@ public
 !package.json
 !package-lock.json
 !codes.json
+!api_pool.json
 !languages.js
 !railway.json
 !auth_info/

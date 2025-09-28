@@ -1,0 +1,118 @@
+{
+  "google_search_keys": [
+    {
+      "key": "AIzaSyAx0lo-L-l2I6nto8RxbWC9Kbw7LhF2YSs",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T21:50:39.145Z"
+    },
+    {
+      "key": "AIzaSyCOKIAaUud2JQWXBLK7gsFPyjLRN1SOlMQ",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:34:21.274Z"
+    },
+    {
+      "key": "AIzaSyDjHSV-G4YYcd7yd6FTZqNyX1CaSlr3UNg",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:35:30.304Z"
+    },
+    {
+      "key": "AIzaSyAsJbx4lQ_XSAHK1NiJzdYNp8Tg6BgT2tI",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:36:28.087Z"
+    },
+    {
+      "key": "AIzaSyCEfmsReh4RI3QpiPPrvSxpf9FT_bsPu2U",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:37:15.727Z"
+    },
+    {
+      "key": "AIzaSyBevJeD3QDyHcB58_NyXb4DCCvElWf0ui4",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:38:35.653Z"
+    },
+    {
+      "key": "AIzaSyAhDD94npK27Bzjaq5PWIqJVvdYZ-3BPRs",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:39:12.335Z"
+    }
+  ],
+  "gemini_keys": [
+    {
+      "key": "AIzaSyAP0P8zu8gCTmtc3-09EcTm68CVUwhmrO8",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:34:02.475Z"
+    },
+    {
+      "key": "AIzaSyC3Egy-17Y1HzIiK7E4gMkAGvC7iw1CII8",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:34:45.988Z"
+    },
+    {
+      "key": "AIzaSyCmQczZtNsd-SzEPT-jCiEyTF-G8J5XPIg",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:35:56.691Z"
+    },
+    {
+      "key": "AIzaSyDftApgqM4dIF9soHHh-y65hGrAunuWzA0",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:36:50.884Z"
+    },
+    {
+      "key": "AIzaSyCNYHtuPviX4MxnfIcxJYaFP66X7Bs84xU",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:37:47.338Z"
+    },
+    {
+      "key": "AIzaSyCEumkWOhrtddCuULj8xkH2zlMzuNi9Niw",
+      "status": "available",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:38:54.037Z"
+    },
+    {
+      "key": "AIzaSyBQVxX67nBfTY6pmEuL905jiKK15QXa7O0",
+      "status": "used",
+      "assignedTo": null,
+      "assignedAt": null,
+      "addedBy": "admin123",
+      "addedAt": "2025-09-27T22:39:42.769Z"
+    }
+  ]
+}
