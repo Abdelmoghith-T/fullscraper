@@ -26,7 +26,8 @@ Authenticate with your admin code to gain access to admin commands.
 ### User Management
 ```
 ADMIN USERS                    # List all users and their status
-ADMIN ADD USER <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>
+ADMIN ADD TRIAL <code> <google_key> <gemini_key>     # Add trial user (1 key each)
+ADMIN ADD PAID <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>  # Add paid user (3 keys each)
 ADMIN REMOVE USER <code>      # Remove user code
 ```
 
@@ -67,15 +68,29 @@ npm run admin:roles
 ```
 
 ### Manage User Codes
+
+**Trial Users (1 API key each):**
+```bash
+# Add trial user
+npm run admin:add-trial <code> <google_key> <gemini_key>
+
+# Generate random trial code
+npm run admin:generate-trial <google_key> <gemini_key>
+```
+
+**Paid Users (3 API keys each):**
+```bash
+# Add paid user
+npm run admin:add-paid <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>
+
+# Generate random paid code
+npm run admin:generate-paid <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>
+```
+
+**Management:**
 ```bash
 # List all user codes
 npm run admin:list
-
-# Add new user
-npm run admin:add <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>
-
-# Generate random user code
-npm run admin:generate <google_key1> <google_key2> <gemini_key1> <gemini_key2>
 
 # Remove user
 npm run admin:remove <code>
@@ -111,8 +126,15 @@ npm run admin:remove <code>
 ## 📋 Usage Examples
 
 ### Adding a New User
+
+**Trial User:**
 ```
-ADMIN ADD USER abc123 AIzaSyA... AIzaSyB... AIzaSyC... AIzaSyD...
+ADMIN ADD TRIAL trial123 AIzaSyA... AIzaSyB...
+```
+
+**Paid User:**
+```
+ADMIN ADD PAID paid123 AIzaSyA... AIzaSyB... AIzaSyC... AIzaSyD... AIzaSyE... AIzaSyF...
 ```
 
 ### Adding a New Admin
@@ -218,10 +240,15 @@ You can create custom admin roles by modifying `admin_config.json`:
 For bulk operations, use the CLI tools:
 
 ```bash
-# Add multiple users from a file
-while IFS=',' read -r code g1 g2 gem1 gem2; do
-  npm run admin:add "$code" "$g1" "$g2" "$gem1" "$gem2"
-done < users.csv
+# Add multiple trial users from a file
+while IFS=',' read -r code g1 gem1; do
+  npm run admin:add-trial "$code" "$g1" "$gem1"
+done < trial_users.csv
+
+# Add multiple paid users from a file  
+while IFS=',' read -r code g1 g2 g3 gem1 gem2 gem3; do
+  npm run admin:add-paid "$code" "$g1" "$g2" "$g3" "$gem1" "$gem2" "$gem3"
+done < paid_users.csv
 
 # Generate multiple admin codes
 for role in admin moderator; do

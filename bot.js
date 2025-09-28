@@ -1647,8 +1647,8 @@ function formatResultSummary(results, meta) {
 function getHelpMessage() {
    return `🤖 **WhatsApp Business Scraper Bot**\n\n` +
           `📋 **Available Commands:**\n\n` +
-          `🔐 **CODE: <your_code>**\n` +
-          `   Authenticate with your access code\n\n` +
+          `🔐 **Authentication**\n` +
+          `   Just send your access code directly\n\n` +
           `🎯 **Business or Service**\n` +
           `   Send any text as a business or service\n` +
           `   Example: "dentist casablanca"\n\n` +
@@ -1670,7 +1670,7 @@ function getHelpMessage() {
           `• Use STATUS command to check your remaining scrapings\n\n` +
           `💡 **Getting Started:**\n` +
           `1. Get your access code from admin\n` +
-          `2. Send: CODE: your_code_here\n` +
+          `2. Send your code directly (e.g., "user1")\n` +
           `3. Send your search query (e.g., "restaurant casablanca")\n` +
           `4. Follow the numbered prompts to configure source, type, and format.\n` +
           `5. Send: START to begin scraping\n` +
@@ -2029,10 +2029,18 @@ async function handleMessage(sock, message) {
         }
         
         if (permissions.includes('manage_users')) {
-          message += `• **ADMIN ADD USER <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>** - Add new user with 3 API keys for each service\n`;
+          message += `• **ADMIN ADD TRIAL** - Generate random code for trial user\n`;
+          message += `• **ADMIN ADD TRIAL <code>** - Add trial user with specific code\n`;
+          message += `• **ADMIN ADD PAID** - Generate random code for paid user\n`;
+          message += `• **ADMIN ADD PAID <code>** - Add paid user with specific code\n`;
           message += `• **ADMIN REMOVE USER <code>** - Remove user code\n`;
+          message += `• **ADMIN ADD GOOGLE KEY <key>** - Add Google Search API key to pool\n`;
+          message += `• **ADMIN ADD GEMINI KEY <key>** - Add Gemini API key to pool\n`;
+          message += `• **ADMIN REMOVE GOOGLE KEY <key>** - Remove Google Search API key from pool\n`;
+          message += `• **ADMIN REMOVE GEMINI KEY <key>** - Remove Gemini API key from pool\n`;
+          message += `• **ADMIN LIST KEYS** - Show API pool status\n`;
+          message += `• **ADMIN SHOW API DATA** - Show detailed API pool data with metadata\n`;
           message += `• **ADMIN MODIFY CODE <old_code> <new_code>** - Change user's access code\n`;
-          message += `• **ADMIN MODIFY KEYS <code> <google_key1> <google_key2> <gemini_key1> <gemini_key2>** - Update user's API keys\n`;
           message += `• **ADMIN MODIFY LANGUAGE <code> <language>** - Change user's language preference\n`;
           message += `• **ADMIN ADD LIMIT <code> <amount>** - Add more daily scraping attempts\n`;
           message += `• **ADMIN RESET LIMIT <code>** - Reset user's daily scraping count\n`;
@@ -2706,7 +2714,7 @@ async function handleMessage(sock, message) {
       if (permissions.includes('manage_users')) {
         if (choice === 3) {
           await sock.sendMessage(jid, { 
-            text: `➕ **Add New User**\n\n📝 **Usage:** ADMIN ADD USER <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>\n\n💡 **Example:** ADMIN ADD USER abc123 google_key1 google_key2 google_key3 gemini_key1 gemini_key2 gemini_key3\n\n⚠️ **Please provide:**\n• User code\n• 3 Google Search API keys\n• 3 Gemini API keys\n\n🔄 **Send the command above to add a user.**`
+            text: `➕ **Add New User**\n\n📝 **Trial User:** ADMIN ADD TRIAL <code>\n💡 **Example:** ADMIN ADD TRIAL trial123\n\n📝 **Paid User:** ADMIN ADD PAID <code>\n💡 **Example:** ADMIN ADD PAID paid123\n\n⚠️ **Trial users:** 1 API key each (automatically assigned from pool, 3 attempts max)\n⚠️ **Paid users:** 3 API keys each (automatically assigned from pool, 30 days access)\n\n💡 **API Pool Management:**\n• ADMIN ADD GOOGLE KEY <key> - Add Google Search API key to pool\n• ADMIN ADD GEMINI KEY <key> - Add Gemini API key to pool\n• ADMIN LIST KEYS - Check API pool status\n\n🔄 **Choose the appropriate command above.**`
           });
           return;
         }
@@ -2744,7 +2752,7 @@ async function handleMessage(sock, message) {
               await sock.sendMessage(jid, { text: message });
             } else {
               await sock.sendMessage(jid, { 
-                text: `❌ **No users found**\n\n💡 Use **ADMIN ADD USER** to create users first.`
+                text: `❌ **No users found**\n\n💡 Use **ADMIN ADD TRIAL** or **ADMIN ADD PAID** to create users first.`
               });
             }
           } catch (error) {
@@ -3218,105 +3226,223 @@ async function handleMessage(sock, message) {
       return;
     }
 
-    // Admin command: Add user
-    if (text.toUpperCase().startsWith('ADMIN ADD USER')) {
+    // Admin command: Add trial user
+    if (text.toUpperCase().startsWith('ADMIN ADD TRIAL')) {
       const parts = text.split(' ');
-      if (parts.length < 9) {
-        await sock.sendMessage(jid, { 
-          text: `❌ **Invalid Format!**\n\n📝 **Correct Usage:** ADMIN ADD USER <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>\n\n💡 **Example:** ADMIN ADD USER abc123 google_key1 google_key2 google_key3 gemini_key1 gemini_key2 gemini_key3\n\n⚠️ **Please provide:**\n• User code\n• 3 Google Search API keys\n• 3 Gemini API keys\n\n🔄 **Try again with the correct format!**`
-        });
-        return;
-      }
-
-      const userCode = parts[3];
-      const googleKey1 = parts[4];
-      const googleKey2 = parts[5];
-      const googleKey3 = parts[6];
-      const geminiKey1 = parts[7];
-      const geminiKey2 = parts[8];
-      const geminiKey3 = parts[9];
-
-      // Validate that all keys are provided and not empty
-      if (!userCode || !googleKey1 || !googleKey2 || !googleKey3 || !geminiKey1 || !geminiKey2 || !geminiKey3) {
-        await sock.sendMessage(jid, { 
-          text: `❌ **Missing Required Information!**\n\n📝 **You provided:**\n• Code: ${userCode || '❌ MISSING'}\n• Google Key 1: ${formatApiKey(googleKey1)}\n• Google Key 2: ${formatApiKey(googleKey2)}\n• Google Key 3: ${formatApiKey(googleKey3)}\n• Gemini Key 1: ${formatApiKey(geminiKey1)}\n• Gemini Key 2: ${formatApiKey(geminiKey2)}\n• Gemini Key 3: ${formatApiKey(geminiKey3)}\n\n💡 **Please provide all 7 required fields and try again!**`
-        });
-        return;
-      }
-
-      // Validate key formats (basic validation) - check for duplicates
-      const googleKeys = [googleKey1, googleKey2, googleKey3];
-      const geminiKeys = [geminiKey1, geminiKey2, geminiKey3];
+      const isRandomCode = parts.length === 3; // ADMIN ADD TRIAL (no code provided)
+      const isSpecificCode = parts.length === 4; // ADMIN ADD TRIAL <code>
       
-      if (new Set(googleKeys).size !== 3) {
+      if (!isRandomCode && !isSpecificCode) {
         await sock.sendMessage(jid, { 
-          text: `❌ **Duplicate Google Keys!**\n\n⚠️ All 3 Google Search API keys must be different.\n\n🔄 **Please provide 3 unique Google API keys and try again!**`
+          text: `❌ **Invalid Format!**\n\n📝 **Correct Usage:**\n• \`ADMIN ADD TRIAL\` - Generate random code\n• \`ADMIN ADD TRIAL <code>\` - Use specific code\n\n💡 **Examples:**\n• \`ADMIN ADD TRIAL\` → Generates random code\n• \`ADMIN ADD TRIAL trial123\` → Uses trial123\n\n⚠️ **API keys are automatically assigned from the pool!**\n\n💡 **API Pool Management:**\n• ADMIN ADD GOOGLE KEY <key> - Add Google Search API key to pool\n• ADMIN ADD GEMINI KEY <key> - Add Gemini API key to pool\n• ADMIN LIST KEYS - Check API pool status\n\n🔄 **Try again with the correct format!**`
         });
         return;
       }
 
-      if (new Set(geminiKeys).size !== 3) {
-        await sock.sendMessage(jid, { 
-          text: `❌ **Duplicate Gemini Keys!**\n\n⚠️ All 3 Gemini API keys must be different.\n\n🔄 **Please provide 3 unique Gemini API keys and try again!**`
-        });
-        return;
-      }
-
-      // Basic validation: ensure keys are not empty strings
-      if (googleKey1.trim() === '' || googleKey2.trim() === '' || googleKey3.trim() === '' || geminiKey1.trim() === '' || geminiKey2.trim() === '' || geminiKey3.trim() === '') {
-        await sock.sendMessage(jid, { 
-          text: `❌ **Empty Keys Not Allowed!**\n\n⚠️ All API keys must contain actual values.\n\n🔍 **Your keys:**\n• Google Key 1: ${formatApiKey(googleKey1)}\n• Google Key 2: ${formatApiKey(googleKey2)}\n• Google Key 3: ${formatApiKey(googleKey3)}\n• Gemini Key 1: ${formatApiKey(geminiKey1)}\n• Gemini Key 2: ${formatApiKey(geminiKey2)}\n• Gemini Key 3: ${formatApiKey(geminiKey3)}\n\n🔄 **Please provide non-empty keys and try again!**`
-        });
-        return;
-      }
-
-      // Check if user code already exists
-      const existingUser = adminManager.getUserDetails(userCode);
-      if (existingUser) {
-        await sock.sendMessage(jid, { 
-          text: `❌ **User Code Already Exists!**\n\n⚠️ The user code \`${userCode}\` is already registered.\n\n💡 **Options:**\n• Use a different user code\n• Use \`ADMIN REMOVE USER ${userCode}\` to remove the existing one first\n• Use \`ADMIN USERS\` to see all existing user codes\n\n🔄 **Please try again with a different code!**`
-        });
-        return;
-      }
-
-      const apiKeys = {
-        googleSearchKeys: [googleKey1, googleKey2, googleKey3],
-        geminiKeys: [geminiKey1, geminiKey2, geminiKey3]
-      };
-
-      const result = adminManager.addUser(adminSession.adminCode, userCode, apiKeys);
+      let userCode;
+      let isGenerated = false;
       
-      if (result.success) {
-        // Get the newly added user details to display
-        const userDetails = adminManager.getUserDetails(userCode);
-        if (userDetails) {
-          // Get total user count for the success message
-          const totalUsers = Object.keys(adminManager.codes).length;
+      if (isRandomCode) {
+        // Generate random code
+        try {
+          const result = adminManager.addTrialUserWithRandomCode(adminSession.adminCode);
           
-          let successMessage = `✅ **User Added Successfully!**\n\n`;
-          successMessage += `👤 **User Code:** ${userCode}\n`;
-          successMessage += `📅 **Created:** ${new Date(userDetails.createdAt).toLocaleString()}\n`;
-          successMessage += `👑 **Issued by:** ${userDetails.meta?.issuedBy || 'unknown'}\n\n`;
-          successMessage += `🔑 **Google Search API Keys:**\n`;
-          successMessage += `   • Key 1: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[0])}\n`;
-          successMessage += `   • Key 2: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[1])}\n`;
-          successMessage += `   • Key 3: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[2])}\n\n`;
-          successMessage += `🤖 **Gemini API Keys:**\n`;
-          successMessage += `   • Key 1: ${formatApiKey(userDetails.apiKeys.geminiKeys[0])}\n`;
-          successMessage += `   • Key 2: ${formatApiKey(userDetails.apiKeys.geminiKeys[1])}\n`;
-          successMessage += `   • Key 3: ${formatApiKey(userDetails.apiKeys.geminiKeys[2])}\n\n`;
-          successMessage += `📊 **Status:** Active\n`;
-          successMessage += `⏰ **Expires:** Never\n`;
-          successMessage += `🔄 **Use Count:** 0\n\n`;
-          successMessage += `📈 **Total Users:** ${totalUsers}`;
-          
-          await sock.sendMessage(jid, { text: successMessage });
-        } else {
-          await sock.sendMessage(jid, { text: `✅ **${result.message}**` });
+          if (result.success) {
+            userCode = result.userCode;
+            isGenerated = true;
+          } else {
+            await sock.sendMessage(jid, { 
+              text: `❌ **Error:** ${result.error}`
+            });
+            return;
+          }
+        } catch (error) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Error:** Failed to generate random trial user`
+          });
+          return;
         }
       } else {
+        // Use specific code
+        userCode = parts[3];
+        
+        // Validate that user code is provided and not empty
+        if (!userCode) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Missing Required Information!**\n\n📝 **You provided:**\n• Code: ${userCode || '❌ MISSING'}\n\n💡 **Please provide the user code and try again!**`
+          });
+          return;
+        }
+
+        // Check if user code already exists
+        const existingUser = adminManager.getUserDetails(userCode);
+        if (existingUser) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **User Code Already Exists!**\n\n⚠️ The user code \`${userCode}\` is already registered.\n\n💡 **Options:**\n• Use a different user code\n• Use \`ADMIN REMOVE USER ${userCode}\` to remove the existing one first\n• Use \`ADMIN USERS\` to see all existing user codes\n\n🔄 **Please try again with a different code!**`
+          });
+          return;
+        }
+        
+        try {
+          const result = adminManager.addTrialUser(adminSession.adminCode, userCode);
+          
+          if (!result.success) {
+            await sock.sendMessage(jid, { 
+              text: `❌ **Error:** ${result.error}`
+            });
+            return;
+          }
+        } catch (error) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Error:** Failed to add trial user`
+          });
+          return;
+        }
+      }
+      
+      // Display success message
+      try {
+        const userDetails = adminManager.getUserDetails(userCode);
+        const totalUsers = Object.keys(adminManager.codes).length;
+        
+        let successMessage = `✅ **Trial User Added Successfully!**\n\n`;
+        
+        if (isGenerated) {
+          successMessage += `🎲 **Generated Code:** ${userCode}\n`;
+        } else {
+          successMessage += `👤 **User Code:** ${userCode}\n`;
+        }
+        
+        successMessage += `🎯 **Type:** Trial User (3 attempts max)\n`;
+        successMessage += `📅 **Created:** ${new Date(userDetails.createdAt).toLocaleString()}\n`;
+        successMessage += `👑 **Issued by:** ${userDetails.meta?.issuedBy || 'unknown'}\n\n`;
+        successMessage += `🔑 **API Keys:** Automatically assigned from pool\n`;
+        successMessage += `   • Google: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[0])}\n`;
+        successMessage += `   • Gemini: ${formatApiKey(userDetails.apiKeys.geminiKeys[0])}\n\n`;
+        successMessage += `📊 **Status:** Active (Trial)\n`;
+        successMessage += `🎯 **Trial:** 0/3 attempts used\n`;
+        successMessage += `⏰ **Expires:** Never\n`;
+        successMessage += `🔄 **Use Count:** 0\n\n`;
+        successMessage += `📈 **Total Users:** ${totalUsers}`;
+        
+        await sock.sendMessage(jid, { text: successMessage });
+      } catch (error) {
         await sock.sendMessage(jid, { 
-          text: `❌ **Error Adding User:** ${result.error}\n\n🔄 **Please check the error and try again!**`
+          text: `❌ **Error:** Failed to retrieve user details`
+        });
+      }
+      return;
+    }
+    
+    // Admin command: Add paid user
+    if (text.toUpperCase().startsWith('ADMIN ADD PAID')) {
+      const parts = text.split(' ');
+      const isRandomCode = parts.length === 3; // ADMIN ADD PAID (no code provided)
+      const isSpecificCode = parts.length === 4; // ADMIN ADD PAID <code>
+      
+      if (!isRandomCode && !isSpecificCode) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Invalid Format!**\n\n📝 **Correct Usage:**\n• \`ADMIN ADD PAID\` - Generate random code\n• \`ADMIN ADD PAID <code>\` - Use specific code\n\n💡 **Examples:**\n• \`ADMIN ADD PAID\` → Generates random code\n• \`ADMIN ADD PAID paid123\` → Uses paid123\n\n⚠️ **API keys are automatically assigned from the pool!**\n\n💡 **API Pool Management:**\n• ADMIN ADD GOOGLE KEY <key> - Add Google Search API key to pool\n• ADMIN ADD GEMINI KEY <key> - Add Gemini API key to pool\n• ADMIN LIST KEYS - Check API pool status\n\n🔄 **Try again with the correct format!**`
+        });
+        return;
+      }
+
+      let userCode;
+      let isGenerated = false;
+      
+      if (isRandomCode) {
+        // Generate random code
+        try {
+          const result = adminManager.addPaidUserWithRandomCode(adminSession.adminCode);
+          
+          if (result.success) {
+            userCode = result.userCode;
+            isGenerated = true;
+          } else {
+            await sock.sendMessage(jid, { 
+              text: `❌ **Error:** ${result.error}`
+            });
+            return;
+          }
+        } catch (error) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Error:** Failed to generate random paid user`
+          });
+          return;
+        }
+      } else {
+        // Use specific code
+        userCode = parts[3];
+
+        // Validate that user code is provided and not empty
+        if (!userCode) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Missing Required Information!**\n\n📝 **You provided:**\n• Code: ${userCode || '❌ MISSING'}\n\n💡 **Please provide the user code and try again!**`
+          });
+          return;
+        }
+
+        // Check if user code already exists
+        const existingUser = adminManager.getUserDetails(userCode);
+        if (existingUser) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **User Code Already Exists!**\n\n⚠️ The user code \`${userCode}\` is already registered.\n\n💡 **Options:**\n• Use a different user code\n• Use \`ADMIN REMOVE USER ${userCode}\` to remove the existing one first\n• Use \`ADMIN USERS\` to see all existing user codes\n\n🔄 **Please try again with a different code!**`
+          });
+          return;
+        }
+
+        try {
+          const result = adminManager.addPaidUser(adminSession.adminCode, userCode);
+          
+          if (!result.success) {
+            await sock.sendMessage(jid, { 
+              text: `❌ **Error:** ${result.error}`
+            });
+            return;
+          }
+        } catch (error) {
+          await sock.sendMessage(jid, { 
+            text: `❌ **Error:** Failed to add paid user`
+          });
+          return;
+        }
+      }
+
+      // Display success message
+      try {
+        const userDetails = adminManager.getUserDetails(userCode);
+        const totalUsers = Object.keys(adminManager.codes).length;
+        const expiresDate = new Date(userDetails.paid.expiresAt);
+        
+        let successMessage = `✅ **Paid User Added Successfully!**\n\n`;
+        
+        if (isGenerated) {
+          successMessage += `🎲 **Generated Code:** ${userCode}\n`;
+        } else {
+          successMessage += `👤 **User Code:** ${userCode}\n`;
+        }
+        
+        successMessage += `🎯 **Type:** Paid User (30 days access)\n`;
+        successMessage += `📅 **Created:** ${new Date(userDetails.createdAt).toLocaleString()}\n`;
+        successMessage += `👑 **Issued by:** ${userDetails.meta?.issuedBy || 'unknown'}\n\n`;
+        successMessage += `🔑 **API Keys:** Automatically assigned from pool\n`;
+        successMessage += `   **Google Search Keys:**\n`;
+        successMessage += `   • Key 1: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[0])}\n`;
+        successMessage += `   • Key 2: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[1])}\n`;
+        successMessage += `   • Key 3: ${formatApiKey(userDetails.apiKeys.googleSearchKeys[2])}\n\n`;
+        successMessage += `   **Gemini Keys:**\n`;
+        successMessage += `   • Key 1: ${formatApiKey(userDetails.apiKeys.geminiKeys[0])}\n`;
+        successMessage += `   • Key 2: ${formatApiKey(userDetails.apiKeys.geminiKeys[1])}\n`;
+        successMessage += `   • Key 3: ${formatApiKey(userDetails.apiKeys.geminiKeys[2])}\n\n`;
+        successMessage += `📊 **Status:** Active (Paid)\n`;
+        successMessage += `⏰ **Expires:** ${expiresDate.toLocaleString()}\n`;
+        successMessage += `🔄 **Use Count:** 0\n\n`;
+        successMessage += `📈 **Total Users:** ${totalUsers}`;
+        
+        await sock.sendMessage(jid, { text: successMessage });
+      } catch (error) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error:** Failed to retrieve user details`
         });
       }
       return;
@@ -3337,6 +3463,223 @@ async function handleMessage(sock, message) {
       await sock.sendMessage(jid, { 
         text: result.success ? `✅ **${result.message}**` : `❌ **Error:** ${result.error}`
       });
+      return;
+    }
+
+    // Admin command: Add Google Search API key to pool
+    if (text.toUpperCase().startsWith('ADMIN ADD GOOGLE KEY')) {
+      const parts = text.split(' ');
+      if (parts.length < 5) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Usage:** ADMIN ADD GOOGLE KEY <key>\n\n💡 **Example:** ADMIN ADD GOOGLE KEY AIzaSyYourGoogleKey123`
+        });
+        return;
+      }
+
+      const apiKey = parts.slice(4).join(' '); // Join all parts after "ADMIN ADD GOOGLE KEY"
+      const result = adminManager.addGoogleKey(adminSession.adminCode, apiKey);
+      
+      if (result.success) {
+        await sock.sendMessage(jid, { 
+          text: `✅ **Google Search API Key Added!**\n\n🔑 **Key:** ${result.maskedKey}\n📅 **Added:** ${new Date().toLocaleString()}\n👑 **Added by:** ${adminSession.adminCode}`
+        });
+      } else {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error:** ${result.error}`
+        });
+      }
+      return;
+    }
+
+    // Admin command: Add Gemini API key to pool
+    if (text.toUpperCase().startsWith('ADMIN ADD GEMINI KEY')) {
+      const parts = text.split(' ');
+      if (parts.length < 5) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Usage:** ADMIN ADD GEMINI KEY <key>\n\n💡 **Example:** ADMIN ADD GEMINI KEY AIzaSyYourGeminiKey123`
+        });
+        return;
+      }
+
+      const apiKey = parts.slice(4).join(' '); // Join all parts after "ADMIN ADD GEMINI KEY"
+      const result = adminManager.addGeminiKey(adminSession.adminCode, apiKey);
+      
+      if (result.success) {
+        await sock.sendMessage(jid, { 
+          text: `✅ **Gemini API Key Added!**\n\n🤖 **Key:** ${result.maskedKey}\n📅 **Added:** ${new Date().toLocaleString()}\n👑 **Added by:** ${adminSession.adminCode}`
+        });
+      } else {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error:** ${result.error}`
+        });
+      }
+      return;
+    }
+
+    // Admin command: Remove Google Search API key from pool
+    if (text.toUpperCase().startsWith('ADMIN REMOVE GOOGLE KEY')) {
+      const parts = text.split(' ');
+      if (parts.length < 5) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Usage:** ADMIN REMOVE GOOGLE KEY <key>\n\n💡 **Example:** ADMIN REMOVE GOOGLE KEY AIzaSyYourGoogleKey123`
+        });
+        return;
+      }
+
+      const apiKey = parts.slice(4).join(' '); // Join all parts after "ADMIN REMOVE GOOGLE KEY"
+      const result = adminManager.removeGoogleKey(adminSession.adminCode, apiKey);
+      
+      if (result.success) {
+        await sock.sendMessage(jid, { 
+          text: `✅ **Google Search API Key Removed!**\n\n🔑 **Key:** ${result.maskedKey}\n👑 **Removed by:** ${adminSession.adminCode}`
+        });
+      } else {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error:** ${result.error}`
+        });
+      }
+      return;
+    }
+
+    // Admin command: Remove Gemini API key from pool
+    if (text.toUpperCase().startsWith('ADMIN REMOVE GEMINI KEY')) {
+      const parts = text.split(' ');
+      if (parts.length < 5) {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Usage:** ADMIN REMOVE GEMINI KEY <key>\n\n💡 **Example:** ADMIN REMOVE GEMINI KEY AIzaSyYourGeminiKey123`
+        });
+        return;
+      }
+
+      const apiKey = parts.slice(4).join(' '); // Join all parts after "ADMIN REMOVE GEMINI KEY"
+      const result = adminManager.removeGeminiKey(adminSession.adminCode, apiKey);
+      
+      if (result.success) {
+        await sock.sendMessage(jid, { 
+          text: `✅ **Gemini API Key Removed!**\n\n🤖 **Key:** ${result.maskedKey}\n👑 **Removed by:** ${adminSession.adminCode}`
+        });
+      } else {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error:** ${result.error}`
+        });
+      }
+      return;
+    }
+
+    // Admin command: List API keys in pool
+    if (text.toUpperCase() === 'ADMIN LIST KEYS') {
+      const result = adminManager.listApiKeys(adminSession.adminCode);
+      
+      if (result.success) {
+        let message = `🔑 **API Key Pool Status**\n\n`;
+        
+        // Google Search Keys
+        message += `🔍 **Google Search Keys:**\n`;
+        message += `   Total: ${result.googleSearchKeys.total}\n`;
+        message += `   Available: ${result.googleSearchKeys.available}\n`;
+        message += `   Used: ${result.googleSearchKeys.used}\n\n`;
+        
+        if (result.googleSearchKeys.keys.length > 0) {
+          message += `   **Keys:**\n`;
+          result.googleSearchKeys.keys.forEach((key, index) => {
+            message += `   ${index + 1}. ${key.maskedKey} (${key.status})${key.assignedTo ? ` → ${key.assignedTo}` : ''}\n`;
+          });
+          message += `\n`;
+        }
+        
+        // Gemini Keys
+        message += `🤖 **Gemini Keys:**\n`;
+        message += `   Total: ${result.geminiKeys.total}\n`;
+        message += `   Available: ${result.geminiKeys.available}\n`;
+        message += `   Used: ${result.geminiKeys.used}\n\n`;
+        
+        if (result.geminiKeys.keys.length > 0) {
+          message += `   **Keys:**\n`;
+          result.geminiKeys.keys.forEach((key, index) => {
+            message += `   ${index + 1}. ${key.maskedKey} (${key.status})${key.assignedTo ? ` → ${key.assignedTo}` : ''}\n`;
+          });
+          message += `\n`;
+        }
+
+        // Pool Statistics
+        const statsResult = adminManager.getApiPoolStatistics(adminSession.adminCode);
+        if (statsResult.success) {
+          const stats = statsResult.statistics;
+          message += `📊 **Pool Statistics:**\n`;
+          message += `   Can create trial users: ${stats.canCreateTrialUsers}\n`;
+          message += `   Can create paid users: ${stats.canCreatePaidUsers}\n`;
+        }
+
+        await sock.sendMessage(jid, { text: message });
+      } else {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error:** ${result.error}`
+        });
+      }
+      return;
+    }
+
+    // Admin command: Show detailed API pool data
+    if (text.toUpperCase() === 'ADMIN SHOW API DATA') {
+      const result = adminManager.showDetailedApiData(adminSession.adminCode);
+      
+      if (result.success) {
+        let message = `📊 **Detailed API Pool Data**\n\n`;
+        
+        // Google Search Keys Details
+        message += `🔍 **Google Search Keys (${result.googleSearchKeys.length} total):**\n`;
+        if (result.googleSearchKeys.length === 0) {
+          message += `   No Google Search keys in pool.\n\n`;
+        } else {
+          result.googleSearchKeys.forEach((key, index) => {
+            message += `\n   **${index + 1}. Key:** ${key.maskedKey}\n`;
+            message += `   **Status:** ${key.status}\n`;
+            message += `   **Added by:** ${key.addedBy || 'Unknown'}\n`;
+            message += `   **Added at:** ${key.addedAt ? new Date(key.addedAt).toLocaleString() : 'Unknown'}\n`;
+            if (key.status === 'used') {
+              message += `   **Assigned to:** ${key.assignedTo || 'Unknown'}\n`;
+              message += `   **Assigned at:** ${key.assignedAt ? new Date(key.assignedAt).toLocaleString() : 'Unknown'}\n`;
+            }
+          });
+          message += `\n`;
+        }
+        
+        // Gemini Keys Details
+        message += `🤖 **Gemini Keys (${result.geminiKeys.length} total):**\n`;
+        if (result.geminiKeys.length === 0) {
+          message += `   No Gemini keys in pool.\n\n`;
+        } else {
+          result.geminiKeys.forEach((key, index) => {
+            message += `\n   **${index + 1}. Key:** ${key.maskedKey}\n`;
+            message += `   **Status:** ${key.status}\n`;
+            message += `   **Added by:** ${key.addedBy || 'Unknown'}\n`;
+            message += `   **Added at:** ${key.addedAt ? new Date(key.addedAt).toLocaleString() : 'Unknown'}\n`;
+            if (key.status === 'used') {
+              message += `   **Assigned to:** ${key.assignedTo || 'Unknown'}\n`;
+              message += `   **Assigned at:** ${key.assignedAt ? new Date(key.assignedAt).toLocaleString() : 'Unknown'}\n`;
+            }
+          });
+          message += `\n`;
+        }
+
+        // Summary Statistics
+        const availableGoogle = result.googleSearchKeys.filter(k => k.status === 'available').length;
+        const usedGoogle = result.googleSearchKeys.filter(k => k.status === 'used').length;
+        const availableGemini = result.geminiKeys.filter(k => k.status === 'available').length;
+        const usedGemini = result.geminiKeys.filter(k => k.status === 'used').length;
+        
+        message += `📈 **Summary:**\n`;
+        message += `   Google Keys: ${availableGoogle} available, ${usedGoogle} used\n`;
+        message += `   Gemini Keys: ${availableGemini} available, ${usedGemini} used\n`;
+        message += `   Can create trial users: ${Math.min(availableGoogle, availableGemini)}\n`;
+        message += `   Can create paid users: ${Math.min(Math.floor(availableGoogle / 3), Math.floor(availableGemini / 3))}\n`;
+
+        await sock.sendMessage(jid, { text: message });
+      } else {
+        await sock.sendMessage(jid, { 
+          text: `❌ **Error:** ${result.error}`
+        });
+      }
       return;
     }
 
@@ -3471,8 +3814,17 @@ async function handleMessage(sock, message) {
       }
       
       if (permissions.includes('manage_users')) {
-        message += `• **ADMIN ADD USER <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>** - Add new user with 3 API keys for each service\n`;
+        message += `• **ADMIN ADD TRIAL** - Generate random code for trial user\n`;
+        message += `• **ADMIN ADD TRIAL <code>** - Add trial user with specific code\n`;
+        message += `• **ADMIN ADD PAID** - Generate random code for paid user\n`;
+        message += `• **ADMIN ADD PAID <code>** - Add paid user with specific code\n`;
         message += `• **ADMIN REMOVE USER <code>** - Remove user code\n`;
+        message += `• **ADMIN ADD GOOGLE KEY <key>** - Add Google Search API key to pool\n`;
+        message += `• **ADMIN ADD GEMINI KEY <key>** - Add Gemini API key to pool\n`;
+        message += `• **ADMIN REMOVE GOOGLE KEY <key>** - Remove Google Search API key from pool\n`;
+        message += `• **ADMIN REMOVE GEMINI KEY <key>** - Remove Gemini API key from pool\n`;
+        message += `• **ADMIN LIST KEYS** - Show API pool status\n`;
+        message += `• **ADMIN SHOW API DATA** - Show detailed API pool data with metadata\n`;
       }
       
       if (permissions.includes('manage_admins')) {
@@ -4690,14 +5042,15 @@ async function handleMessage(sock, message) {
       
       // Check if it's a valid admin command
       const validCommands = [
-        'ADMIN USERS', 'ADMIN ADD USER', 'ADMIN REMOVE USER', 'ADMIN ADMINS', 
+        'ADMIN USERS', 'ADMIN ADD TRIAL', 'ADMIN ADD PAID', 'ADMIN REMOVE USER', 'ADMIN ADMINS', 
         'ADMIN ADD ADMIN', 'ADMIN REMOVE ADMIN', 'ADMIN STATUS', 'ADMIN CLEANUP', 'ADMIN HELP',
         'ADMIN SESSIONS', 'ADMIN REFRESH', 'ADMIN ADMINSESSIONSFILE', 
         'ADMIN USERSESSIONSFILE', 'ADMIN FILES', 'ADMIN DEBUG', 'ADMIN LOG',
         'ADMIN SESSIONSFILE', 'ADMIN RESET', 'ADMIN CONFIGFILE', 'ADMIN CODESFILE',
         'ADMIN CLEAR', 'ADMIN AUTH', 'ADMIN LOGOUT', 'ADMIN ME', 'ADMIN INFO', 'ADMIN TEST',
         'ADMIN RELOAD', 'ADMIN CONFIG', 'ADMIN CODES', 'ADMIN SESSIONS', 'ADMIN GRANT',
-        'ADMIN SEND FILES', 'ADMIN ERROR LOG', 'ADMIN ERROR DETAILS', 'ADMIN TEST ERROR', 'ADMIN TEST SCRAPER ERROR', 'ADMIN CLEAR ERROR LOG'
+        'ADMIN SEND FILES', 'ADMIN ERROR LOG', 'ADMIN ERROR DETAILS', 'ADMIN TEST ERROR', 'ADMIN TEST SCRAPER ERROR', 'ADMIN CLEAR ERROR LOG',
+        'ADMIN ADD GOOGLE KEY', 'ADMIN ADD GEMINI KEY', 'ADMIN REMOVE GOOGLE KEY', 'ADMIN REMOVE GEMINI KEY', 'ADMIN LIST KEYS', 'ADMIN SHOW API DATA'
       ];
 
       let isValidCommand = false;
@@ -4710,7 +5063,7 @@ async function handleMessage(sock, message) {
 
       if (!isValidCommand) {
         await sock.sendMessage(jid, { 
-          text: `❌ **Invalid Admin Command!**\n\n⚠️ The command "${text}" is not recognized.\n\n💡 **Available Commands:**\n• ADMIN USERS - List all users\n• ADMIN ADD USER <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>\n• ADMIN REMOVE USER <code>\n• ADMIN ADMINS - List all admins\n• ADMIN STATUS - System status\n• ADMIN HELP - Show detailed help\n• ADMIN LOGOUT - Switch to user mode\n\n🔄 **Try again with a valid command!**`
+          text: `❌ **Invalid Admin Command!**\n\n⚠️ The command "${text}" is not recognized.\n\n💡 **Available Commands:**\n• ADMIN USERS - List all users\n• ADMIN ADD TRIAL - Generate random trial user\n• ADMIN ADD TRIAL <code> - Add trial user with specific code\n• ADMIN ADD PAID - Generate random paid user\n• ADMIN ADD PAID <code> - Add paid user with specific code\n• ADMIN REMOVE USER <code>\n• ADMIN ADD GOOGLE KEY <key> - Add Google Search API key to pool\n• ADMIN ADD GEMINI KEY <key> - Add Gemini API key to pool\n• ADMIN REMOVE GOOGLE KEY <key> - Remove Google Search API key from pool\n• ADMIN REMOVE GEMINI KEY <key> - Remove Gemini API key from pool\n• ADMIN LIST KEYS - Show API pool status\n• ADMIN SHOW API DATA - Show detailed API pool data\n• ADMIN ADMINS - List all admins\n• ADMIN STATUS - System status\n• ADMIN HELP - Show detailed help\n• ADMIN LOGOUT - Switch to user mode\n\n🔄 **Try again with a valid command!**`
         });
         return;
       }
@@ -4723,8 +5076,11 @@ async function handleMessage(sock, message) {
      }
    }
 
-   // Handle language selection for unauthenticated users
-   if (session.currentStep === 'awaiting_language' && !session.apiKeys) {
+   // Handle direct authentication from language selection step
+   if (session.currentStep === 'awaiting_language' && !session.apiKeys && codesDb[text.trim()]) {
+     // User is trying to authenticate directly without selecting language first
+     // Let it fall through to the authentication logic below
+   } else if (session.currentStep === 'awaiting_language' && !session.apiKeys) {
      const langNumber = parseInt(text);
      const langMap = { 1: 'en', 2: 'fr', 3: 'ar' };
      
@@ -4754,6 +5110,7 @@ async function handleMessage(sock, message) {
    
    // Handle authentication for users who have selected language
     if (session.currentStep === 'awaiting_authentication' && !session.apiKeys) {
+      
       if (text.trim() === '0') {
         // User wants to go back to language selection
         session.currentStep = 'awaiting_language';
@@ -4761,17 +5118,21 @@ async function handleMessage(sock, message) {
         console.log(chalk.yellow(`🔄 User ${jid.split('@')[0]} going back to language selection from authentication`));
         await sendImageWithMessage(sock, jid, 'welcome', getMessage('fr', 'welcome'), 'fr');
         return;
-      } else if (!/^CODE:?\s+/i.test(text)) {
+      } else if (!/^CODE:?\s+/i.test(text) && !codesDb[text.trim()]) {
         // Invalid input - resend authentication message
         console.log(chalk.yellow(`⚠️ Invalid authentication attempt from ${jid.split('@')[0]}: "${text}" - resending auth message`));
         await sendImageWithMessage(sock, jid, 'authentication', getMessage(session.language, 'auth_required'), session.language);
        return;
      }
-     // If it's a CODE command, let it continue to the authentication logic below
+     // If it's a CODE command or valid direct code, let it continue to the authentication logic below
    }
    
    // STRICT AUTHENTICATION: No responses until CODE is provided (for regular users who haven't selected language)
-  if (!session.apiKeys && !/^CODE:?\s+/i.test(text)) {
+  // Check if message is a direct access code (without CODE: prefix) or a CODE: command
+  const isDirectCode = !session.apiKeys && codesDb[text.trim()] && !/^CODE:?\s+/i.test(text);
+  const isCodeCommand = /^CODE:?\s+/i.test(text);
+  
+  if (!session.apiKeys && !isDirectCode && !isCodeCommand) {
     // SILENT IGNORE: Don't respond to any messages until authentication
     console.log(chalk.yellow(`🔒 Unauthorized message from ${jid.split('@')[0]}: "${shortText}" - Ignoring silently`));
     return; // Exit without any response
@@ -5681,9 +6042,60 @@ async function handleMessage(sock, message) {
       }
     }
 
-    // Command: CODE
-    if (/^CODE:?\s+/i.test(text)) {
-      const code = text.replace(/^CODE:?\s+/i, '').trim();
+    // Handle trial_end state - check if code was recreated by admin
+    if (session.currentStep === 'trial_end') {
+      // Check if the user's code still exists in codes.json (admin recreated it)
+      const userCode = session.code;
+      const codesDb = loadJson(CODES_FILE, {});
+      
+      if (userCode && codesDb[userCode]) {
+        // Code exists - admin recreated it, re-authenticate the user
+        console.log(chalk.green(`🔄 Code '${userCode}' was recreated by admin. Re-authenticating user ${jid.split('@')[0]}`));
+        
+        // Update user session with fresh data from codes.json
+        const userEntry = codesDb[userCode];
+        session.apiKeys = userEntry.apiKeys;
+        session.stage = userEntry.stage;
+        session.language = userEntry.language || session.language;
+        session.currentStep = 'main_menu';
+        session.status = 'idle';
+        
+        // Update trial info if it's a trial user
+        if (userEntry.trial) {
+          session.trial = userEntry.trial;
+        }
+        
+        // Save updated session
+        sessions[jid] = session;
+        saveJson(SESSIONS_FILE, sessions);
+        
+        // Send welcome message first (like fresh authentication)
+        if (session.stage === 'free_trial') {
+          await sock.sendMessage(jid, { text: getMessage(session.language, 'trial_welcome') });
+        } else if (session.stage === 'paid') {
+          await sock.sendMessage(jid, { text: getMessage(session.language, 'paid_welcome') });
+        }
+        
+        // Then send main menu
+        await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
+        return;
+      } else {
+        // Code doesn't exist - send trial completion message
+        await sock.sendMessage(jid, {
+          text: `🎯 **Trial Complete!**\n\n✅ You have used all 3 trial attempts.\n\n💡 **Want to continue? Upgrade to Premium!**\n\n🚀 **Premium Benefits:**\n• 4 searches per day (instead of 3 total)\n• Unlimited data extraction\n• Priority support\n• Advanced features\n\n📞 **Contact support in the number below to upgrade your account!**`
+        });
+        
+        // Send support number message
+        await sock.sendMessage(jid, {
+          text: getMessage(session.language, 'support_contact')
+        });
+        return;
+      }
+    }
+
+    // Command: CODE or Direct Code Authentication (from any step)
+    if (/^CODE:?\s+/i.test(text) || (!session.apiKeys && codesDb[text.trim()])) {
+      const code = /^CODE:?\s+/i.test(text) ? text.replace(/^CODE:?\s+/i, '').trim() : text.trim();
       
       if (!codesDb[code]) {
 
@@ -6755,12 +7167,34 @@ async function handleMessage(sock, message) {
             }
             // Block if trial limit reached
             if (stageLocal === 'free_trial' && trialLocal.triesUsed >= trialLocal.maxTries) {
+                // 🗑️ AUTO-REMOVE: Remove trial user code when limit is reached
+                if (userCodeLocal && codesDbLocal[userCodeLocal]) {
+                    console.log(chalk.yellow(`🗑️ Trial user ${userCodeLocal} has reached limit (${trialLocal.triesUsed}/${trialLocal.maxTries}). Auto-removing code to free up API keys.`));
+                    
+                    // Remove the user code from codes.json
+                    delete codesDbLocal[userCodeLocal];
+                    saveJson(CODES_FILE, codesDbLocal);
+                    
+                    // Notify user that their trial has ended and code was removed
+                    await sock.sendMessage(jid, { 
+                        text: `🎯 **Trial Complete!**\n\n✅ You have used all ${trialLocal.maxTries} trial attempts.\n\n💡 **Want to continue? Upgrade to Premium!**\n\n🚀 **Premium Benefits:**\n• 4 searches per day (instead of 3 total)\n• Unlimited data extraction\n• Priority support\n• Advanced features\n\n📞 **Contact support in the number below to upgrade your account!**`
+                    });
+                    
+                    // Send support number message
+                    await sock.sendMessage(jid, {
+                        text: getMessage(currentSession.language, 'support_contact')
+                    });
+                    
+                    console.log(chalk.blue(`🗑️ Trial user code '${userCodeLocal}' auto-removed after reaching limit`));
+                } else {
+                    // Fallback message if code already removed
                 await sock.sendMessage(jid, { text: getMessage(currentSession.language, 'trial_finished') });
-                currentSession.currentStep = 'main_menu';
+                }
+                
+                // Set user session to trial_end state
+                currentSession.currentStep = 'trial_end';
                 sessions[jid] = currentSession;
                 saveJson(SESSIONS_FILE, sessions);
-                // Show main menu
-                await sendImageWithMessage(sock, jid, 'main_menu', getMessage(currentSession.language, 'main_menu'), currentSession.language);
                 return;
             }
             
@@ -6887,12 +7321,16 @@ async function handleMessage(sock, message) {
                                                                 const currentTries = Math.min(trial.triesUsed || 0, trial.maxTries || 3);
                                                                 if (currentTries < (trial.maxTries || 3)) {
                                                                     trial.triesUsed = currentTries + 1;
+                                                                    codesNow[userCode].trial = trial;
+                                                                    saveJson(CODES_FILE, codesNow);
+                                                                    console.log(chalk.green(`✅ Trial try incremented for ${jid.split('@')[0]} → ${trial.triesUsed}/${trial.maxTries}`));
+                                                                    
+                                                                    // Note: Trial completion is now handled after job completion, not during scraping
                                                                 } else {
                                                                     trial.triesUsed = currentTries; // clamp
-                                                                }
                                                                 codesNow[userCode].trial = trial;
                                                                 saveJson(CODES_FILE, codesNow);
-                                                                console.log(chalk.green(`✅ Trial try incremented for ${jid.split('@')[0]} → ${trial.triesUsed}/${trial.maxTries}`));
+                                                                }
                                                             }
                                                         } else {
                                                             // Paid mode: increment daily count
@@ -7000,12 +7438,55 @@ async function handleMessage(sock, message) {
 
                 // Job completed successfully - perform cleanup and reset session state
                 activeJobs.delete(jid);
+                
+                // Check if this is a trial user who has reached their limit
+                const finalSession = sessions[jid];
+                const completionUserCode = finalSession?.code;
+                const completionCodesDb = JSON.parse(fs.readFileSync(CODES_FILE, 'utf8'));
+                const completionUserEntry = completionCodesDb[completionUserCode];
+                
+                let isTrialComplete = false;
+                console.log(chalk.blue(`🔍 Debug: Checking trial completion for user ${completionUserCode}`));
+                console.log(chalk.blue(`🔍 Debug: completionUserEntry = ${JSON.stringify(completionUserEntry)}`));
+                
+                if (completionUserEntry && completionUserEntry.stage === 'free_trial' && completionUserEntry.trial) {
+                    const trial = completionUserEntry.trial;
+                    const currentTries = trial.triesUsed || 0;
+                    
+                    console.log(chalk.blue(`🔍 Debug: currentTries = ${currentTries}, maxTries = ${trial.maxTries || 3}`));
+                    
+                    // Check if user has already reached or exceeded their trial limit
+                    if (currentTries >= (trial.maxTries || 3)) {
+                        isTrialComplete = true;
+                        console.log(chalk.yellow(`🎯 Trial user ${completionUserCode} has completed all attempts (${currentTries}/${trial.maxTries})`));
+                    }
+                }
+                
+                console.log(chalk.blue(`🔍 Debug: isTrialComplete = ${isTrialComplete}`));
+                
+                if (isTrialComplete) {
+                    // Set user to trial_end state instead of main_menu
+                    await mutateUserSession(jid, (s) => ({
+                        ...s,
+                        status: 'idle',
+                        currentStep: 'trial_end',
+                        meta: { ...(s.meta || {}), totalJobs: ((s.meta?.totalJobs) || 0) + 1 }
+                    }));
+                    
+                    // Also update the local sessions object to ensure consistency
+                    if (sessions[jid]) {
+                        sessions[jid].currentStep = 'trial_end';
+                        sessions[jid].status = 'idle';
+                    }
+                } else {
+                    // Normal completion - set to main_menu
                 await mutateUserSession(jid, (s) => ({
                     ...s,
                     status: 'idle',
                     currentStep: 'main_menu',
                     meta: { ...(s.meta || {}), totalJobs: ((s.meta?.totalJobs) || 0) + 1 }
                 }));
+                }
 
                 // Notify concurrency manager that this user finished
                 await concurrencyManager.finishScraping(jid);
@@ -7102,8 +7583,37 @@ async function handleMessage(sock, message) {
 
                 // File caption already contains all the information, no need for duplicate completion message
                 
-                // Show main menu after job completion
+                // Check if user is in trial_end state - if so, send trial completion message instead of main menu
+                const trialEndSession = sessions[jid];
+                console.log(chalk.blue(`🔍 Debug: trialEndSession.currentStep = ${trialEndSession?.currentStep}`));
+                if (trialEndSession && trialEndSession.currentStep === 'trial_end') {
+                    // Send trial completion message and remove the user code
+                    const finalUserCode = trialEndSession.code;
+                    const finalCodesDb = JSON.parse(fs.readFileSync(CODES_FILE, 'utf8'));
+                    
+                    if (finalUserCode && finalCodesDb[finalUserCode]) {
+                        console.log(chalk.yellow(`🗑️ Trial user ${finalUserCode} has completed all attempts. Auto-removing code to free up API keys.`));
+                        
+                        // Remove the user code from codes.json
+                        delete finalCodesDb[finalUserCode];
+                        saveJson(CODES_FILE, finalCodesDb);
+                        
+                        // Send trial completion message
+                        await sock.sendMessage(jid, {
+                            text: `🎯 **Trial Complete!**\n\n✅ You have used all 3 trial attempts.\n\n💡 **Want to continue? Upgrade to Premium!**\n\n🚀 **Premium Benefits:**\n• 4 searches per day (instead of 3 total)\n• Unlimited data extraction\n• Priority support\n• Advanced features\n\n📞 **Contact support in the number below to upgrade your account!**`
+                        });
+                        
+                        // Send support number message
+                        await sock.sendMessage(jid, {
+                            text: getMessage(session.language, 'support_contact')
+                        });
+                        
+                        console.log(chalk.blue(`🗑️ Trial user code '${finalUserCode}' auto-removed after completing all attempts`));
+                    }
+                } else {
+                    // Show main menu after job completion for normal users
                 await sendImageWithMessage(sock, jid, 'main_menu', getMessage(session.language, 'main_menu'), session.language);
+                }
 
                 console.log(chalk.green(`✅ Job completed: ${result.meta.totalResults} results`));
 

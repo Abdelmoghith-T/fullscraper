@@ -16,17 +16,18 @@ The WhatsApp Bot now implements **strict authentication and security measures** 
 1. User sends message → Bot checks if authenticated
 2. If NOT authenticated → Message ignored silently
 3. If authenticated → Message processed normally
-4. Only "CODE: <code>" messages are processed for new users
+4. Only valid access codes (direct or "CODE: <code>") are processed for new users
 ```
 
 ## 🔐 **Access Code System**
 
 ### **Code Format**
 ```
-CODE: your_access_code_here
+your_access_code_here
 ```
+- Direct code authentication (recommended)
+- Also supports `CODE: your_access_code_here` format for backward compatibility
 - Case-insensitive
-- Supports both `CODE:` and `CODE ` formats
 - Must be provided by administrator
 
 ### **Code Validation**

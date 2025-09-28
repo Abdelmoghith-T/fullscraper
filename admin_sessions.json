@@ -1,1 +1,44 @@
-{}
+{
+  "212717034808@s.whatsapp.net": {
+    "adminCode": "admin123",
+    "role": "super_admin",
+    "permissions": [
+      "manage_users",
+      "manage_admins",
+      "view_logs",
+      "system_control",
+      "view_sessions"
+    ],
+    "authenticatedAt": "2025-09-23T21:11:06.046Z",
+    "currentMenu": "main_admin_menu",
+    "menuOptions": 10
+  },
+  "212612212801@s.whatsapp.net": {
+    "adminCode": "admin123",
+    "role": "super_admin",
+    "permissions": [
+      "manage_users",
+      "manage_admins",
+      "view_logs",
+      "system_control",
+      "view_sessions"
+    ],
+    "authenticatedAt": "2025-09-27T21:39:27.257Z",
+    "currentMenu": "main_admin_menu",
+    "menuOptions": 10
+  },
+  "212617881167@s.whatsapp.net": {
+    "adminCode": "admin123",
+    "role": "super_admin",
+    "permissions": [
+      "manage_users",
+      "manage_admins",
+      "view_logs",
+      "system_control",
+      "view_sessions"
+    ],
+    "authenticatedAt": "2025-09-28T01:32:36.240Z",
+    "currentMenu": "main_admin_menu",
+    "menuOptions": 10
+  }
+}

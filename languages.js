@@ -10,7 +10,7 @@ export const languages = {
     language_selection: "🌐 **Language Selection**\n\nPlease select your preferred language:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **Reply with the number** corresponding to your choice.\n\n0️⃣ **BACK TO MENU** - Return to main menu",
     
     // Authentication
-    auth_required: "🔐 **Authentication required.** Please send your access code first.\n\n💬 **Format:** CODE: your_code_here\n💬 **Example:** CODE: user1\n\n💡 Contact admin if you don't have an access code.\n\n0️⃣ **CHANGE LANGUAGE** - Select a different language",
+    auth_required: "🔐 **Authentication required.** Please send your access code first.\n\n💡 Contact support if you don't have an access code.\n\n0️⃣ **CHANGE LANGUAGE** - Select a different language",
     invalid_code: "❌ Invalid access code. Please contact admin for a valid code.",
     access_granted: "✅ **Access granted!** Welcome to the Business Lead Finder.\n\n📝 Send a search query (e.g., \"restaurant casablanca\").\n\n📅 **Daily Limits:** You can perform 4 lead searches per day. Limits reset at midnight.\n\n💡 Use STATUS command to check your remaining searches.",
     
@@ -82,7 +82,7 @@ export const languages = {
     reset: "♻️ **Preferences reset to defaults.**",
     
     // Help
-    help: "📚 **Lead Finder Help**\n\n🔐 **CODE: <code>**\n   Authenticate with your access code\n   Example: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   Set data source: GOOGLE, LINKEDIN, MAPS\n\n📊 **STATUS**\n   Check current session status\n\n🛑 **STOP**\n   Cancel current lead‑finding session\n\n♻️ **RESET**\n   Reset all preferences\n\n🔄 **RESTART** (00)\n   Restart the entire process from business/service selection\n\n❓ **HELP**\n   Show this help message\n\n💡 **Getting Started:**\n1. Get your access code from admin\n2. Send: CODE: your_code_here\n3. Send your business or service (e.g., \"restaurant casablanca\")\n4. Follow the numbered prompts to configure source and type.\n5. Send: START to begin finding leads\n6. Receive real-time progress updates!\n\n**Navigation Tip:** At any numbered selection step, reply with `0` to go back to the previous step.",
+    help: "📚 **Lead Finder Help**\n\n🔐 **Authentication**\n   Just send your access code directly\n   Example: \"user1\"\n\n🎯 **SOURCE: <source>**\n   Set data source: GOOGLE, LINKEDIN, MAPS\n\n📊 **STATUS**\n   Check current session status\n\n🛑 **STOP**\n   Cancel current lead‑finding session\n\n♻️ **RESET**\n   Reset all preferences\n\n🔄 **RESTART** (00)\n   Restart the entire process from business/service selection\n\n❓ **HELP**\n   Show this help message\n\n💡 **Getting Started:**\n1. Get your access code from admin\n2. Send your code directly (e.g., \"user1\")\n3. Send your business or service (e.g., \"restaurant casablanca\")\n4. Follow the numbered prompts to configure source and type.\n5. Send: START to begin finding leads\n6. Receive real-time progress updates!\n\n**Navigation Tip:** At any numbered selection step, reply with `0` to go back to the previous step.",
     
     // Progress Messages
     progress_update: "⏱️ **Progress Update:** {message}",
@@ -100,12 +100,13 @@ export const languages = {
     invalid_selection: "⚠️ Invalid selection. Please choose a number between 1 and {max} or 0 to go back.",
     error_generic_friendly: "❌ **Something went wrong.**\n\n💡 Please try again with a different business or service. If the problem continues, contact support.",
     error_invalid_niche_maps: "❌ **Invalid business or service for Google Maps.**\n\nYour query should describe a business and a location.\n\nExamples:\n• dentist casablanca\n• restaurant marrakech\n• web developer fes\n\n💡 Please send a clearer business or service including a city or region.",
-    trial_finished: "🧪 **Your free trial has ended.**\n\nYou used all 3 trial searches (20 results each).\n\n💳 Contact support to upgrade and continue.",
+    trial_finished: "🎯 **Trial Complete!**\n\n✅ You have used all 3 trial attempts.\n\n💡 **Want to continue? Upgrade to Premium!**\n\n🚀 **Premium Benefits:**\n• 4 searches per day (instead of 3 total)\n• Unlimited data extraction\n• Priority support\n• Advanced features\n\n📞 **Contact support in the number below to upgrade your account!**",
+    support_contact: "📞 **Support Contact:**\n\nClick here: https://wa.me/212717034808",
     subscription_expired: "⏳ **Subscription expired.**\n\nPlease contact support to renew your access.",
     trial_status_title: "🧪 **Free Trial Status**\n\n",
     trial_status_body: "You are on the free trial.\nTries used: {triesUsed}/{maxTries}\nRemaining: {remaining}\n\n",
-    trial_welcome: "🎉 **Welcome to your Free Trial!**\n\nYou're all set to explore the Business Lead Finder.\n\n**How it works:**\n• 3 trial searches included\n• Each trial search returns up to 20 leads (trial limit). Upgrade to get unlimited results\n• Type STATUS anytime to see remaining tries\n\nWhen you're ready to continue after the trial, contact support to upgrade.\n\n✨ Happy lead finding!",
-    paid_welcome: "🎉 **Welcome back!**\n\nYour subscription is active.\n\n**Good to know:**\n• Daily limit: 4 searches per day\n• Results per search: unlimited\n• Type STATUS anytime to see remaining searches\n\n✨ Let's find new leads!",
+    trial_welcome: "🎉 **Welcome to your Free Trial!**\n\nYou're all set to explore the Business Lead Finder.\n\n**How it works:**\n• 3 trial searches included\n• Each trial search returns up to 20 leads (trial limit). Upgrade to get unlimited results\n\nWhen you're ready to continue after the trial, contact support to upgrade.\n\n✨ Happy lead finding!",
+    paid_welcome: "🎉 **Welcome back!**\n\nYour subscription is active.\n\n**Good to know:**\n• Daily limit: 4 searches per day\n• Results per search: unlimited\n\n✨ Let's find new leads!",
     
     // Daily limit status
     status_title: "📊 **Your Lead‑Finding Status**\n\n",
@@ -135,7 +136,7 @@ export const languages = {
     
     // Logout Messages
     logout_confirmation: "🔓 **Confirm Logout**\n\n⚠️ Are you sure you want to logout?\n\nThis will end your current session and you'll need to authenticate again.\n\n💬 **Reply with:**\n• **5** to confirm logout\n• **0** to cancel and return to main menu",
-    logout_successful: "🔓 **User Logout Successful!**\n\n✅ You have been logged out of your user session.\n\n💡 **To log back in:**\n• Send CODE: <user_code> to start a new user session\n• Example: CODE: user1",
+    logout_successful: "🔓 **User Logout Successful!**\n\n✅ You have been logged out of your user session.\n\n💡 **To log back in:**\n• Just send your access code",
     logout_error: "❌ **Error during logout**\n\nAn error occurred while logging out. Please try again or contact support."
   },
   
@@ -145,7 +146,7 @@ export const languages = {
     language_selection: "🌐 **Sélection de Langue**\n\nVeuillez sélectionner votre langue préférée:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **Répondez avec le numéro** correspondant à votre choix.\n\n0️⃣ **RETOUR AU MENU** - Retourner au menu principal",
     
     // Authentication
-    auth_required: "🔐 **Authentification requise.** Veuillez d'abord envoyer votre code d'accès.\n\n💬 **Format:** CODE: votre_code_ici\n💬 **Exemple:** CODE: user1\n\n💡 Contactez l'administrateur si vous n'avez pas de code d'accès.\n\n0️⃣ **CHANGER DE LANGUE** - Sélectionner une langue différente",
+    auth_required: "🔐 **Authentification requise.** Veuillez d'abord envoyer votre code d'accès.\n\n💡 Contactez le support si vous n'avez pas de code d'accès.\n\n0️⃣ **CHANGER DE LANGUE** - Sélectionner une langue différente",
     invalid_code: "❌ Code d'accès invalide. Veuillez contacter l'administrateur pour un code valide.",
     access_granted: "✅ **Accès accordé!** Bienvenue dans le Localisateur de Prospects.\n\n📝 Envoyez une requête de recherche (ex: \"restaurant casablanca\").\n\n📅 **Limites Quotidiennes:** Vous pouvez effectuer 4 recherches de prospects par jour. Réinitialisation à minuit.\n\n💡 Utilisez la commande STATUS pour vérifier vos recherches restantes.",
     
@@ -217,7 +218,7 @@ export const languages = {
     reset: "♻️ **Préférences remises aux valeurs par défaut.**",
     
     // Help
-    help: "📚 **Aide – Localisateur de Prospects**\n\n🔐 **CODE: <code>**\n   Authentifiez-vous avec votre code d'accès\n   Exemple: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   Définir la source: GOOGLE, LINKEDIN, MAPS\n\n📊 **STATUT**\n   Vérifier le statut de la session\n\n🛑 **STOP**\n   Annuler la session en cours\n\n♻️ **RESET**\n   Réinitialiser les préférences\n\n🔄 **RESTART** (00)\n   Redémarrer depuis la sélection d'entreprise/service\n\n❓ **HELP**\n   Afficher cette aide\n\n💡 **Pour Commencer:**\n1. Obtenez votre code d'accès\n2. Envoyez: CODE: votre_code_ici\n3. Envoyez votre entreprise ou service (ex: \"restaurant casablanca\")\n4. Configurez source et type\n5. Envoyez: START pour commencer la recherche de prospects\n6. Suivez les mises à jour!\n\n**Astuce:** À chaque étape numérotée, répondez `0` pour revenir en arrière.",
+    help: "📚 **Aide – Localisateur de Prospects**\n\n🔐 **Authentification**\n   Envoyez simplement votre code d'accès directement\n   Exemple: \"user1\"\n\n🎯 **SOURCE: <source>**\n   Définir la source: GOOGLE, LINKEDIN, MAPS\n\n📊 **STATUT**\n   Vérifier le statut de la session\n\n🛑 **STOP**\n   Annuler la session en cours\n\n♻️ **RESET**\n   Réinitialiser les préférences\n\n🔄 **RESTART** (00)\n   Redémarrer depuis la sélection d'entreprise/service\n\n❓ **HELP**\n   Afficher cette aide\n\n💡 **Pour Commencer:**\n1. Obtenez votre code d'accès\n2. Envoyez votre code directement (ex: \"user1\")\n3. Envoyez votre entreprise ou service (ex: \"restaurant casablanca\")\n4. Configurez source et type\n5. Envoyez: START pour commencer la recherche de prospects\n6. Suivez les mises à jour!\n\n**Astuce:** À chaque étape numérotée, répondez `0` pour revenir en arrière.",
     
     // Progress Messages
     progress_update: "⏱️ **Mise à Jour de Progression:** {message}",
@@ -235,12 +236,13 @@ export const languages = {
     invalid_selection: "⚠️ Sélection invalide. Veuillez choisir un numéro entre 1 et {max} ou 0 pour revenir en arrière.",
     error_generic_friendly: "❌ **Un problème est survenu.**\n\n💡 Veuillez réessayer avec une autre entreprise ou service. Si le problème persiste, contactez le support.",
     error_invalid_niche_maps: "❌ **Entreprise ou service invalide pour Google Maps.**\n\nVotre requête doit décrire une activité et un lieu.\n\nExemples:\n• dentiste casablanca\n• restaurant marrakech\n• développeur web fes\n\n💡 Envoyez une entreprise ou service plus claire incluant une ville ou une région.",
-    trial_finished: "🧪 **Votre période d'essai est terminée.**\n\nVous avez utilisé les 3 recherches d'essai (20 résultats chacune).\n\n💳 Contactez le support pour passer à l'abonnement.",
+    trial_finished: "🎯 **Essai Terminé !**\n\n✅ Vous avez utilisé vos 3 tentatives d'essai.\n\n💡 **Voulez-vous continuer ? Passez à Premium !**\n\n🚀 **Avantages Premium :**\n• 4 recherches par jour (au lieu de 3 au total)\n• Extraction de données illimitée\n• Support prioritaire\n• Fonctionnalités avancées\n\n📞 **Contactez le support au numéro ci-dessous pour mettre à niveau votre compte !**",
+    support_contact: "📞 **Contact Support :**\n\nCliquez ici : https://wa.me/212717034808",
     subscription_expired: "⏳ **Abonnement expiré.**\n\nVeuillez contacter le support pour renouveler votre accès.",
     trial_status_title: "🧪 **Statut de l'essai gratuit**\n\n",
     trial_status_body: "Vous êtes en période d'essai.\nEssais utilisés : {triesUsed}/{maxTries}\nRestants : {remaining}\n\n",
-    trial_welcome: "🎉 **Bienvenue dans votre essai gratuit !**\n\nVous êtes prêt à explorer le Localisateur de Prospects.\n\n**Fonctionnement de l'essai :**\n• 3 recherches d'essai incluses\n• Chaque recherche d'essai renvoie jusqu’à 20 prospects (limite d’essai). Passez à l’abonnement pour des résultats illimités\n• Tapez STATUS à tout moment pour voir les essais restants\n\nPrêt à continuer après l’essai ? Contactez le support pour passer à l’abonnement.\n\n✨ Bonne prospection !",
-    paid_welcome: "🎉 **Content de vous revoir !**\n\nVotre abonnement est actif.\n\n**À savoir :**\n• Limite quotidienne : 4 recherches par jour\n• Résultats par recherche : illimités\n• Tapez STATUS à tout moment pour voir le restant\n\n✨ Allons trouver de nouveaux prospects !",
+    trial_welcome: "🎉 **Bienvenue dans votre essai gratuit !**\n\nVous êtes prêt à explorer le Localisateur de Prospects.\n\n**Fonctionnement de l'essai :**\n• 3 recherches d'essai incluses\n• Chaque recherche d'essai renvoie jusqu'à 20 prospects (limite d'essai). Passez à l'abonnement pour des résultats illimités\n\nPrêt à continuer après l'essai ? Contactez le support pour passer à l'abonnement.\n\n✨ Bonne prospection !",
+    paid_welcome: "🎉 **Content de vous revoir !**\n\nVotre abonnement est actif.\n\n**À savoir :**\n• Limite quotidienne : 4 recherches par jour\n• Résultats par recherche : illimités\n\n✨ Allons trouver de nouveaux prospects !",
     
     // Daily limit status
     status_title: "📊 **Votre statut de recherche de prospects**\n\n",
@@ -270,7 +272,7 @@ export const languages = {
     
     // Logout Messages
     logout_confirmation: "🔓 **Confirmer la Déconnexion**\n\n⚠️ Êtes-vous sûr de vouloir vous déconnecter?\n\nCela mettra fin à votre session actuelle et vous devrez vous authentifier à nouveau.\n\n💬 **Répondez avec:**\n• **5** pour confirmer la déconnexion\n• **0** pour annuler et retourner au menu principal",
-    logout_successful: "🔓 **Déconnexion Utilisateur Réussie!**\n\n✅ Vous avez été déconnecté de votre session utilisateur.\n\n💡 **Pour vous reconnecter:**\n• Envoyez CODE: <votre_code> pour commencer une nouvelle session utilisateur\n• Exemple: CODE: user1",
+    logout_successful: "🔓 **Déconnexion Utilisateur Réussie!**\n\n✅ Vous avez été déconnecté de votre session utilisateur.\n\n💡 **Pour vous reconnecter:**\n• Envoyez simplement votre code d'accès ",
     logout_error: "❌ **Erreur lors de la déconnexion**\n\nUne erreur s'est produite lors de la déconnexion. Veuillez réessayer ou contacter le support."
   },
   
@@ -280,7 +282,7 @@ export const languages = {
     language_selection: "🌐 **اختيار اللغة**\n\nيرجى اختيار لغتك المفضلة:\n\n1️⃣ **English**\n2️⃣ **Français**\n3️⃣ **العربية**\n\n💬 **أرسل الرقم** المقابل لاختيارك.\n\n0️⃣ **العودة إلى القائمة** - العودة إلى القائمة الرئيسية",
     
     // Authentication
-    auth_required: "🔐 **مطلوب مصادقة.** يرجى إرسال رمز الوصول أولاً.\n\n💬 **التنسيق:** CODE: رمزك_هنا\n💬 **مثال:** CODE: user1\n\n💡 اتصل بالمدير إذا لم يكن لديك رمز وصول.\n\n0️⃣ **تغيير اللغة** - اختر لغة مختلفة",
+    auth_required: "🔐 **مطلوب مصادقة.** يرجى إرسال رمز الوصول أولاً.\n\n💡 اتصل بالدعم إذا لم يكن لديك رمز وصول.\n\n0️⃣ **تغيير اللغة** - اختر لغة مختلفة",
     invalid_code: "❌ رمز وصول غير صحيح. يرجى الاتصال بالمدير للحصول على رمز صحيح.",
     access_granted: "✅ **تم منح الوصول!** مرحباً بك في محدِّد العملاء المحتملين.\n\n📝 أرسل استعلام بحث (مثال: \"مطعم الدار البيضاء\").\n\n📅 **الحدود اليومية:** يمكنك إجراء 4 عمليات بحث عن العملاء المحتملين يومياً. تُعاد التهيئة عند منتصف الليل.\n\n💡 استخدم STATUS للتحقق من الباقي.",
     
@@ -352,7 +354,7 @@ export const languages = {
     reset: "♻️ **تم إعادة تعيين التفضيلات إلى القيم الافتراضية.**",
     
     // Help
-    help: "📚 **مساعدة – محدِّد العملاء المحتملين**\n\n🔐 **CODE: <code>**\n   المصادقة برمز الوصول الخاص بك\n   مثال: \"CODE: user1\"\n\n🎯 **SOURCE: <source>**\n   تعيين المصدر: GOOGLE, LINKEDIN, MAPS\n\n📏 **LIMIT: <number>**\n   الحد الأقصى للنتائج (1-500). الافتراضي: 300\n\n📊 **STATUS**\n   التحقق من حالة الجلسة\n\n🛑 **STOP**\n   إلغاء الجلسة الحالية\n\n♻️ **RESET**\n   إعادة تعيين التفضيلات\n\n🔄 **RESTART** (00)\n   إعادة التشغيل من اختيار النيش\n\n❓ **HELP**\n   عرض هذه المساعدة\n\n💡 **للبدء:**\n1. احصل على رمز الوصول\n2. أرسل: CODE: رمزك_هنا\n3. أرسل استعلامك (مثال: \"مطعم الدار البيضاء\")\n4. كوّن المصدر والنوع\n5. أرسل: START لبدء البحث عن العملاء المحتملين\n6. استلم التحديثات!\n\n**نصيحة:** في أي خطوة مرقمة، أرسل `0` للعودة.",
+    help: "📚 **مساعدة – محدِّد العملاء المحتملين**\n\n🔐 **المصادقة**\n   أرسل رمز الوصول الخاص بك مباشرة\n   مثال: \"user1\"\n\n🎯 **SOURCE: <source>**\n   تعيين المصدر: GOOGLE, LINKEDIN, MAPS\n\n📏 **LIMIT: <number>**\n   الحد الأقصى للنتائج (1-500). الافتراضي: 300\n\n📊 **STATUS**\n   التحقق من حالة الجلسة\n\n🛑 **STOP**\n   إلغاء الجلسة الحالية\n\n♻️ **RESET**\n   إعادة تعيين التفضيلات\n\n🔄 **RESTART** (00)\n   إعادة التشغيل من اختيار النيش\n\n❓ **HELP**\n   عرض هذه المساعدة\n\n💡 **للبدء:**\n1. احصل على رمز الوصول\n2. أرسل رمزك مباشرة (مثال: \"user1\")\n3. أرسل استعلامك (مثال: \"مطعم الدار البيضاء\")\n4. كوّن المصدر والنوع\n5. أرسل: START لبدء البحث عن العملاء المحتملين\n6. استلم التحديثات!\n\n**نصيحة:** في أي خطوة مرقمة، أرسل `0` للعودة.",
     
     // Progress Messages
     progress_update: "⏱️ **تحديث التقدم:** {message}",
@@ -370,12 +372,13 @@ export const languages = {
     invalid_selection: "⚠️ اختيار غير صحيح. يرجى اختيار رقم بين 1 و {max} أو 0 للرجوع.",
     error_generic_friendly: "❌ **حدث خطأ ما.**\n\n💡 يرجى المحاولة مرة أخرى باستخدام نيش مختلف. إذا استمرت المشكلة، تواصل مع الدعم.",
     error_invalid_niche_maps: "❌ **نيش غير صالح لخرائط Google.**\n\nيجب أن يصف الاستعلام نشاطاً وموقعاً.\n\nأمثلة:\n• طبيب أسنان الدار البيضاء\n• مطعم مراكش\n• مطور ويب فاس\n\n💡 أرسل نيشاً أوضح يتضمن مدينة أو منطقة.",
-    trial_finished: "🧪 **انتهت الفترة التجريبية.**\n\nلقد استخدمت 3 محاولات تجريبية (20 نتيجة لكل محاولة).\n\n💳 يرجى التواصل معنا للترقية.",
+    trial_finished: "🎯 **انتهت التجربة!**\n\n✅ لقد استخدمت جميع محاولاتك التجريبية الثلاث.\n\n💡 **هل تريد المتابعة؟ ترقية إلى Premium!**\n\n🚀 **مزايا Premium:**\n• 4 عمليات بحث يومياً (بدلاً من 3 إجمالي)\n• استخراج بيانات غير محدود\n• دعم أولوية\n• ميزات متقدمة\n\n📞 **تواصل مع الدعم في الرقم أدناه لترقية حسابك!**",
+    support_contact: "📞 **جهة اتصال الدعم:**\n\nانقر هنا: https://wa.me/212717034808",
     subscription_expired: "⏳ **انتهى الاشتراك.**\n\nيرجى التواصل لتجديد الوصول.",
     trial_status_title: "🧪 **حالة الفترة التجريبية**\n\n",
     trial_status_body: "أنت على الفترة التجريبية.\nالمحاولات المستخدمة: {triesUsed}/{maxTries}\nالمتبقي: {remaining}\n\n",
-    trial_welcome: "🎉 **أهلاً بك في الفترة التجريبية!**\n\nأنت جاهز لاستكشاف مُحدِّد العملاء المحتملين.\n\n**طريقة عمل التجربة:**\n• 3 محاولات بحث تجريبية\n• كل محاولة تجريبية تُرسل حتى 20 نتيجة (حدّ التجربة). بالترقية تحصل على نتائج غير محدودة\n• أرسل STATUS في أي وقت لمعرفة المتبقي\n\nعند استعدادك للاستمرار بعد التجربة، تواصل معنا للترقية.\n\n✨ نتمنى لك تجربة موفقة!",
-    paid_welcome: "🎉 **مرحباً بعودتك!**\n\nاشتراكك نشِط.\n\n**معلومات مهمة:**\n• الحد اليومي: 4 عمليات بحث يومياً\n• النتائج لكل بحث: غير محدودة\n• أرسل STATUS في أي وقت لمعرفة المتبقي\n\n✨ هيا نبدأ بالعثور على عملاء جدد!",
+    trial_welcome: "🎉 **أهلاً بك في الفترة التجريبية!**\n\nأنت جاهز لاستكشاف مُحدِّد العملاء المحتملين.\n\n**طريقة عمل التجربة:**\n• 3 محاولات بحث تجريبية\n• كل محاولة تجريبية تُرسل حتى 20 نتيجة (حدّ التجربة). بالترقية تحصل على نتائج غير محدودة\n\n\nعند استعدادك للاستمرار بعد التجربة، تواصل معنا للترقية.\n\n✨ نتمنى لك تجربة موفقة!",
+    paid_welcome: "🎉 **مرحباً بعودتك!**\n\nاشتراكك نشِط.\n\n**معلومات مهمة:**\n• الحد اليومي: 4 عمليات بحث يومياً\n• النتائج لكل بحث: غير محدودة\n\n\n✨ هيا نبدأ بالعثور على عملاء جدد!",
     
     // Daily limit status
     status_title: "📊 **حالة البحث عن العملاء المحتملين**\n\n",
@@ -405,7 +408,7 @@ export const languages = {
     
     // Logout Messages
     logout_confirmation: "🔓 **تأكيد تسجيل الخروج**\n\n⚠️ هل أنت متأكد من أنك تريد تسجيل الخروج؟\n\nسيؤدي هذا إلى إنهاء جلستك الحالية وستحتاج إلى المصادقة مرة أخرى.\n\n💬 **أرسل:**\n• **5** لتأكيد تسجيل الخروج\n• **0** للإلغاء والعودة إلى القائمة الرئيسية",
-    logout_successful: "🔓 **تم تسجيل الخروج بنجاح!**\n\n✅ تم تسجيل خروجك من جلسة المستخدم.\n\n💡 **للإعادة تسجيل الدخول:**\n• أرسل CODE: <رمز_المستخدم> لبدء جلسة مستخدم جديدة\n• مثال: CODE: user1",
+    logout_successful: "🔓 **تم تسجيل الخروج بنجاح!**\n\n✅ تم تسجيل خروجك من جلسة المستخدم.\n\n💡 **للإعادة تسجيل الدخول:**\n• أرسل رمز الوصول",
     logout_error: "❌ **خطأ أثناء تسجيل الخروج**\n\nحدث خطأ أثناء تسجيل الخروج. يرجى المحاولة مرة أخرى أو الاتصال بالدعم."
   }
 };

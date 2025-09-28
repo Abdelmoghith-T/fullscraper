@@ -334,18 +334,31 @@ npm install @whiskeysockets/baileys qrcode-terminal lowdb
 
 #### 2. Admin: Create Access Codes
 
+**Trial Users (1 API key each):**
 ```bash
-# Add a new access code with API keys
-npm run admin add abc123 YOUR_GOOGLE_KEY_1 YOUR_GOOGLE_KEY_2 YOUR_GEMINI_KEY_1 YOUR_GEMINI_KEY_2
+# Add trial user with 1 Google + 1 Gemini key
+npm run admin:add-trial trial123 YOUR_GOOGLE_KEY YOUR_GEMINI_KEY
 
-# Or generate a random code
-npm run admin generate YOUR_GOOGLE_KEY_1 YOUR_GOOGLE_KEY_2 YOUR_GEMINI_KEY_1 YOUR_GEMINI_KEY_2
+# Generate random trial code
+npm run admin:generate-trial YOUR_GOOGLE_KEY YOUR_GEMINI_KEY
+```
 
+**Paid Users (3 API keys each):**
+```bash
+# Add paid user with 3 Google + 3 Gemini keys
+npm run admin:add-paid paid123 KEY1 KEY2 KEY3 KEY4 KEY5 KEY6
+
+# Generate random paid code
+npm run admin:generate-paid KEY1 KEY2 KEY3 KEY4 KEY5 KEY6
+```
+
+**Management:**
+```bash
 # List all codes
-npm run admin list
+npm run admin:list
 
 # Remove a code
-npm run admin remove abc123
+npm run admin:remove abc123
 ```
 
 #### 3. Start WhatsApp Bot
@@ -360,9 +373,9 @@ Scan the QR code with WhatsApp → **Linked Devices** → **Link a Device**
 
 #### 🔐 Authentication
 ```
-CODE: abc123
+abc123
 ```
-Authenticate with your access code (provided by admin)
+Just send your access code directly (provided by admin)
 
 #### 📅 Daily Limits
 ```
@@ -396,7 +409,7 @@ Send any text as a search niche - the bot will start scraping!
 ### 💬 Example Conversation
 
 ```
-👤 User: CODE: abc123
+👤 User: abc123
 🤖 Bot: ✅ Access granted! Welcome to the Business Scraper.
       Current Settings: Source: ALL | Format: XLSX | Limit: 300
 
@@ -440,13 +453,27 @@ Send any text as a search niche - the bot will start scraping!
 ```
 
 #### Admin CLI Commands
+
+**Trial Users:**
 ```bash
-# Create new access code
-node manage_codes.js add <code> <google_key_1> <google_key_2> <gemini_key_1> <gemini_key_2>
+# Add trial user (1 key each)
+node manage_codes.js add-trial <code> <google_key> <gemini_key>
 
-# Generate random code  
-node manage_codes.js generate <google_key_1> <google_key_2> <gemini_key_1> <gemini_key_2>
+# Generate random trial code
+node manage_codes.js generate-trial <google_key> <gemini_key>
+```
 
+**Paid Users:**
+```bash
+# Add paid user (3 keys each)
+node manage_codes.js add-paid <code> <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>
+
+# Generate random paid code
+node manage_codes.js generate-paid <google_key1> <google_key2> <google_key3> <gemini_key1> <gemini_key2> <gemini_key3>
+```
+
+**Management:**
+```bash
 # List all codes (with masked keys)
 node manage_codes.js list
 
